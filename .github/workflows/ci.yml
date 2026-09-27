@@ -1,0 +1,18 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ["airflow/**"]
+  push:
+    branches: [main]
+    paths: ["airflow/**"]
+
+jobs:
+  airflow-build:
+    name: Build airflow/ Dockerfile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image (sanity check only, not pushed anywhere)
+        run: docker build ./airflow -t airflow-ci-check
