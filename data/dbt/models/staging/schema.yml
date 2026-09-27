@@ -1,0 +1,84 @@
+version: 2
+
+models:
+  - name: stg_customers
+    description: "customers con tipos reales, empty-string normalizado a null."
+    columns:
+      - name: customer_id
+        tests: [not_null, unique]
+      - name: country
+        tests:
+          - accepted_values:
+              values: ["México", "Colombia", "Argentina"]
+      - name: customer_status
+        tests:
+          - accepted_values:
+              values: ["Active", "Inactive", "Suspended", "Closed"]
+
+  - name: stg_products
+    description: "products con tipos reales. currency NUNCA trae MXN (limitación de datos conocida, ver spec/DATA_FINDINGS.md) — no agregar un test accepted_values que exija MXN."
+    columns:
+      - name: product_id
+        tests: [not_null, unique]
+      - name: customer_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_customers')
+              field: customer_id
+      - name: currency
+        tests:
+          - accepted_values:
+              values: ["USD", "COP", "ARS"]
+      - name: product_status
+        tests:
+          - accepted_values:
+              values: ["Active", "Closed", "Blocked", "Suspended"]
+
+  - name: stg_transactions
+    description: "transactions con tipos reales. is_fraud/fraud_score son ground truth de evaluación, no input para el agente."
+    columns:
+      - name: transaction_id
+        tests: [not_null, unique]
+      - name: customer_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_customers')
+              field: customer_id
+      - name: transaction_status
+        tests:
+          - accepted_values:
+              values: ["Approved", "Declined", "Pending", "Reversed"]
+
+  - name: stg_complaints
+    description: "complaints (PQR) con tipos reales. description/resolution son texto plantilla, no texto libre — no construir clasificación de intención sobre esos campos."
+    columns:
+      - name: complaint_id
+        tests: [not_null, unique]
+      - name: customer_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_customers')
+              field: customer_id
+      - name: case_type
+        tests:
+          - accepted_values:
+              values: ["Complaint", "Claim", "Request", "Suggestion"]
+      - name: status
+        tests:
+          - accepted_values:
+              values: ["Open", "In Process", "Escalated", "Resolved", "Closed", "Rejected"]
+
+  - name: stg_call_center_interactions
+    description: "call_center_interactions con tipos reales. contact_reason == reason_category en la práctica (ver spec/DATA_FINDINGS.md)."
+    columns:
+      - name: interaction_id
+        tests: [not_null, unique]
+      - name: customer_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_customers')
+              field: customer_id

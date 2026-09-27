@@ -1,3 +1,10 @@
 # Add extra PyPI packages required by your DAGs, one per line.
 # Example:
 # pendulum==3.0.0
+
+# dbt (data/dbt/) runs from a BashOperator inside the ingestion DAG.
+dbt-postgres==1.8.*
+
+# ingestion task: S3 -> raw.*
+boto3==1.35.*
+
