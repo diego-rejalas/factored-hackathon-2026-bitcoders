@@ -1,0 +1,20 @@
+version: 2
+
+sources:
+  - name: raw
+    description: >
+      Espejo crudo de las tablas del dataset LATAM Bank, cargado por
+      data/dags/ (ingesta). Columnas como texto tal cual llegan de S3, sin
+      transformar — ver spec/DATA_FINDINGS.md antes de asumir tipos/nulls.
+    schema: raw
+    tables:
+      - name: customers
+        description: "150,000 filas. Ver spec/DATA_FINDINGS.md: nulls variables por campo (landline_phone 50%, detected_accent 30%)."
+      - name: products
+        description: "400,000 filas. Ver spec/DATA_FINDINGS.md: currency solo trae USD/COP/ARS, cero MXN pese a 50% de clientes mexicanos."
+      - name: transactions
+        description: "5,000,000 filas, particionado por fecha. Mismo hallazgo de ausencia de MXN que products."
+      - name: complaints
+        description: "80,000 filas (PQR). description/resolution son texto plantilla, no texto libre real — ver spec/DATA_FINDINGS.md."
+      - name: call_center_interactions
+        description: "800,000 filas. contact_reason y reason_category son literalmente los mismos 6 valores (menos granular que lo que sugiere el data dictionary)."
