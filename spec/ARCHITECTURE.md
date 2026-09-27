@@ -12,20 +12,20 @@ flowchart LR
         FE[Frontend chat<br/>Vercel]
     end
 
-    subgraph agentv["Vertical 4: Agente + Guardrail"]
+    subgraph agentv["agent/ — Agente + Guardrail"]
         AGENT[Agent Orchestrator<br/>FastAPI + LangGraph]
         GUARD[Guardrail determinista<br/>tabla intent→permiso]
         AGENT --> GUARD
         GUARD --> AGENT
     end
 
-    subgraph bankv["Vertical 3: Microservicio de banca"]
+    subgraph bankv["backend/ — Microservicio de banca"]
         BANK[Banking Mock API<br/>FastAPI]
     end
 
-    subgraph etlv["Vertical 1+2: Ingesta + ETL"]
-        INGEST[Ingesta<br/>script Python]
-        DBT[dbt<br/>raw. → clean.]
+    subgraph etlv["infra/airflow/ + data/ — Ingesta + ETL"]
+        INGEST[DAG: ingesta<br/>data/dags/]
+        DBT[dbt<br/>data/dbt/]
         INGEST --> DBT
     end
 
@@ -54,9 +54,10 @@ flowchart TB
         FE[Frontend chat]
     end
 
-    subgraph railway["Railway project: factored-hackathon"]
-        AGENT[agent-orchestrator<br/>servicio]
-        BANK[banking-mock-api<br/>servicio]
+    subgraph railway["Railway project: factored-hackathon (.railway/railway.ts)"]
+        AGENT[agent/<br/>servicio]
+        BANK[backend/<br/>servicio]
+        AIRFLOW[infra/airflow/<br/>servicio, DAGs+dbt horneados]
         PG[(Postgres<br/>addon)]
     end
 
@@ -72,16 +73,17 @@ flowchart TB
     BANK -->|SQL| PG
     AGENT -->|trace_log| PG
 
-    JOB[Job manual/CI:<br/>ingesta + dbt] -.->|corre una vez / bajo demanda| PG
-    JOB -.->|lee| S3
+    AIRFLOW -.->|DAG: extrae + carga| PG
+    AIRFLOW -.->|lee| S3
 ```
 
 ## 1. Ingesta
 
 **Responsabilidad:** bajar los CSVs particionados de S3 (bucket read-only del data dictionary) y volcarlos crudos a Postgres, sin transformar.
 
-- Orquestado por **Airflow standalone** (1 solo contenedor — template `apache-airflow` en Railway, servicio `railwayapp-airflow`), no Airbyte. Airbyte quedó descartado: su modelo de despliegue por Docker Compose está descontinuado por el propio proyecto (el único camino soportado ahora es `abctl` sobre un clúster Kubernetes, que no encaja en Railway como "otro servicio más"). Ver intento fallido documentado más abajo.
-- Un DAG simple: task de extracción (boto3, S3 → `raw.*`) → task de trigger de dbt (`dbt run` + `dbt test`).
+- Orquestado por **Airflow standalone** (1 solo contenedor — servicio `railwayapp-airflow`, deployment config en `infra/airflow/`), no Airbyte. Airbyte quedó descartado: su modelo de despliegue por Docker Compose está descontinuado por el propio proyecto (el único camino soportado ahora es `abctl` sobre un clúster Kubernetes, que no encaja en Railway como "otro servicio más"). Ver intento fallido documentado más abajo.
+- Un DAG simple en `data/dags/`: task de extracción (boto3, S3 → `raw.*`) → task de trigger de dbt (`dbt run` + `dbt test`, proyecto en `data/dbt/`).
+- **`infra/` vs `data/` — separación deliberada:** `infra/airflow/` es solo config de despliegue (Dockerfile, entrypoint, healthcheck); `data/dags/` y `data/dbt/` son el contenido real del pipeline (lógica de negocio de datos). El mercado a escala separa esto más todavía — DAGs sincronizados por un sidecar git-sync a un volumen compartido, e imagen de dbt desplegada y versionada aparte del cluster de Airflow, disparada por un operator — para no tener que rebuildear/redeployar todo Airflow cada vez que cambia un DAG o un modelo dbt. A nuestra escala (pocos DAGs, 8 días, 1 contenedor standalone) eso es sobre-ingeniería: `infra/airflow/Dockerfile` hornea `data/dags/` y `data/dbt/` directo en la imagen en build time — cada cambio dispara un rebuild, aceptable acá. Documentado como camino de escalamiento, no implementado ahora.
 - Destino: schema `raw.*` en Postgres (Railway), una tabla por tabla del dataset, columnas como texto — espejo fiel de lo que llegó (evidencia de lineage/auditoría).
 - **Contrato de salida:** `raw.<tabla>` existe y tiene el mismo número de filas que S3 (contar y loggear al final de la carga).
 
@@ -99,14 +101,14 @@ Se intentó self-hostear Airbyte OSS 2.1.1 en Railway (server + worker, sin weba
 
 ## 2. ETL / limpieza
 
-**Responsabilidad:** transformar `raw.*` en `clean.*`, resolviendo lo que encontramos en `DATA_FINDINGS.md` (nulls, moneda MXN faltante, tipos, dedupe donde aplique).
+**Responsabilidad:** transformar `raw.*` en `clean.*`, resolviendo lo que encontramos en `DATA_FINDINGS.md` (nulls, moneda MXN faltante, tipos, dedupe donde aplique). Vive en `data/dbt/`.
 
 - dbt sobre el mismo Postgres. Modelos `stg_*` (cast de tipos, nulls tratados) → modelos `clean_*` (joins resueltos, listos para que el tool layer los lea).
 - Tests de dbt (`schema.yml`): `not_null`, `unique`, `accepted_values` sobre los campos clave (esto cubre "contratos de datos" y "quality checks" que pide el reto).
 - Great Expectations no entra — dbt tests + pandera puntual si hace falta algo que dbt no cubre bien, sin levantar un servicio nuevo.
 - **Contrato de salida:** `clean.<tabla>` versionado por los modelos dbt, con `dbt test` pasando en CI/manual antes de que el tool layer dependa de ellos.
 
-## 3. Microservicio de banca (mock banking API)
+## 3. Microservicio de banca (mock banking API) — `backend/`
 
 **Responsabilidad:** es el "service/tool layer" que el reto exige explícitamente para enforced de permisos — "Enforce access to each customer's records and action permissions in the service or tool layer", no en el prompt del LLM.
 
@@ -116,7 +118,7 @@ Se intentó self-hostear Airbyte OSS 2.1.1 en Railway (server + worker, sin weba
 - **Por qué sí separarlo (y no meterlo en el mismo proceso del agente):** es la pieza que el reto pide mostrar explícitamente como "fuera del modelo" — tenerla como servicio HTTP propio, con sus propios logs, hace la separación obvia y fácil de explicar en el video pitch. Es el único microservicio real que vale la pena con el tiempo que hay; todo lo demás se queda en un solo proceso.
 - **Contrato:** OpenAPI expuesto por FastAPI (gratis con FastAPI), documentado como "mock banking tool" con sus límites (qué simula, qué no) — cumple el requisito de documentar contratos de sandbox services.
 
-## 4. Agente + guardrail
+## 4. Agente + guardrail — `agent/`
 
 **Responsabilidad:** el orquestador conversacional. Habla con el usuario, decide, llama al microservicio de banca, verifica, escala.
 
@@ -130,23 +132,26 @@ Se intentó self-hostear Airbyte OSS 2.1.1 en Railway (server + worker, sin weba
 
 ## Mapa de servicios a desplegar (mínimo viable)
 
-| Servicio | Plataforma | Contiene |
-|---|---|---|
-| Postgres | Railway (addon) | `raw.*`, `clean.*`, `trace_log` |
-| banking-mock-api | Railway | Vertical 3 |
-| agent-orchestrator | Railway | Vertical 4 (LangGraph + guardrail) |
-| frontend (chat) | Vercel | UI de chat |
-| ingesta + dbt | se corren como jobs/scripts, no quedan como servicio corriendo 24/7 |
+| Servicio | Carpeta | Plataforma | Contiene |
+|---|---|---|---|
+| Postgres | — (addon) | Railway | `raw.*`, `clean.*`, `trace_log` |
+| railwayapp-airflow | `infra/airflow/` (+ `data/dags/`, `data/dbt/` horneados) | Railway | Vertical 1+2 |
+| backend | `backend/` | Railway | Vertical 3 |
+| agent | `agent/` | Railway | Vertical 4 (LangGraph + guardrail) |
+| frontend | `frontend/` | Vercel | UI de chat |
 
-Total: 2 servicios de aplicación en Railway + 1 Postgres + 1 frontend en Vercel. Nada de k8s, Kafka, Temporal, Kubeflow.
+Total: 3 servicios de aplicación en Railway + 1 Postgres + 1 frontend en Vercel. Nada de k8s, Kafka, Temporal, Kubeflow.
 
 ## Configuración de Railway como código
 
-Lección de la sesión: configurar servicios a mano (dashboard o vía MCP) es rápido pero no queda versionado ni es reproducible por otra persona del equipo — así se armó y desarmó Airbyte sin dejar rastro reproducible. Convención a seguir de acá en adelante:
+Lección de la sesión: configurar servicios a mano (dashboard o vía MCP) es rápido pero no queda versionado ni es reproducible por otra persona del equipo — así se armó y desarmó Airbyte sin dejar rastro reproducible.
 
-- Cada servicio de la app (`banking-mock-api`, `agent-orchestrator`) tiene su propio `railway.toml` en la raíz de su carpeta (mismo patrón usado para `worker/railway.toml` y `webapp/railway.toml` en el fork de Airbyte): builder, healthcheck, restart policy — todo en el repo, no seteado a mano.
-- Variables de entorno con secretos (API keys) siguen en Railway (nunca en el repo), pero sus *nombres* y de dónde vienen (qué servicio las provee, ej. `${{Postgres.DATABASE_URL}}`) se documentan en un `.env.example` por servicio, igual que ya hace el template de Airflow/Airbyte.
-- El repo `railwayapp-airbyte-private` con los fixes queda como referencia local (el equipo lo va a clonar), no como servicio activo en Railway.
+Railway deprecó `railway.toml`/`railway.json` (Config as Code, corte duro 2026-12-01) a favor de **Infrastructure as Code**: un único archivo `.railway/railway.ts` en la raíz del repo, gestionado con la Railway CLI (`railway config plan` / `railway config apply`). Convención del proyecto:
+
+- **Un solo archivo `.railway/railway.ts`** declara todos los servicios, volúmenes y la base de datos del proyecto — build, healthcheck, restart policy, montajes de volumen, y qué variables se preservan (`preserve()` para secretos que ya viven en Railway, nunca en el repo).
+- Cada servicio (`infra/airflow/`, `backend/`, `agent/`) sigue teniendo su propio `Dockerfile` y `.env.example` en su carpeta (documentación de qué variables necesita), pero el *despliegue* (qué servicio existe, con qué config) se define en el `.railway/railway.ts` único, no en un `railway.toml` por carpeta.
+- Flujo: `railway config plan` (previsualiza, nunca escribe nada) → revisar → `railway config apply` (confirma antes de aplicar; cambios destructivos requieren confirmación explícita).
+- El repo `railwayapp-airbyte-private` con los fixes de Airbyte queda como referencia local (por si se retoma), no como servicio activo en Railway ni en el IaC.
 
 ## Próximo paso
 
