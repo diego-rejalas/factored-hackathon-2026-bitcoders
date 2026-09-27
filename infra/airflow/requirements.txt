@@ -5,6 +5,7 @@
 # dbt (data/dbt/) runs from a BashOperator inside the ingestion DAG.
 dbt-postgres==1.8.*
 
-# ingestion task: S3 -> raw.*
-boto3==1.35.*
+# ingestion task: S3 -> raw.* (no version pin — Airflow's own constraints
+# file already pins a compatible boto3, pinning here conflicts with it)
+boto3
 
