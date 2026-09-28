@@ -81,7 +81,7 @@ flowchart TB
 
 **Responsabilidad:** bajar los CSVs particionados de S3 (bucket read-only del data dictionary) y volcarlos crudos a Postgres, sin transformar.
 
-- Orquestado por **Airflow standalone** (1 solo contenedor — servicio `railwayapp-airflow`, deployment config en `infra/airflow/`), no Airbyte. Airbyte quedó descartado: su modelo de despliegue por Docker Compose está descontinuado por el propio proyecto (el único camino soportado ahora es `abctl` sobre un clúster Kubernetes, que no encaja en Railway como "otro servicio más"). Ver intento fallido documentado más abajo.
+- Orquestado por **Airflow standalone** (1 solo contenedor — servicio `airflow`, deployment config en `infra/airflow/`), no Airbyte. Airbyte quedó descartado: su modelo de despliegue por Docker Compose está descontinuado por el propio proyecto (el único camino soportado ahora es `abctl` sobre un clúster Kubernetes, que no encaja en Railway como "otro servicio más"). Ver intento fallido documentado más abajo.
 - Un DAG simple en `data/dags/`: task de extracción (boto3, S3 → `raw.*`) → `POST /run` al servicio `dbt` (ver Vertical 2).
 - **`infra/` vs `data/` — separación deliberada:** `infra/airflow/` e `infra/dbt/` son solo config de despliegue (Dockerfile, entrypoint, healthcheck); `data/dags/` y `data/dbt/` son el contenido real del pipeline (lógica de negocio de datos).
 - **dbt como servicio Railway separado, no horneado en la imagen de Airflow.** Motivos: (1) `dbt-postgres` tiene dependencias transitivas (`isodate`, `pathspec`) que chocan con las versiones exactas que fija el archivo de constraints de Airflow 3.3.0 — ningún release de dbt-postgres satisface ambos a la vez, instalarlo en el mismo entorno de Python de Airflow no es viable sin degradar a un dbt de 2018; (2) el equipo quería dbt visible como pieza propia en el canvas de Railway. El DAG le pega por HTTP después de terminar la carga a `raw.*` (no un cron suelto, para garantizar el orden). Esto es, de hecho, el patrón de mercado (imagen de dbt separada, disparada por un operator) que en un momento se documentó como "camino de escalamiento, no implementado" — terminó implementándose antes de lo esperado, por la combinación de este conflicto de dependencias + la preferencia de visibilidad del equipo.
@@ -137,7 +137,7 @@ Se intentó self-hostear Airbyte OSS 2.1.1 en Railway (server + worker, sin weba
 | Servicio | Carpeta | Plataforma | Contiene | Grupo Railway |
 |---|---|---|---|---|
 | Postgres | — (addon) | Railway | `raw.*`, `clean.*`, `trace_log` | Data Pipeline |
-| railwayapp-airflow | `infra/airflow/` (+ `data/dags/`) | Railway | Vertical 1 (ingesta) | Data Pipeline |
+| airflow | `infra/airflow/` (+ `data/dags/`) | Railway | Vertical 1 (ingesta) | Data Pipeline |
 | dbt | `infra/dbt/` (+ `data/dbt/`) | Railway | Vertical 2 (ETL/limpieza) | Data Pipeline |
 | backend | `backend/` | Railway | Vertical 3 | — |
 | agent | `agent/` | Railway | Vertical 4 (LangGraph + guardrail) | — |

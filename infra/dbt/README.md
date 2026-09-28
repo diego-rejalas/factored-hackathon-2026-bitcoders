@@ -26,4 +26,4 @@ if not result["ok"]:
     raise AirflowException(result)
 ```
 
-`DBT_SERVICE_URL` ya está declarado en `railwayapp-airflow` dentro de `../../.railway/railway.ts` (dominio privado del servicio `dbt`).
+`DBT_SERVICE_URL` ya está declarado en el servicio `airflow` dentro de `../../.railway/railway.ts` (dominio privado del servicio `dbt`).
