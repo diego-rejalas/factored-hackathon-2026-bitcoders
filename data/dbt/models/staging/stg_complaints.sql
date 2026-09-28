@@ -28,9 +28,9 @@ select
     nullif(resolution_date, '')::timestamp                  as resolution_date,
     nullif(closing_date, '')::timestamp                     as closing_date,
     (sla_breached)::boolean                                  as sla_breached,
-    nullif(resolution_days, '')::int                        as resolution_days,
+    nullif(resolution_days, '')::numeric::int                as resolution_days,
     nullif(resolution, '')                                  as resolution,
     nullif(compensation_granted, '')::numeric(15,2)         as compensation_granted,
-    nullif(resolution_satisfaction, '')::int                as resolution_satisfaction,
+    nullif(resolution_satisfaction, '')::numeric::int        as resolution_satisfaction,
     (is_repeat_complainer)::boolean                          as is_repeat_complainer
 from source
