@@ -1,9 +1,9 @@
 -- is_fraud/fraud_score are ground truth for evaluation only — see
--- spec/DATA_FINDINGS.md. Kept here (staging mirrors raw with real types);
+-- spec/DATA_FINDINGS.md. Kept here (silver mirrors bronze with real types);
 -- any model the agent/tool layer reads from must NOT expose these as
--- input signal, only clean./eval-set consumers should.
+-- input signal, only gold./eval-set consumers should.
 with source as (
-    select * from {{ source('raw', 'transactions') }}
+    select * from {{ source('bronze', 'transactions') }}
 )
 
 select

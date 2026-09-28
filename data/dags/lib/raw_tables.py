@@ -1,7 +1,7 @@
-"""Table specs for the S3 -> raw.* ingestion task.
+"""Table specs for the S3 -> data.bronze.* ingestion task.
 
-Column lists match data/dbt/models/staging/stg_*.sql exactly (raw.* columns
-are all text — casts happen once, in staging, not here). See
+Column lists match data/dbt/models/staging/stg_*.sql exactly (bronze.* columns
+are all text — casts happen once, in silver, not here). See
 spec/DATA_FINDINGS.md for the data-quality context behind these tables.
 """
 from dataclasses import dataclass

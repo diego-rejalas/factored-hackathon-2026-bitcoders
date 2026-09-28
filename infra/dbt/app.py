@@ -1,6 +1,6 @@
 """Thin HTTP wrapper around dbt so it can run as its own Railway service.
 
-Airflow's ingestion DAG (data/dags/) calls POST /run after loading raw.*,
+Airflow's ingestion DAG (data/dags/) calls POST /run after loading bronze.*,
 so dbt only runs once ingestion has actually finished — a cron on this
 service alone couldn't guarantee that ordering.
 """
@@ -35,7 +35,7 @@ def health() -> dict:
 
 @app.post("/run")
 def run() -> dict:
-    """raw.* -> clean.*, then test. Returns non-2xx-worthy info in the body
+    """bronze.* -> silver.* -> gold.*, then test. Returns non-2xx-worthy info in the body
     (exit_code) rather than raising, so the caller (Airflow) can inspect
     stdout/stderr regardless of success or failure."""
     run_result = _run_dbt("run")

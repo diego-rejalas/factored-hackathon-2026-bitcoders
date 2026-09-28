@@ -2,7 +2,7 @@
 -- being Mexican) is NOT corrected here — documented in spec/DATA_FINDINGS.md
 -- as a limitation to report, not silently patched.
 with source as (
-    select * from {{ source('raw', 'products') }}
+    select * from {{ source('bronze', 'products') }}
 )
 
 select

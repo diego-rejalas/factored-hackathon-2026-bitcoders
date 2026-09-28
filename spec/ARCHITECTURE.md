@@ -29,20 +29,23 @@ flowchart LR
         INGEST -->|POST /run| DBT
     end
 
-    subgraph data["Postgres"]
-        RAW[(raw.*)]
-        CLEAN[(clean.*)]
+    subgraph data["Postgres: database data"]
+        BRONZE[(bronze.*)]
+        SILVER[(silver.*)]
+        GOLD[(gold.*)]
         TRACE[(trace_log)]
     end
 
     S3[(S3<br/>LATAM Bank dataset)] --> INGEST
-    DBT --> RAW
-    DBT --> CLEAN
+    INGEST --> BRONZE
+    BRONZE --> DBT
+    DBT --> SILVER
+    SILVER --> GOLD
 
     FE -->|POST /chat| AGENT
     AGENT -->|logs cada paso| TRACE
     AGENT -->|HTTP tools| BANK
-    BANK -->|SQL| CLEAN
+    BANK -->|SQL| GOLD
     AGENT -.->|LLM calls| OR[OpenRouter]
 ```
 
@@ -82,11 +85,11 @@ flowchart TB
 **Responsabilidad:** bajar los CSVs particionados de S3 (bucket read-only del data dictionary) y volcarlos crudos a Postgres, sin transformar.
 
 - Orquestado por **Airflow standalone** (1 solo contenedor — servicio `airflow`, deployment config en `infra/airflow/`), no Airbyte. Airbyte quedó descartado: su modelo de despliegue por Docker Compose está descontinuado por el propio proyecto (el único camino soportado ahora es `abctl` sobre un clúster Kubernetes, que no encaja en Railway como "otro servicio más"). Ver intento fallido documentado más abajo.
-- Un DAG simple en `data/dags/`: task de extracción (boto3, S3 → `raw.*`) → `POST /run` al servicio `dbt` (ver Vertical 2).
+- Un DAG simple en `data/dags/`: bootstrap idempotente de la base `data` y schemas `bronze`/`silver`/`gold`, extracción (boto3, S3 → `bronze.*`) y luego `POST /run` al servicio `dbt` (ver Vertical 2).
 - **`infra/` vs `data/` — separación deliberada:** `infra/airflow/` e `infra/dbt/` son solo config de despliegue (Dockerfile, entrypoint, healthcheck); `data/dags/` y `data/dbt/` son el contenido real del pipeline (lógica de negocio de datos).
-- **dbt como servicio Railway separado, no horneado en la imagen de Airflow.** Motivos: (1) `dbt-postgres` tiene dependencias transitivas (`isodate`, `pathspec`) que chocan con las versiones exactas que fija el archivo de constraints de Airflow 3.3.0 — ningún release de dbt-postgres satisface ambos a la vez, instalarlo en el mismo entorno de Python de Airflow no es viable sin degradar a un dbt de 2018; (2) el equipo quería dbt visible como pieza propia en el canvas de Railway. El DAG le pega por HTTP después de terminar la carga a `raw.*` (no un cron suelto, para garantizar el orden). Esto es, de hecho, el patrón de mercado (imagen de dbt separada, disparada por un operator) que en un momento se documentó como "camino de escalamiento, no implementado" — terminó implementándose antes de lo esperado, por la combinación de este conflicto de dependencias + la preferencia de visibilidad del equipo.
-- Destino: schema `raw.*` en Postgres (Railway), una tabla por tabla del dataset, columnas como texto — espejo fiel de lo que llegó (evidencia de lineage/auditoría).
-- **Contrato de salida:** `raw.<tabla>` existe y tiene el mismo número de filas que S3 (contar y loggear al final de la carga).
+- **dbt como servicio Railway separado, no horneado en la imagen de Airflow.** Motivos: (1) `dbt-postgres` tiene dependencias transitivas (`isodate`, `pathspec`) que chocan con las versiones exactas que fija el archivo de constraints de Airflow 3.3.0 — ningún release de dbt-postgres satisface ambos a la vez, instalarlo en el mismo entorno de Python de Airflow no es viable sin degradar a un dbt de 2018; (2) el equipo quería dbt visible como pieza propia en el canvas de Railway. El DAG le pega por HTTP después de terminar la carga a `bronze.*` (no un cron suelto, para garantizar el orden). Esto es, de hecho, el patrón de mercado (imagen de dbt separada, disparada por un operator) que en un momento se documentó como "camino de escalamiento, no implementado" — terminó implementándose antes de lo esperado, por la combinación de este conflicto de dependencias + la preferencia de visibilidad del equipo.
+- Destino: schema `bronze.*` en la base `data` de Postgres (Railway), una tabla por tabla del dataset, columnas como texto — espejo fiel de lo que llegó (evidencia de lineage/auditoría).
+- **Contrato de salida:** `bronze.<tabla>` existe y tiene el mismo número de filas que S3 (contar y loggear al final de la carga).
 
 ### Por qué Airflow y no un script suelto
 
@@ -102,21 +105,21 @@ Se intentó self-hostear Airbyte OSS 2.1.1 en Railway (server + worker, sin weba
 
 ## 2. ETL / limpieza — servicio `dbt`
 
-**Responsabilidad:** transformar `raw.*` en `clean.*`, resolviendo lo que encontramos en `DATA_FINDINGS.md` (nulls, moneda MXN faltante, tipos, dedupe donde aplique). Proyecto en `data/dbt/`, deployment en `infra/dbt/`.
+**Responsabilidad:** transformar `bronze.*` en `silver.*` y `gold.*`, resolviendo lo que encontramos en `DATA_FINDINGS.md` (nulls, moneda MXN faltante, tipos, dedupe donde aplique). Proyecto en `data/dbt/`, deployment en `infra/dbt/`.
 
 - Servicio FastAPI liviano (`infra/dbt/app.py`) que expone `POST /run` (`dbt run` + `dbt test`) y `GET /health`. Corre en su propio contenedor Railway, dentro del grupo "Data Pipeline" junto a Postgres y Airflow.
-- dbt sobre el mismo Postgres. Modelos `stg_*` (cast de tipos, nulls tratados) → modelos `clean_*` (joins resueltos, listos para que el tool layer los lea).
+- dbt sobre la base `data`. Modelos `stg_*` en `silver` (cast de tipos, nulls tratados) → modelos `clean_*` en `gold` (joins resueltos, listos para que el tool layer los lea).
 - Tests de dbt (`schema.yml`): `not_null`, `unique`, `accepted_values` sobre los campos clave (esto cubre "contratos de datos" y "quality checks" que pide el reto).
 - Great Expectations no entra — dbt tests + pandera puntual si hace falta algo que dbt no cubre bien, sin levantar un servicio nuevo.
-- **Contrato de salida:** `clean.<tabla>` versionado por los modelos dbt, con `dbt test` pasando en CI/manual antes de que el tool layer dependa de ellos.
+- **Contrato de salida:** `gold.<tabla>` versionado por los modelos dbt, con `dbt test` pasando en CI/manual antes de que el tool layer dependa de ellos.
 
 ## 3. Microservicio de banca (mock banking API) — `backend/`
 
 **Responsabilidad:** es el "service/tool layer" que el reto exige explícitamente para enforced de permisos — "Enforce access to each customer's records and action permissions in the service or tool layer", no en el prompt del LLM.
 
 - Un servicio FastAPI separado (Railway), con endpoints REST deterministas: `GET /customers/{id}`, `GET /customers/{id}/transactions`, `POST /cases`, `POST /cards/{id}/block`, etc. — según el workflow que gane el voto.
-- Cada endpoint valida sesión/permiso **antes** de tocar `clean.*` — esto es lo único que de verdad se beneficia de ser un servicio aparte (aísla el enforcement de permisos del código del agente, para que quede claro en la demo/video que la política no vive en el prompt).
-- Lee de `clean.*` en Postgres.
+- Cada endpoint valida sesión/permiso **antes** de tocar `data.gold.*` — esto es lo único que de verdad se beneficia de ser un servicio aparte (aísla el enforcement de permisos del código del agente, para que quede claro en la demo/video que la política no vive en el prompt).
+- Lee de `data.gold.*` en Postgres.
 - **Por qué sí separarlo (y no meterlo en el mismo proceso del agente):** es la pieza que el reto pide mostrar explícitamente como "fuera del modelo" — tenerla como servicio HTTP propio, con sus propios logs, hace la separación obvia y fácil de explicar en el video pitch. Es el único microservicio real que vale la pena con el tiempo que hay; todo lo demás se queda en un solo proceso.
 - **Contrato:** OpenAPI expuesto por FastAPI (gratis con FastAPI), documentado como "mock banking tool" con sus límites (qué simula, qué no) — cumple el requisito de documentar contratos de sandbox services.
 
@@ -136,7 +139,7 @@ Se intentó self-hostear Airbyte OSS 2.1.1 en Railway (server + worker, sin weba
 
 | Servicio | Carpeta | Plataforma | Contiene | Grupo Railway |
 |---|---|---|---|---|
-| Postgres | — (addon) | Railway | `raw.*`, `clean.*`, `trace_log` | Data Pipeline |
+| Postgres | — (addon) | Railway | base `data`: `bronze.*`, `silver.*`, `gold.*`, `trace_log` | Data Pipeline |
 | airflow | `infra/airflow/` (+ `data/dags/`) | Railway | Vertical 1 (ingesta) | Data Pipeline |
 | dbt | `infra/dbt/` (+ `data/dbt/`) | Railway | Vertical 2 (ETL/limpieza) | Data Pipeline |
 | backend | `backend/` | Railway | Vertical 3 | — |

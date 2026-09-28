@@ -1,0 +1,38 @@
+# Repository Guidelines
+
+## Project Structure & Module Organization
+
+This repository is an AI-first banking customer-service hackathon prototype. Read `doc/Factored AI & Data Hackathon 2026.md` before changing product behavior, then use `spec/CRITERIA.md`, `spec/DATA_FINDINGS.md`, and `spec/ARCHITECTURE.md` as the implementation contract.
+
+- `data/dags/` contains Airflow ingestion code (`S3 -> data.bronze.*`); shared DAG helpers live in `data/dags/lib/`.
+- `data/dbt/` contains dbt models: `models/staging/` builds `silver.*` and `models/clean/` supplies `gold.*` tables.
+- `infra/airflow/` and `infra/dbt/` contain deployment images and the dbt HTTP runner. Railway configuration is centralized in `.railway/railway.ts`.
+- `backend/`, `agent/`, and `frontend/` are reserved for the banking tool layer, guarded agent, and chat UI. Follow their README contracts when adding them.
+- `doc/` is organizer material; do not edit it.
+
+## Build, Test, and Development Commands
+
+Work is the data pipeline. From `data/dbt/`, configure credentials before running:
+
+```bash
+cp .env.example .env
+export $(cat .env | xargs)
+dbt run       # build silver and gold models
+dbt test      # validate declared data contracts
+```
+
+Railway configuration changes should be previewed with `railway config plan` before `railway config apply`. Do not invent npm, Python, lint, or test commands for the not-yet-created services; add verified commands here with the implementation.
+
+## Coding Style & Naming Conventions
+
+Use four-space indentation for Python and SQL. Keep DAG code small and place reusable ingestion logic in `data/dags/lib/`. Name dbt models by layer and entity: `stg_<entity>.sql` for source normalization and `clean_<entity>.sql` for backend-ready relations. Define model contracts in the adjacent `schema.yml`/`sources.yml` files.
+
+Prefer deterministic policy and permission checks outside LLM prompts. The agent must access banking data only through the backend HTTP tool layer, never directly through Postgres. Preserve the documented rule that fraud ground-truth fields are not agent inputs.
+
+## Testing Guidelines
+
+Add dbt tests for keys, required values, accepted values, and relationships whenever a model changes. Run both `dbt run` and `dbt test` against the intended database before submitting data-pipeline work. For future services, add focused tests alongside the code and document the exact test command before treating it as required.
+
+## Commit & Pull Request Guidelines
+
+Use concise Conventional Commit-style subjects, as in `feat: add ingest_latam_bank DAG`, `fix: pin psycopg2-binary`, or `refactor: split dbt service`. Keep commits scoped to one vertical. Pull requests should explain the workflow impact, list validation performed, link the relevant spec or issue, and include screenshots for frontend changes. Flag data-model changes, Railway configuration changes, and any guardrail impact explicitly.

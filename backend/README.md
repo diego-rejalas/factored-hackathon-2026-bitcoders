@@ -6,7 +6,7 @@ Pendiente de crear (una vez el equipo vote el workflow, define endpoints exactos
 - `app/main.py` — FastAPI app
 - `app/auth.py` — validación de sesión de prueba antes de cualquier endpoint
 - `app/routes/` — endpoints deterministas (`GET /customers/{id}`, `GET /customers/{id}/transactions`, `POST /cases`, etc.)
-- `app/db.py` — conexión a `clean.*` en Postgres (ver `../data/dbt/`)
+- `app/db.py` — conexión a `data.gold.*` en Postgres (ver `../data/dbt/`)
 - `Dockerfile`, `requirements.txt`
 
 Despliegue gestionado en `../.railway/railway.ts` (no `railway.toml` — deprecado, ver `../spec/ARCHITECTURE.md`), mismo patrón que `../infra/airflow/`.

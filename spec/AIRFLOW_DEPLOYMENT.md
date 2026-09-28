@@ -64,5 +64,5 @@ railway config apply
 
 ## Pendiente / próximos pasos
 
-- [ ] Escribir el DAG real de ingesta (S3 → `raw.*` → trigger dbt) en `data/dags/` — a decidir cuando se defina el workflow ganador. Cada cambio de DAG dispara rebuild de la imagen de Airflow (aceptado a esta escala, ver `ARCHITECTURE.md`).
+- [x] DAG de ingesta implementado: bootstrap de la base `data` y sus schemas `bronze`/`silver`/`gold`, S3 → `bronze.*` → trigger dbt. Cada cambio de DAG dispara rebuild de la imagen de Airflow (aceptado a esta escala, ver `ARCHITECTURE.md`).
 - [ ] SQLite alcanza para el hackathon; si se necesita concurrencia entre DAGs, migrar `AIRFLOW__DATABASE__SQL_ALCHEMY_CONN` al Postgres ya provisto en el proyecto, documentado como camino de escalamiento, no implementado ahora.
