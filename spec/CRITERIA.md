@@ -9,7 +9,7 @@ Extraído de `doc/Factored AI & Data Hackathon 2026.md` y `doc/Datathon_2026_Kic
 - [ ] Caso ambiguo o no soportado → el sistema pide aclaración o se abstiene explícitamente.
 - [ ] Caso que requiere intervención humana → handoff estructurado.
 - [ ] Interacción demostrada en **español y portugués**.
-- [ ] Reportar limitaciones de datos o cobertura de idioma encontradas.
+- [x] Reportar limitaciones de datos o cobertura de idioma encontradas. (`DATA_FINDINGS.md`, `WORKFLOW_DECISION.md`: sin MXN en transacciones, sin portugués en histórico, `complaints.affected_product_id` inconsistente, sin duplicados exactos)
 
 ## Sistema funcional (requisitos mínimos)
 
@@ -28,7 +28,7 @@ Extraído de `doc/Factored AI & Data Hackathon 2026.md` y `doc/Datathon_2026_Kic
 
 ## Datos y ML
 
-- [ ] Pipeline de datos repetible: contratos de esquema, checks de calidad, linaje, política de actualización/frescura.
+- [x] Pipeline de datos repetible: contratos de esquema, checks de calidad, linaje, política de actualización/frescura. (Airflow idempotente + dbt tests, `spec/ARCHITECTURE.md` Vertical 1-2)
 - [ ] Al menos un componente aprendido evaluado contra un baseline apropiado.
 - [ ] Labels o juicios de relevancia válidos, sin leakage (ej. no usar `is_fraud` como input si se supone que el sistema lo "detecta").
 - [ ] Justificar representaciones, métricas, umbrales, y splits de evaluación.
@@ -68,9 +68,9 @@ Extraído de `doc/Factored AI & Data Hackathon 2026.md` y `doc/Datathon_2026_Kic
 
 ## Fronteras de datos y ejecución
 
-- [ ] Solo el dataset organizador-aprobado (LATAM Bank sintético) y recursos externos permitidos.
+- [x] Solo el dataset organizador-aprobado (LATAM Bank sintético) y recursos externos permitidos.
 - [ ] Identificar qué inputs son reales, de-identificados, sintéticos, o generados por el equipo.
-- [ ] No incluir registros privados reales, credenciales, o datos restringidos en la entrega pública ni en requests a modelos externos.
+- [x] No incluir registros privados reales, credenciales, o datos restringidos en la entrega pública ni en requests a modelos externos. (PDF con AWS keys sacado del repo y de la historia de git — ver commits de purge)
 - [ ] Servicios sandbox / tools de banca simulados son aceptables si sus contratos y límites están documentados.
 - [ ] Autenticación con sesión de prueba confiable o servicio de identidad — un ID/número de cliente solo NO prueba identidad.
 - [ ] Permisos de acceso a registros de cada cliente enforced en la capa de servicio/tool, no en el prompt.
