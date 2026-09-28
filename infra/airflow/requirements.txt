@@ -3,10 +3,9 @@
 # pendulum==3.0.0
 
 # dbt (data/dbt/) runs from a BashOperator inside the ingestion DAG.
-# psycopg2-binary listed first so pip resolves dbt-postgres's psycopg2
-# dependency to the precompiled wheel — building psycopg2 from source
-# needs pg_config/libpq-dev, not present in the Airflow base image.
-psycopg2-binary
+# Needs psycopg2 built from source — libpq-dev/gcc installed in the
+# Dockerfile before this step (dbt-postgres depends on the source
+# package, not psycopg2-binary).
 dbt-postgres==1.8.*
 
 # ingestion task: S3 -> raw.* (no version pin — Airflow's own constraints

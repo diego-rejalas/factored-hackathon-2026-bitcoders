@@ -6,6 +6,16 @@ FROM apache/airflow:${AIRFLOW_VERSION}-python${PYTHON_VERSION}
 ARG AIRFLOW_VERSION
 ARG PYTHON_VERSION
 
+# dbt-postgres depends on psycopg2 (source), which needs pg_config/libpq-dev
+# and a compiler to build — not present in the base image. Install as root,
+# then drop back to the image's non-root airflow user for the actual pip
+# install (matches how the base image itself installs packages).
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libpq-dev gcc \
+    && rm -rf /var/lib/apt/lists/*
+USER airflow
+
 # Install extra Python packages for custom DAGs. Constrained against Airflow's own
 # constraints file so a transitive dependency bump can't silently break Airflow.
 # https://airflow.apache.org/docs/docker-stack/build.html
