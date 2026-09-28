@@ -111,7 +111,7 @@ Se intentó self-hostear Airbyte OSS 2.1.1 en Railway (server + worker, sin weba
 **Responsabilidad:** transformar `bronze.*` en `silver.*` y `gold.*`, resolviendo lo que encontramos en `DATA_FINDINGS.md` (nulls, moneda MXN faltante, tipos, dedupe donde aplique). Proyecto en `data/dbt/`, deployment en `infra/dbt/`.
 
 - Servicio FastAPI liviano (`infra/dbt/app.py`) que expone `POST /run` (`dbt run` + `dbt test`) y `GET /health`. Corre en su propio contenedor Railway, dentro del grupo "Data Pipeline" junto a Postgres y Airflow.
-- dbt sobre la base `data`. Modelos `stg_*` en `silver` (cast de tipos, nulls tratados) → modelos `clean_*` en `gold` (joins resueltos, listos para que el tool layer los lea).
+- dbt sobre la base `data`. Modelos `stg_*` en `silver` (cast de tipos, nulls tratados) → modelos por entidad (sin prefijo `clean_` — medallion reserva la limpieza para silver, gold nombra por entidad/consumidor) en `gold` (joins resueltos, listos para que el tool layer los lea).
 - Tests de dbt (`schema.yml`): `not_null`, `unique`, `accepted_values` sobre los campos clave (esto cubre "contratos de datos" y "quality checks" que pide el reto).
 - Great Expectations no entra — dbt tests + pandera puntual si hace falta algo que dbt no cubre bien, sin levantar un servicio nuevo.
 - **Contrato de salida:** `gold.<tabla>` versionado por los modelos dbt, con `dbt test` pasando en CI/manual antes de que el tool layer dependa de ellos.

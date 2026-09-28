@@ -11,12 +11,12 @@ Contenido de datos, no de infraestructura — la config de cómo se despliega (A
 - `models/staging/stg_*.sql` — cast de tipos reales, `''` → `NULL`, sin lógica de negocio. Vistas en el schema `silver`.
 - `models/staging/sources.yml` — declara `bronze.*` como fuente, con los hallazgos de `../../spec/DATA_FINDINGS.md` documentados por tabla.
 - `models/staging/schema.yml` — tests (`not_null`, `unique`, `accepted_values`, `relationships`) — son los "contratos de datos" que pide el reto.
-- `models/clean/clean_*.sql` — tablas materializadas en el schema `gold`, lo que lee el tool layer (`backend/`). Por ahora son pass-through de silver (sin joins todavía) — los joins/agregaciones específicos de workflow se agregan cuando el equipo vote entre las opciones A/B/C/D.
-- `models/clean/schema.yml` — mismos tests sobre la capa final.
+- `models/gold/<entidad>.sql` — tablas materializadas en el schema `gold`, lo que lee el tool layer (`backend/`). Sin prefijo `clean_`: medallion reserva la limpieza (casts, nulls) para silver — gold nombra por entidad/consumidor de negocio. Por ahora son pass-through de silver (sin joins todavía) — los joins/agregaciones específicos de workflow se agregan cuando el equipo vote entre las opciones A/B/C/D.
+- `models/gold/schema.yml` — mismos tests sobre la capa final.
 
 ## Decisiones de calidad de datos ya tomadas (no reinventar al escribir modelos nuevos)
 
-- **`clean_transactions` excluye `is_fraud`/`fraud_score`** — son ground truth de evaluación, nunca input del agente (leakage). Si un modelo nuevo necesita fraude como feature, es un bug.
+- **`gold.transactions` excluye `is_fraud`/`fraud_score`** — son ground truth de evaluación, nunca input del agente (leakage). Si un modelo nuevo necesita fraude como feature, es un bug.
 - **`currency` nunca corrige la ausencia de MXN** — se documenta como limitación de datos real (ver `../../spec/DATA_FINDINGS.md`), no se inventa una conversión.
 - **`contact_reason`/`reason_category`** en `call_center_interactions` son el mismo campo en la práctica — no asumir que dan más granularidad de la real.
 

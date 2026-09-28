@@ -1,31 +1,31 @@
 version: 2
 
 models:
-  - name: clean_customers
+  - name: customers
     description: "Lo que lee backend/ para consultas de cliente."
     columns:
       - name: customer_id
         tests: [not_null, unique]
 
-  - name: clean_products
+  - name: products
     description: "Lo que lee backend/ para consultas de producto/tarjeta/cuenta."
     columns:
       - name: product_id
         tests: [not_null, unique]
 
-  - name: clean_transactions
+  - name: transactions
     description: "Lo que lee backend/. is_fraud/fraud_score excluidos deliberadamente — no son input del agente, ver el .sql."
     columns:
       - name: transaction_id
         tests: [not_null, unique]
 
-  - name: clean_complaints
+  - name: complaints
     description: "Lo que lee backend/ si el workflow elegido es disputas (Opción A)."
     columns:
       - name: complaint_id
         tests: [not_null, unique]
 
-  - name: clean_call_center_interactions
+  - name: call_center_interactions
     description: "Contexto de interacciones previas — soporte, no núcleo de ningún workflow por sí solo."
     columns:
       - name: interaction_id
