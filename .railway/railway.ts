@@ -28,10 +28,14 @@ export default defineRailway(() => {
     replicas: { "us-east4-eqdc4a": 1 },
     volumeMounts: { "/opt/airflow/data": airflowData },
     env: {
-      AIRFLOW_UID: preserve(),
-      AIRFLOW__CORE__LOAD_EXAMPLES: preserve(),
+      AIRFLOW_UID: "50000",
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False",
+      // Literal, not preserve() — this service has been recreated a few
+      // times during setup (renames), and preserve() has nothing to carry
+      // forward on a brand-new resource, which silently dropped this var
+      // and broke login. Not a secret, safe to commit.
+      _AIRFLOW_WWW_USER_USERNAME: "admin",
       _AIRFLOW_WWW_USER_PASSWORD: preserve(),
-      _AIRFLOW_WWW_USER_USERNAME: preserve(),
       DBT_SERVICE_URL: dbt.env.RAILWAY_PRIVATE_DOMAIN,
       // ingest_latam_bank DAG: S3 -> data.bronze.*
       PG_HOST: Postgres.env.PGHOST,
