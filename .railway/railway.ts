@@ -31,6 +31,17 @@ export default defineRailway(() => {
       _AIRFLOW_WWW_USER_PASSWORD: preserve(),
       _AIRFLOW_WWW_USER_USERNAME: preserve(),
       DBT_SERVICE_URL: dbt.env.RAILWAY_PRIVATE_DOMAIN,
+      // ingest_latam_bank DAG: S3 -> raw.*
+      PG_HOST: Postgres.env.PGHOST,
+      PG_PORT: Postgres.env.PGPORT,
+      PG_USER: Postgres.env.PGUSER,
+      PG_PASSWORD: Postgres.env.PGPASSWORD,
+      PG_DATABASE: Postgres.env.PGDATABASE,
+      // read-only S3 credentials from the data dictionary — set directly in
+      // Railway, never committed here (preserve() keeps whatever's already set).
+      LATAM_BANK_AWS_ACCESS_KEY_ID: preserve(),
+      LATAM_BANK_AWS_SECRET_ACCESS_KEY: preserve(),
+      AWS_REGION: "us-east-2",
     },
   });
 
