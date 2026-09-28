@@ -18,7 +18,7 @@ export default defineRailway(() => {
       DBT_PG_DATABASE: Postgres.env.PGDATABASE,
     },
   });
-  const railwayappAirflow = service("railwayapp-airflow", {
+  const railwayappAirflow = service("airflow", {
     source: github("diego-rejalas/factored-hackathon-2026-bitcoders", { checkSuites: false, rootDirectory: "/" }),
     build: { buildEnvironment: "V3", builder: "DOCKERFILE", dockerfilePath: "infra/airflow/Dockerfile" },
     healthcheck: "/api/v2/monitor/health",

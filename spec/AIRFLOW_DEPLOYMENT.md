@@ -1,6 +1,6 @@
 # Despliegue de Airflow — mapeo completo
 
-Estado real en Railway (proyecto `factored-hackathon`, servicio `railwayapp-airflow`), gestionado como código en `../.railway/railway.ts` (ver `ARCHITECTURE.md`, sección "Configuración de Railway como código"). El fork suelto `diego-rejalas/railwayapp-airflow-private` (fix original) quedó solo como referencia — la fuente real es este repo.
+Estado real en Railway (proyecto `factored-hackathon`, servicio `airflow`), gestionado como código en `../.railway/railway.ts` (ver `ARCHITECTURE.md`, sección "Configuración de Railway como código"). El fork suelto `diego-rejalas/railwayapp-airflow-private` (fix original) quedó solo como referencia — la fuente real es este repo.
 
 ## Fuente
 
@@ -28,7 +28,7 @@ El template original crashea al montar un volumen de Railway porque:
 | Campo | Valor |
 |---|---|
 | Builder | DOCKERFILE (`infra/airflow/Dockerfile`), build context raíz del repo |
-| Dominio público | `railwayapp-airflow-production-fd99.up.railway.app` |
+| Dominio público | `airflow-production-2d51.up.railway.app` |
 | Healthcheck | `/api/v2/monitor/health`, timeout 1800s |
 | Volumen | `airflow-data`, 5000 MB, montado en `/opt/airflow/data` |
 | Modo Airflow | `standalone` (SequentialExecutor, un solo proceso — apiserver+scheduler+DB en un contenedor) |
