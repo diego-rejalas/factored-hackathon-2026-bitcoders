@@ -2,17 +2,24 @@
 table without duplicating rows (ON CONFLICT DO NOTHING on the table's natural
 PK — see spec/ARCHITECTURE.md, "Escalabilidad").
 
+Each source file is a snapshot, not a delta: a re-run of the same key inserts
+nothing new (rows_inserted == 0), it does not apply corrections to an existing
+row. rows_read (parsed from the CSV) and rows_inserted (actually new in
+Postgres) are reported separately — collapsing them into one counter hid
+which rows were skipped as duplicates vs. genuinely new.
+
 Bucket/credentials come from env vars set on the Airflow service in
 .railway/railway.ts, never hardcoded here.
 """
-import csv
 import io
 import logging
 import os
+import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import boto3
+import polars as pl
 import psycopg2
-import psycopg2.extras
 from psycopg2 import sql
 
 from lib.raw_tables import TableSpec
@@ -104,20 +111,67 @@ def _ensure_table(conn, spec: TableSpec) -> None:
     conn.commit()
 
 
-def _load_key(conn, s3, spec: TableSpec, key: str) -> int:
-    body = s3.get_object(Bucket=BUCKET, Key=key)["Body"].read().decode("utf-8-sig")
-    reader = csv.DictReader(io.StringIO(body))
-    rows = [tuple(row.get(c, "") for c in spec.columns) for row in reader]
-    if not rows:
-        return 0
+def _read_csv(body: bytes, spec: TableSpec) -> pl.DataFrame:
+    """Parse one CSV file, TEXT-typed and column-aligned to spec.columns.
 
+    Reads with infer_schema_length=0 so every column stays Utf8 (bronze is
+    all-text by design — real casts happen once, in dbt staging). Missing
+    values become "" (not NULL): dbt's stg_*.sql owns the "" -> NULL cast, so
+    bronze must hold literal empty strings to match that contract.
+    """
+    # utf-8-sig strips a leading BOM that polars' own decoder doesn't expect.
+    text = body.decode("utf-8-sig")
+    df = pl.read_csv(io.BytesIO(text.encode("utf-8")), infer_schema_length=0)
+    missing = [c for c in spec.columns if c not in df.columns]
+    if missing:
+        df = df.with_columns([pl.lit("").alias(c) for c in missing])
+    return df.select(spec.columns).fill_null("")
+
+
+def _load_key(conn, s3, spec: TableSpec, key: str) -> dict:
+    body = s3.get_object(Bucket=BUCKET, Key=key)["Body"].read()
+    df = _read_csv(body, spec)
+    rows_read = df.height
+    if rows_read == 0:
+        return {"rows_read": 0, "rows_inserted": 0}
+
+    # quote_style="always" so an empty field round-trips through COPY as an
+    # actual empty string, not NULL (Postgres COPY CSV treats an unquoted
+    # blank as NULL).
+    csv_text = df.write_csv(include_header=False, quote_style="always")
+
+    stage = f"stage_{spec.name}_{uuid.uuid4().hex[:12]}"
     cols_sql = ", ".join(f'"{c}"' for c in spec.columns)
     pk_sql = ", ".join(f'"{c}"' for c in spec.pk_columns)
-    sql = f'INSERT INTO bronze."{spec.name}" ({cols_sql}) VALUES %s ON CONFLICT ({pk_sql}) DO NOTHING'
     with conn.cursor() as cur:
-        psycopg2.extras.execute_values(cur, sql, rows, page_size=1000)
+        cur.execute(f'CREATE TEMP TABLE "{stage}" (LIKE bronze."{spec.name}") ON COMMIT DROP')
+        cur.copy_expert(f'COPY "{stage}" ({cols_sql}) FROM STDIN WITH (FORMAT csv)', io.StringIO(csv_text))
+        cur.execute(
+            f"""
+            INSERT INTO bronze."{spec.name}" ({cols_sql})
+            SELECT {cols_sql} FROM "{stage}"
+            ON CONFLICT ({pk_sql}) DO NOTHING
+            """
+        )
+        rows_inserted = cur.rowcount
     conn.commit()
-    return len(rows)
+    return {"rows_read": rows_read, "rows_inserted": rows_inserted}
+
+
+# Independent partitions (one file = one day, no cross-file dependency), so
+# each worker gets its own S3 client + Postgres connection and a file is
+# never shared — psycopg2 connections aren't thread-safe. I/O-bound (S3 GET,
+# network round trip to Postgres), so threads help despite the GIL.
+_LOAD_WORKERS = int(os.environ.get("S3_LOAD_WORKERS", "8"))
+
+
+def _load_key_isolated(spec: TableSpec, key: str) -> dict:
+    s3 = _s3_client()
+    conn = _pg_connect()
+    try:
+        return _load_key(conn, s3, spec, key)
+    finally:
+        conn.close()
 
 
 def load_table(table_name: str) -> dict:
@@ -128,12 +182,37 @@ def load_table(table_name: str) -> dict:
     conn = _pg_connect()
     try:
         _ensure_table(conn, spec)
-        keys = _list_keys(s3, spec)
-        total = 0
-        for key in keys:
-            n = _load_key(conn, s3, spec, key)
-            total += n
-            logger.info("bronze.%s <- %s (%d rows)", spec.name, key, n)
-        return {"table": spec.name, "files": len(keys), "rows_upserted": total}
     finally:
         conn.close()
+
+    keys = _list_keys(s3, spec)
+    rows_read = 0
+    rows_inserted = 0
+
+    if not spec.partitioned or len(keys) <= 1:
+        conn = _pg_connect()
+        try:
+            for key in keys:
+                result = _load_key(conn, s3, spec, key)
+                rows_read += result["rows_read"]
+                rows_inserted += result["rows_inserted"]
+                logger.info("bronze.%s <- %s (%d read, %d inserted)", spec.name, key, result["rows_read"], result["rows_inserted"])
+        finally:
+            conn.close()
+    else:
+        with ThreadPoolExecutor(max_workers=_LOAD_WORKERS) as pool:
+            futures = {pool.submit(_load_key_isolated, spec, key): key for key in keys}
+            for future in as_completed(futures):
+                key = futures[future]
+                result = future.result()
+                rows_read += result["rows_read"]
+                rows_inserted += result["rows_inserted"]
+                logger.info("bronze.%s <- %s (%d read, %d inserted)", spec.name, key, result["rows_read"], result["rows_inserted"])
+
+    return {
+        "table": spec.name,
+        "files": len(keys),
+        "rows_read": rows_read,
+        "rows_inserted": rows_inserted,
+        "rows_skipped": rows_read - rows_inserted,
+    }
