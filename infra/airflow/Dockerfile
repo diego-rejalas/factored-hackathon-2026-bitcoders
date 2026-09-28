@@ -6,14 +6,22 @@ FROM apache/airflow:${AIRFLOW_VERSION}-python${PYTHON_VERSION}
 ARG AIRFLOW_VERSION
 ARG PYTHON_VERSION
 
-# dbt-postgres depends on psycopg2 (source), which needs pg_config/libpq-dev
-# and a compiler to build — not present in the base image. Install as root,
-# then drop back to the image's non-root airflow user for the actual pip
-# install (matches how the base image itself installs packages).
+# dbt lives in its own virtualenv, isolated from Airflow's own dependencies.
+# dbt-postgres's transitive deps (isodate, pathspec) hard-conflict with the
+# exact versions Airflow 3.3.0's constraints file pins — no dbt-postgres
+# release satisfies both at once, so dbt can't be pip-installed into
+# Airflow's environment at all (constrained or not) without either
+# downgrading to an ancient dbt or risking an unconstrained upgrade of
+# packages Airflow itself relies on. The DAG invokes dbt via
+# /opt/dbt-venv/bin/dbt, a subprocess — it never needs to share Airflow's
+# Python environment.
 USER root
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libpq-dev gcc \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && python3 -m venv /opt/dbt-venv \
+    && /opt/dbt-venv/bin/pip install --no-cache-dir dbt-postgres \
+    && chown -R airflow:0 /opt/dbt-venv
 USER airflow
 
 # Install extra Python packages for custom DAGs. Constrained against Airflow's own
