@@ -6,6 +6,15 @@ de calidad de datos y `spec/evidence/` para la auditoría estática de Codex.
 Este documento es la base para que el equipo vote y quede registrada la
 justificación.
 
+## Las 4 opciones originales (para votar)
+
+| # | Workflow | Problema | Riesgo/nota |
+|---|---|---|---|
+| **A** | Disputas de transacciones | Cliente reporta cargo no reconocido o transacción fallida/duplicada | Recomendada — ver evidencia abajo |
+| **B** | Soporte de tarjetas | Bloqueo/reposición de tarjeta, cargos no reconocidos, aumento de límite | Se solapa con A (cargos no reconocidos) sin aportar profundidad extra; casi todo termina en "confirmar y ejecutar" o "escalar" |
+| **C** | Cuentas/pagos | Consulta de saldo, estado de transferencia, historial de movimientos | Mayormente lectura, bajo riesgo — menos diferenciada, poco espacio para mostrar ambigüedad real o decisiones de riesgo |
+| **D** | Info/elegibilidad de crédito | Cliente pregunta si califica para un producto de crédito | El reto exige separar conversación/riesgo/política — bien implementado demuestra rigor, pero mayor carga de diseño (política de elegibilidad sintética a inventar) con solo días de plazo |
+
 ## Recomendación: Opción A — Disputas de transacciones
 
 Reforzada, no solo elegida por descarte. Con las 13 tablas cargadas a escala
