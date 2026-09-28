@@ -2,9 +2,12 @@ import { defineRailway, github, group, postgres, preserve, project, service, vol
 
 export default defineRailway(() => {
   const Postgres = postgres("postgres", { region: "us-east4-eqdc4a" });
-  Postgres.networking = { privateNetworkEndpoint: "postgres" };
   const airflowData = volume("airflow-data", { alerts: { usage: { "100": {}, "80": {}, "95": {} } }, allowOnlineResize: true, region: "us-east4-eqdc4a", sizeMB: 5000 });
-  const postgresVolume = volume("postgres-volume", { alerts: { usage: { "100": {}, "80": {}, "95": {} } }, allowOnlineResize: true, region: "us-east4-eqdc4a", sizeMB: 5000 });
+  // Bound by name to the volume actually attached to `postgres` (was named
+  // "postgres-volume" in this file, but the live one is "data-volume--Z5O" —
+  // that mismatch meant every edit here created an orphan instead of
+  // resizing the real thing).
+  const postgresVolume = volume("data-volume--Z5O", { alerts: { usage: { "100": {}, "80": {}, "95": {} } }, allowOnlineResize: true, region: "us-east4-eqdc4a", sizeMB: 30000 });
   const dbt = service("dbt", {
     source: github("diego-rejalas/factored-hackathon-2026-bitcoders", { checkSuites: false, rootDirectory: "/" }),
     build: { buildEnvironment: "V3", builder: "DOCKERFILE", dockerfilePath: "infra/dbt/Dockerfile" },
@@ -36,7 +39,7 @@ export default defineRailway(() => {
       // and broke login. Not a secret, safe to commit.
       _AIRFLOW_WWW_USER_USERNAME: "admin",
       _AIRFLOW_WWW_USER_PASSWORD: preserve(),
-      DBT_SERVICE_URL: dbt.env.RAILWAY_PRIVATE_DOMAIN,
+      DBT_SERVICE_URL: `${dbt.env.RAILWAY_PRIVATE_DOMAIN}:8000`,
       // ingest_latam_bank DAG: S3 -> data.bronze.*
       PG_HOST: Postgres.env.PGHOST,
       PG_PORT: Postgres.env.PGPORT,

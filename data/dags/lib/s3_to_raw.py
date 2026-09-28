@@ -89,7 +89,7 @@ def _list_keys(s3, spec: TableSpec) -> list[str]:
 
 
 def _ensure_table(conn, spec: TableSpec) -> None:
-    pk = spec.columns[0]
+    pk_sql = ", ".join(f'"{c}"' for c in spec.pk_columns)
     cols_sql = ",\n            ".join(f'"{c}" TEXT' for c in spec.columns)
     with conn.cursor() as cur:
         cur.execute("CREATE SCHEMA IF NOT EXISTS bronze")
@@ -97,7 +97,7 @@ def _ensure_table(conn, spec: TableSpec) -> None:
             f"""
             CREATE TABLE IF NOT EXISTS bronze."{spec.name}" (
                 {cols_sql},
-                PRIMARY KEY ("{pk}")
+                PRIMARY KEY ({pk_sql})
             )
             """
         )
@@ -112,8 +112,8 @@ def _load_key(conn, s3, spec: TableSpec, key: str) -> int:
         return 0
 
     cols_sql = ", ".join(f'"{c}"' for c in spec.columns)
-    pk = spec.columns[0]
-    sql = f'INSERT INTO bronze."{spec.name}" ({cols_sql}) VALUES %s ON CONFLICT ("{pk}") DO NOTHING'
+    pk_sql = ", ".join(f'"{c}"' for c in spec.pk_columns)
+    sql = f'INSERT INTO bronze."{spec.name}" ({cols_sql}) VALUES %s ON CONFLICT ({pk_sql}) DO NOTHING'
     with conn.cursor() as cur:
         psycopg2.extras.execute_values(cur, sql, rows, page_size=1000)
     conn.commit()

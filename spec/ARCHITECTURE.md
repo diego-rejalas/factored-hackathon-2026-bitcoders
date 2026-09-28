@@ -47,6 +47,7 @@ flowchart LR
     AGENT -->|HTTP tools| BANK
     BANK -->|SQL| GOLD
     AGENT -.->|LLM calls| OR[OpenRouter]
+    GUARD -.->|clasificación/verificación semántica| TS[TypeSafe]
 ```
 
 ## Diagrama de despliegue
@@ -66,6 +67,7 @@ flowchart TB
 
     subgraph external["Externo"]
         OR[OpenRouter API]
+        TS[TypeSafe API<br/>decisión/verificación]
         S3[S3 bucket<br/>read-only]
     end
 
@@ -73,6 +75,7 @@ flowchart TB
     FE -->|HTTPS| AGENT
     AGENT -->|HTTP interno| BANK
     AGENT -->|HTTPS| OR
+    AGENT -->|HTTPS| TS
     BANK -->|SQL| PG
     AGENT -->|trace_log| PG
 
@@ -130,6 +133,7 @@ Se intentó self-hostear Airbyte OSS 2.1.1 en Railway (server + worker, sin weba
 - Servicio FastAPI separado (Railway) con LangGraph adentro. Grafo con nodos explícitos: `understand → decide → act → verify → escalate`.
 - Las "tools" del agente son clientes HTTP delgados al microservicio de banca (vertical 3) — el LLM nunca toca Postgres directo.
 - **Guardrail determinista:** vive en el nodo `decide`, ANTES de `act`. Es una tabla/config (no un prompt) que dice qué tool puede invocarse según intent detectado + estado de sesión/autenticación. Si falta permiso o falta info → fuerza camino de aclaración o abstención, no deja que el LLM decida solo.
+- **TypeSafe (`docs.typesafe.ai`)** como capa de decisión/verificación semántica dentro del guardrail — no reemplaza LangGraph (que sigue orquestando el grafo), se usa puntual en dos puntos: (1) clasificación de intent en `decide` sin gastar una llamada a LLM completo por cada mensaje, (2) verificación del output del agente en `verify` antes de dejarlo ejecutar la tool. Control de flujo sigue en código (LangGraph + guardrail), TypeSafe solo aporta el chequeo semántico barato — cumple el mismo principio de "policy fuera del prompt" que ya pedía el reto.
 - Verificación: después de que `act` llama al microservicio de banca, `verify` vuelve a consultar el estado (no confía en que el LLM "diga" que funcionó).
 - LLM vía OpenRouter (flexibilidad de modelo/fallback).
 - Logging estructurado de cada paso del grafo a `trace_log` en Postgres — evidencia de auditoría para el handoff a humano y para el reporte de evaluación.
@@ -147,6 +151,8 @@ Se intentó self-hostear Airbyte OSS 2.1.1 en Railway (server + worker, sin weba
 | frontend | `frontend/` | Vercel | UI de chat | — |
 
 Total: 4 servicios de aplicación en Railway + 1 Postgres + 1 frontend en Vercel. Nada de k8s, Kafka, Temporal, Kubeflow.
+
+Externo (SaaS, sin servicio propio en Railway): OpenRouter (LLM calls) y **TypeSafe** (decisión/verificación semántica, consumido por `agent/` vía API — ver Vertical 4).
 
 ## Configuración de Railway como código
 
