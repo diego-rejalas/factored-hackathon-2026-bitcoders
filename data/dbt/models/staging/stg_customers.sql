@@ -23,7 +23,7 @@ select
     nullif(postal_code, '')                              as postal_code,
     nullif(detected_accent, '')                          as detected_accent,
     segment,
-    nullif(credit_score, '')::int                        as credit_score,
+    nullif(credit_score, '')::numeric::int                as credit_score,
     nullif(estimated_monthly_income, '')::numeric(12,2)   as estimated_monthly_income,
     nullif(occupation, '')                               as occupation,
     nullif(marital_status, '')                           as marital_status,
