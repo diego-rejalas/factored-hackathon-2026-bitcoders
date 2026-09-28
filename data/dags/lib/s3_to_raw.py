@@ -1,4 +1,4 @@
-"""S3 -> raw.* loader. Idempotent: safe to re-run a partition or the whole
+"""S3 -> data.* loader. Idempotent: safe to re-run a partition or the whole
 table without duplicating rows (ON CONFLICT DO NOTHING on the table's natural
 PK — see spec/ARCHITECTURE.md, "Escalabilidad").
 
@@ -57,10 +57,10 @@ def _ensure_table(conn, spec: TableSpec) -> None:
     pk = spec.columns[0]
     cols_sql = ",\n            ".join(f'"{c}" TEXT' for c in spec.columns)
     with conn.cursor() as cur:
-        cur.execute("CREATE SCHEMA IF NOT EXISTS raw")
+        cur.execute("CREATE SCHEMA IF NOT EXISTS data")
         cur.execute(
             f"""
-            CREATE TABLE IF NOT EXISTS raw."{spec.name}" (
+            CREATE TABLE IF NOT EXISTS data."{spec.name}" (
                 {cols_sql},
                 PRIMARY KEY ("{pk}")
             )
@@ -78,7 +78,7 @@ def _load_key(conn, s3, spec: TableSpec, key: str) -> int:
 
     cols_sql = ", ".join(f'"{c}"' for c in spec.columns)
     pk = spec.columns[0]
-    sql = f'INSERT INTO raw."{spec.name}" ({cols_sql}) VALUES %s ON CONFLICT ("{pk}") DO NOTHING'
+    sql = f'INSERT INTO data."{spec.name}" ({cols_sql}) VALUES %s ON CONFLICT ("{pk}") DO NOTHING'
     with conn.cursor() as cur:
         psycopg2.extras.execute_values(cur, sql, rows, page_size=1000)
     conn.commit()
@@ -98,7 +98,7 @@ def load_table(table_name: str) -> dict:
         for key in keys:
             n = _load_key(conn, s3, spec, key)
             total += n
-            logger.info("raw.%s <- %s (%d rows)", spec.name, key, n)
+            logger.info("data.%s <- %s (%d rows)", spec.name, key, n)
         return {"table": spec.name, "files": len(keys), "rows_upserted": total}
     finally:
         conn.close()

@@ -1,7 +1,7 @@
 import { defineRailway, github, group, postgres, preserve, project, service, volume } from "railway/iac";
 
 export default defineRailway(() => {
-  const Postgres = postgres("Postgres", { region: "us-east4-eqdc4a" });
+  const Postgres = postgres("postgres", { region: "us-east4-eqdc4a" });
   Postgres.networking = { privateNetworkEndpoint: "postgres" };
   const airflowData = volume("airflow-data", { alerts: { usage: { "100": {}, "80": {}, "95": {} } }, allowOnlineResize: true, region: "us-east4-eqdc4a", sizeMB: 5000 });
   const postgresVolume = volume("postgres-volume", { alerts: { usage: { "100": {}, "80": {}, "95": {} } }, allowOnlineResize: true, region: "us-east4-eqdc4a", sizeMB: 5000 });
