@@ -6,24 +6,6 @@ FROM apache/airflow:${AIRFLOW_VERSION}-python${PYTHON_VERSION}
 ARG AIRFLOW_VERSION
 ARG PYTHON_VERSION
 
-# dbt lives in its own virtualenv, isolated from Airflow's own dependencies.
-# dbt-postgres's transitive deps (isodate, pathspec) hard-conflict with the
-# exact versions Airflow 3.3.0's constraints file pins — no dbt-postgres
-# release satisfies both at once, so dbt can't be pip-installed into
-# Airflow's environment at all (constrained or not) without either
-# downgrading to an ancient dbt or risking an unconstrained upgrade of
-# packages Airflow itself relies on. The DAG invokes dbt via
-# /opt/dbt-venv/bin/dbt, a subprocess — it never needs to share Airflow's
-# Python environment.
-USER root
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends libpq-dev gcc \
-    && rm -rf /var/lib/apt/lists/* \
-    && python3 -m venv /opt/dbt-venv \
-    && /opt/dbt-venv/bin/pip install --no-cache-dir dbt-postgres \
-    && chown -R airflow:0 /opt/dbt-venv
-USER airflow
-
 # Install extra Python packages for custom DAGs. Constrained against Airflow's own
 # constraints file so a transitive dependency bump can't silently break Airflow.
 # https://airflow.apache.org/docs/docker-stack/build.html
@@ -32,14 +14,14 @@ RUN pip install --no-cache-dir \
       --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYTHON_VERSION}.txt" \
       -r /requirements.txt
 
-# DAG + dbt content lives in data/ (data engineering logic), separate from this
-# deployment config (infra/airflow/) — build context is the repo root so both
-# are reachable here. Baked in at build time (simple, rebuild-on-change) rather
-# than the market-standard git-sync sidecar / separately-deployed dbt image —
-# right tradeoff at this scale, documented as the scaling path in
-# spec/ARCHITECTURE.md, not implemented now.
+# DAG content lives in data/dags/ (data engineering logic), separate from
+# this deployment config (infra/airflow/) — build context is the repo root
+# so it's reachable here. dbt runs as its own Railway service
+# (infra/dbt/), the DAG calls it over HTTP — not baked into this image
+# (dbt-postgres's deps conflict with Airflow's own constraints file, and
+# a separate service is what the team wanted visible on the Railway
+# canvas, see spec/ARCHITECTURE.md).
 COPY data/dags/ /opt/airflow/dags/
-COPY data/dbt/ /opt/airflow/dbt/
 
 COPY --chmod=0755 infra/airflow/docker-entrypoint.sh /opt/airflow/railway-entrypoint.sh
 
