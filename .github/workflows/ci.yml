@@ -3,16 +3,24 @@ name: CI
 on:
   pull_request:
     branches: [main]
-    paths: ["airflow/**"]
+    paths: ["infra/airflow/**", "infra/dbt/**", "data/dags/**"]
   push:
     branches: [main]
-    paths: ["airflow/**"]
+    paths: ["infra/airflow/**", "infra/dbt/**", "data/dags/**"]
 
 jobs:
   airflow-build:
-    name: Build airflow/ Dockerfile
+    name: Build infra/airflow/Dockerfile
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Build image (sanity check only, not pushed anywhere)
-        run: docker build ./airflow -t airflow-ci-check
+        run: docker build . -f infra/airflow/Dockerfile -t airflow-ci-check
+
+  dbt-build:
+    name: Build infra/dbt/Dockerfile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image (sanity check only, not pushed anywhere)
+        run: docker build . -f infra/dbt/Dockerfile -t dbt-ci-check

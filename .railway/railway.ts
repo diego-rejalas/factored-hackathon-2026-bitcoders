@@ -21,6 +21,12 @@ export default defineRailway(() => {
       // The DAG bootstraps this application database from the managed
       // Postgres database on its first run.
       DBT_PG_DATABASE: "data",
+      // Railway's private networking implies port 80 when a consumer uses
+      // RAILWAY_PRIVATE_DOMAIN with no port suffix. Pinning this service to
+      // listen there avoids needing to concatenate a port onto the domain
+      // reference object below (that produced a literal "[object Object]:8000"
+      // string — env refs aren't plain strings until Railway resolves them).
+      PORT: "80",
     },
   });
   const railwayappAirflow = service("airflow", {
@@ -39,7 +45,7 @@ export default defineRailway(() => {
       // and broke login. Not a secret, safe to commit.
       _AIRFLOW_WWW_USER_USERNAME: "admin",
       _AIRFLOW_WWW_USER_PASSWORD: preserve(),
-      DBT_SERVICE_URL: `${dbt.env.RAILWAY_PRIVATE_DOMAIN}:8000`,
+      DBT_SERVICE_URL: dbt.env.RAILWAY_PRIVATE_DOMAIN,
       // ingest_latam_bank DAG: S3 -> data.bronze.*
       PG_HOST: Postgres.env.PGHOST,
       PG_PORT: Postgres.env.PGPORT,

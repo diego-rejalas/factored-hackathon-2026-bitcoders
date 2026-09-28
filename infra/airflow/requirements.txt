@@ -10,3 +10,4 @@
 # with it, same lesson as the boto3/dbt-postgres fixes above)
 boto3
 psycopg2-binary
+polars
