@@ -1,8 +1,8 @@
--- raw.customers columns are text (ingestion loads CSVs as-is, see
+-- bronze.customers columns are text (ingestion loads CSVs as-is, see
 -- spec/ARCHITECTURE.md vertical 1). Casts + empty-string-to-null happen once,
 -- here, so every downstream model and the tool layer see real types.
 with source as (
-    select * from {{ source('raw', 'customers') }}
+    select * from {{ source('bronze', 'customers') }}
 )
 
 select

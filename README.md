@@ -14,8 +14,8 @@ Prototipo de sistema de atención al cliente bancario AI-first para el Factored 
 | Carpeta | Rol / vertical | Estado |
 |---|---|---|
 | `infra/airflow/` | Infra — deployment de Airflow (ingesta orquestada) | Desplegado en Railway |
-| `data/dags/` | Lógica — DAGs reales (S3 → `raw.*`) | Por crear |
-| `data/dbt/` | Lógica — dbt (`raw.*` → `clean.*`) | Por crear |
+| `data/dags/` | Lógica — DAGs reales (S3 → `data.bronze.*`) | Implementado |
+| `data/dbt/` | Lógica — dbt (`bronze.*` → `silver.*` → `gold.*`) | Implementado |
 | `backend/` | Backend — microservicio de banca (tool layer, permisos) | Por crear |
 | `agent/` | AI engineer — agente + guardrail (LangGraph) | Por crear |
 | `frontend/` | Chat UI (Vercel) | Por crear |

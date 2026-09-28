@@ -2,7 +2,7 @@
 -- spec/DATA_FINDINGS.md) — kept as two columns for schema fidelity, don't
 -- expect extra granularity from contact_reason downstream.
 with source as (
-    select * from {{ source('raw', 'call_center_interactions') }}
+    select * from {{ source('bronze', 'call_center_interactions') }}
 )
 
 select

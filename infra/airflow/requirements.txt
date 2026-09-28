@@ -5,9 +5,8 @@
 # dbt runs as its own Railway service (infra/dbt/) — the DAG calls it over
 # HTTP, no dbt package needed in this image at all.
 
-# ingestion task: S3 -> raw.* (no version pins — Airflow's own constraints
+# ingestion task: S3 -> bronze.* (no version pins — Airflow's own constraints
 # file already pins compatible versions of these, pinning here conflicts
 # with it, same lesson as the boto3/dbt-postgres fixes above)
 boto3
 psycopg2-binary
-

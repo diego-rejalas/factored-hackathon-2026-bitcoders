@@ -15,7 +15,9 @@ export default defineRailway(() => {
       DBT_PG_PORT: Postgres.env.PGPORT,
       DBT_PG_USER: Postgres.env.PGUSER,
       DBT_PG_PASSWORD: Postgres.env.PGPASSWORD,
-      DBT_PG_DATABASE: Postgres.env.PGDATABASE,
+      // The DAG bootstraps this application database from the managed
+      // Postgres database on its first run.
+      DBT_PG_DATABASE: "data",
     },
   });
   const railwayappAirflow = service("airflow", {
@@ -31,12 +33,14 @@ export default defineRailway(() => {
       _AIRFLOW_WWW_USER_PASSWORD: preserve(),
       _AIRFLOW_WWW_USER_USERNAME: preserve(),
       DBT_SERVICE_URL: dbt.env.RAILWAY_PRIVATE_DOMAIN,
-      // ingest_latam_bank DAG: S3 -> raw.*
+      // ingest_latam_bank DAG: S3 -> data.bronze.*
       PG_HOST: Postgres.env.PGHOST,
       PG_PORT: Postgres.env.PGPORT,
       PG_USER: Postgres.env.PGUSER,
       PG_PASSWORD: Postgres.env.PGPASSWORD,
-      PG_DATABASE: Postgres.env.PGDATABASE,
+      // Railway's provisioned database is used only to create `data`.
+      PG_ADMIN_DATABASE: Postgres.env.PGDATABASE,
+      PG_DATABASE: "data",
       // read-only S3 credentials from the data dictionary — set directly in
       // Railway, never committed here (preserve() keeps whatever's already set).
       LATAM_BANK_AWS_ACCESS_KEY_ID: preserve(),

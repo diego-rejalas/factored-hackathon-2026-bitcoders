@@ -2,7 +2,7 @@
 -- spec/DATA_FINDINGS.md. category/subcategory are the real structured
 -- signal; don't build NLP intent classification on the text fields here.
 with source as (
-    select * from {{ source('raw', 'complaints') }}
+    select * from {{ source('bronze', 'complaints') }}
 )
 
 select

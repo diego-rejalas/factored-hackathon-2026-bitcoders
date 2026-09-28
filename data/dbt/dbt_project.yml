@@ -13,7 +13,7 @@ models:
   latam_bank:
     staging:
       +materialized: view
-      +schema: staging
+      +schema: silver
     clean:
       +materialized: table
-      +schema: clean
+      +schema: gold

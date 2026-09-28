@@ -1,12 +1,12 @@
 version: 2
 
 sources:
-  - name: raw
+  - name: bronze
     description: >
       Espejo crudo de las tablas del dataset LATAM Bank, cargado por
       data/dags/ (ingesta). Columnas como texto tal cual llegan de S3, sin
       transformar — ver spec/DATA_FINDINGS.md antes de asumir tipos/nulls.
-    schema: data
+    schema: bronze
     tables:
       - name: customers
         description: "150,000 filas. Ver spec/DATA_FINDINGS.md: nulls variables por campo (landline_phone 50%, detected_accent 30%)."

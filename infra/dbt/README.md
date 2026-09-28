@@ -4,7 +4,7 @@ Deployment config para correr dbt como su propio servicio (visible aparte en el 
 
 ## Por qué HTTP y no cron
 
-Un cron propio en este servicio correría dbt en un horario fijo, sin garantía de que la ingesta (Airflow) ya haya terminado de cargar `raw.*`. En cambio: expone `POST /run` (FastAPI, `app.py`), y el DAG de ingesta en `../../data/dags/` le pega recién después de que la task de carga S3→`raw.*` termina bien — así el orden queda correcto sin acoplar los dos contenedores en un solo proceso.
+Un cron propio en este servicio correría dbt en un horario fijo, sin garantía de que la ingesta (Airflow) ya haya terminado de cargar `bronze.*`. En cambio: expone `POST /run` (FastAPI, `app.py`), y el DAG de ingesta en `../../data/dags/` le pega recién después de que la task de carga S3→`bronze.*` termina bien — así el orden queda correcto sin acoplar los dos contenedores en un solo proceso.
 
 ## Endpoints
 
@@ -13,7 +13,7 @@ Un cron propio en este servicio correría dbt en un horario fijo, sin garantía 
 
 ## Variables de entorno
 
-Las mismas de `../../data/dbt/.env.example` (`DBT_PG_HOST`, `DBT_PG_PORT`, `DBT_PG_USER`, `DBT_PG_PASSWORD`, `DBT_PG_DATABASE`), declaradas en `../../.railway/railway.ts` como referencia directa al servicio `Postgres` — nunca hardcodeadas.
+Las mismas de `../../data/dbt/.env.example` (`DBT_PG_HOST`, `DBT_PG_PORT`, `DBT_PG_USER`, `DBT_PG_PASSWORD`, `DBT_PG_DATABASE`). En Railway, `DBT_PG_DATABASE` es `data`; host, puerto, usuario y password se referencian desde el servicio `Postgres`.
 
 ## Cómo lo llama el DAG
 
