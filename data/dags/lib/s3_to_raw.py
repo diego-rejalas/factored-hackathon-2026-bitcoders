@@ -14,12 +14,14 @@ Bucket/credentials come from env vars set on the Airflow service in
 import io
 import logging
 import os
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import boto3
 import polars as pl
 import psycopg2
+from botocore.config import Config as BotoConfig
 from psycopg2 import sql
 
 from lib.raw_tables import TableSpec
@@ -35,6 +37,11 @@ def _s3_client():
         region_name=os.environ.get("AWS_REGION", "us-east-2"),
         aws_access_key_id=os.environ["LATAM_BANK_AWS_ACCESS_KEY_ID"],
         aws_secret_access_key=os.environ["LATAM_BANK_AWS_SECRET_ACCESS_KEY"],
+        # "adaptive" retries transient body-read failures (IncompleteRead /
+        # ProtocolError) that "legacy" mode's default retry policy doesn't
+        # cover — seen under concurrent GETs on the larger partitioned tables
+        # (transactions, digital_events).
+        config=BotoConfig(retries={"max_attempts": 6, "mode": "adaptive"}),
     )
 
 
@@ -128,8 +135,24 @@ def _read_csv(body: bytes, spec: TableSpec) -> pl.DataFrame:
     return df.select(spec.columns).fill_null("")
 
 
+def _get_object_bytes(s3, key: str, attempts: int = 4) -> bytes:
+    # botocore's retry config (see _s3_client) only covers request-level
+    # failures — a body read that starts streaming and then drops
+    # (IncompleteRead/ProtocolError) happens after the 200 OK, so it isn't
+    # retried automatically. Re-issuing get_object from scratch is.
+    last_exc = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return s3.get_object(Bucket=BUCKET, Key=key)["Body"].read()
+        except Exception as exc:  # noqa: BLE001 - deliberately broad, see above
+            last_exc = exc
+            logger.warning("s3 get_object retry %d/%d for %s: %s", attempt, attempts, key, exc)
+            time.sleep(min(2**attempt, 10))
+    raise last_exc
+
+
 def _load_key(conn, s3, spec: TableSpec, key: str) -> dict:
-    body = s3.get_object(Bucket=BUCKET, Key=key)["Body"].read()
+    body = _get_object_bytes(s3, key)
     df = _read_csv(body, spec)
     rows_read = df.height
     if rows_read == 0:
@@ -162,7 +185,7 @@ def _load_key(conn, s3, spec: TableSpec, key: str) -> dict:
 # each worker gets its own S3 client + Postgres connection and a file is
 # never shared — psycopg2 connections aren't thread-safe. I/O-bound (S3 GET,
 # network round trip to Postgres), so threads help despite the GIL.
-_LOAD_WORKERS = int(os.environ.get("S3_LOAD_WORKERS", "8"))
+_LOAD_WORKERS = int(os.environ.get("S3_LOAD_WORKERS", "4"))
 
 
 def _load_key_isolated(spec: TableSpec, key: str) -> dict:
