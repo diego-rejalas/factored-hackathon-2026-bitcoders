@@ -2,8 +2,8 @@
 # Example:
 # pendulum==3.0.0
 
-# dbt-postgres is installed into its own venv (see Dockerfile) — its deps
-# conflict with Airflow's own constraints file, so it can't go here.
+# dbt runs as its own Railway service (infra/dbt/) — the DAG calls it over
+# HTTP, no dbt package needed in this image at all.
 
 # ingestion task: S3 -> raw.* (no version pin — Airflow's own constraints
 # file already pins a compatible boto3, pinning here conflicts with it)

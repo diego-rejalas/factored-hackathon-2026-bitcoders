@@ -23,10 +23,10 @@ flowchart LR
         BANK[Banking Mock API<br/>FastAPI]
     end
 
-    subgraph etlv["infra/airflow/ + data/ — Ingesta + ETL"]
-        INGEST[DAG: ingesta<br/>data/dags/]
-        DBT[dbt<br/>data/dbt/]
-        INGEST --> DBT
+    subgraph etlv["Data Pipeline (grupo Railway)"]
+        INGEST[Airflow: DAG ingesta<br/>infra/airflow/ + data/dags/]
+        DBT[Servicio dbt<br/>infra/dbt/ + data/dbt/]
+        INGEST -->|POST /run| DBT
     end
 
     subgraph data["Postgres"]
@@ -82,8 +82,9 @@ flowchart TB
 **Responsabilidad:** bajar los CSVs particionados de S3 (bucket read-only del data dictionary) y volcarlos crudos a Postgres, sin transformar.
 
 - Orquestado por **Airflow standalone** (1 solo contenedor — servicio `railwayapp-airflow`, deployment config en `infra/airflow/`), no Airbyte. Airbyte quedó descartado: su modelo de despliegue por Docker Compose está descontinuado por el propio proyecto (el único camino soportado ahora es `abctl` sobre un clúster Kubernetes, que no encaja en Railway como "otro servicio más"). Ver intento fallido documentado más abajo.
-- Un DAG simple en `data/dags/`: task de extracción (boto3, S3 → `raw.*`) → task de trigger de dbt (`dbt run` + `dbt test`, proyecto en `data/dbt/`).
-- **`infra/` vs `data/` — separación deliberada:** `infra/airflow/` es solo config de despliegue (Dockerfile, entrypoint, healthcheck); `data/dags/` y `data/dbt/` son el contenido real del pipeline (lógica de negocio de datos). El mercado a escala separa esto más todavía — DAGs sincronizados por un sidecar git-sync a un volumen compartido, e imagen de dbt desplegada y versionada aparte del cluster de Airflow, disparada por un operator — para no tener que rebuildear/redeployar todo Airflow cada vez que cambia un DAG o un modelo dbt. A nuestra escala (pocos DAGs, 8 días, 1 contenedor standalone) eso es sobre-ingeniería: `infra/airflow/Dockerfile` hornea `data/dags/` y `data/dbt/` directo en la imagen en build time — cada cambio dispara un rebuild, aceptable acá. Documentado como camino de escalamiento, no implementado ahora.
+- Un DAG simple en `data/dags/`: task de extracción (boto3, S3 → `raw.*`) → `POST /run` al servicio `dbt` (ver Vertical 2).
+- **`infra/` vs `data/` — separación deliberada:** `infra/airflow/` e `infra/dbt/` son solo config de despliegue (Dockerfile, entrypoint, healthcheck); `data/dags/` y `data/dbt/` son el contenido real del pipeline (lógica de negocio de datos).
+- **dbt como servicio Railway separado, no horneado en la imagen de Airflow.** Motivos: (1) `dbt-postgres` tiene dependencias transitivas (`isodate`, `pathspec`) que chocan con las versiones exactas que fija el archivo de constraints de Airflow 3.3.0 — ningún release de dbt-postgres satisface ambos a la vez, instalarlo en el mismo entorno de Python de Airflow no es viable sin degradar a un dbt de 2018; (2) el equipo quería dbt visible como pieza propia en el canvas de Railway. El DAG le pega por HTTP después de terminar la carga a `raw.*` (no un cron suelto, para garantizar el orden). Esto es, de hecho, el patrón de mercado (imagen de dbt separada, disparada por un operator) que en un momento se documentó como "camino de escalamiento, no implementado" — terminó implementándose antes de lo esperado, por la combinación de este conflicto de dependencias + la preferencia de visibilidad del equipo.
 - Destino: schema `raw.*` en Postgres (Railway), una tabla por tabla del dataset, columnas como texto — espejo fiel de lo que llegó (evidencia de lineage/auditoría).
 - **Contrato de salida:** `raw.<tabla>` existe y tiene el mismo número de filas que S3 (contar y loggear al final de la carga).
 
@@ -99,10 +100,11 @@ El reto pide diseñar pensando en escalabilidad, no necesariamente demostrarla c
 
 Se intentó self-hostear Airbyte OSS 2.1.1 en Railway (server + worker, sin webapp — la imagen `airbyte/webapp:2.1.1` no existe, Airbyte discontinuó esa línea de versiones para self-host en contenedores sueltos). Requirió Temporal + Elasticsearch + Postgres dedicado además del server/worker, y depuración empírica de variables no documentadas (`WORKSPACE_ROOT`, `DATABASE_USER`, `AIRBYTE_URL`) vía logs de crash. Se abandonó al confirmar que Airbyte eliminó el soporte de Docker Compose y el único camino oficial (`abctl`) requiere un clúster Kubernetes completo. Fork con los fixes queda documentado en `diego-rejalas/railwayapp-airbyte-private` (privado) por si se retoma.
 
-## 2. ETL / limpieza
+## 2. ETL / limpieza — servicio `dbt`
 
-**Responsabilidad:** transformar `raw.*` en `clean.*`, resolviendo lo que encontramos en `DATA_FINDINGS.md` (nulls, moneda MXN faltante, tipos, dedupe donde aplique). Vive en `data/dbt/`.
+**Responsabilidad:** transformar `raw.*` en `clean.*`, resolviendo lo que encontramos en `DATA_FINDINGS.md` (nulls, moneda MXN faltante, tipos, dedupe donde aplique). Proyecto en `data/dbt/`, deployment en `infra/dbt/`.
 
+- Servicio FastAPI liviano (`infra/dbt/app.py`) que expone `POST /run` (`dbt run` + `dbt test`) y `GET /health`. Corre en su propio contenedor Railway, dentro del grupo "Data Pipeline" junto a Postgres y Airflow.
 - dbt sobre el mismo Postgres. Modelos `stg_*` (cast de tipos, nulls tratados) → modelos `clean_*` (joins resueltos, listos para que el tool layer los lea).
 - Tests de dbt (`schema.yml`): `not_null`, `unique`, `accepted_values` sobre los campos clave (esto cubre "contratos de datos" y "quality checks" que pide el reto).
 - Great Expectations no entra — dbt tests + pandera puntual si hace falta algo que dbt no cubre bien, sin levantar un servicio nuevo.
@@ -132,15 +134,16 @@ Se intentó self-hostear Airbyte OSS 2.1.1 en Railway (server + worker, sin weba
 
 ## Mapa de servicios a desplegar (mínimo viable)
 
-| Servicio | Carpeta | Plataforma | Contiene |
-|---|---|---|---|
-| Postgres | — (addon) | Railway | `raw.*`, `clean.*`, `trace_log` |
-| railwayapp-airflow | `infra/airflow/` (+ `data/dags/`, `data/dbt/` horneados) | Railway | Vertical 1+2 |
-| backend | `backend/` | Railway | Vertical 3 |
-| agent | `agent/` | Railway | Vertical 4 (LangGraph + guardrail) |
-| frontend | `frontend/` | Vercel | UI de chat |
+| Servicio | Carpeta | Plataforma | Contiene | Grupo Railway |
+|---|---|---|---|---|
+| Postgres | — (addon) | Railway | `raw.*`, `clean.*`, `trace_log` | Data Pipeline |
+| railwayapp-airflow | `infra/airflow/` (+ `data/dags/`) | Railway | Vertical 1 (ingesta) | Data Pipeline |
+| dbt | `infra/dbt/` (+ `data/dbt/`) | Railway | Vertical 2 (ETL/limpieza) | Data Pipeline |
+| backend | `backend/` | Railway | Vertical 3 | — |
+| agent | `agent/` | Railway | Vertical 4 (LangGraph + guardrail) | — |
+| frontend | `frontend/` | Vercel | UI de chat | — |
 
-Total: 3 servicios de aplicación en Railway + 1 Postgres + 1 frontend en Vercel. Nada de k8s, Kafka, Temporal, Kubeflow.
+Total: 4 servicios de aplicación en Railway + 1 Postgres + 1 frontend en Vercel. Nada de k8s, Kafka, Temporal, Kubeflow.
 
 ## Configuración de Railway como código
 

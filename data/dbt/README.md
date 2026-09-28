@@ -2,9 +2,9 @@
 
 Vertical 2 de `../../spec/ARCHITECTURE.md`. Transforma `raw.*` (volcado por el DAG en `../dags/`) en `clean.*` (lo que lee `../../backend/`).
 
-Contenido de datos, no de infraestructura — la config de cómo se despliega Airflow (que ejecuta esto) vive aparte en `../../infra/airflow/`. Horneado dentro de la imagen de Airflow en build time (`../../infra/airflow/Dockerfile` copia esta carpeta a `/opt/airflow/dbt/`) — simple y suficiente a esta escala; el patrón de mercado a mayor escala (imagen de dbt separada, disparada por un operator) queda documentado como camino de escalamiento en `../../spec/ARCHITECTURE.md`, no implementado ahora.
+Contenido de datos, no de infraestructura — la config de cómo se despliega (Airflow y dbt) vive aparte en `../../infra/`.
 
-**dbt corre en su propio virtualenv (`/opt/dbt-venv/`), no en el Python de Airflow.** Los paquetes transitivos de `dbt-postgres` (`isodate`, `pathspec`) chocan con las versiones exactas que fija el archivo de constraints de Airflow 3.3.0 — ninguna versión de dbt-postgres satisface ambos a la vez. El DAG debe invocar dbt con la ruta completa: `BashOperator(bash_command="/opt/dbt-venv/bin/dbt run --project-dir /opt/airflow/dbt")`, nunca solo `dbt` (que resolvería al PATH de Airflow, donde no está instalado).
+**dbt corre como su propio servicio Railway** (`../../infra/dbt/`, ver su README), no horneado en la imagen de Airflow — eso fue la primera versión, descartada por dos motivos: (1) los paquetes transitivos de `dbt-postgres` (`isodate`, `pathspec`) chocan con las versiones exactas que fija el archivo de constraints de Airflow 3.3.0, ninguna versión de dbt-postgres satisface ambos a la vez, y (2) el equipo quería dbt visible como pieza propia en el canvas de Railway, junto a Postgres y Airflow (grupo "Data Pipeline" en `../../.railway/railway.ts`). El DAG de ingesta en `../dags/` le pega por HTTP (`POST /run`) después de terminar la carga a `raw.*` — no un cron suelto, para garantizar el orden.
 
 ## Estructura
 
