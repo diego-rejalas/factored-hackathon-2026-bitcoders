@@ -4,6 +4,8 @@ Vertical 2 de `../../spec/ARCHITECTURE.md`. Transforma `raw.*` (volcado por el D
 
 Contenido de datos, no de infraestructura — la config de cómo se despliega Airflow (que ejecuta esto) vive aparte en `../../infra/airflow/`. Horneado dentro de la imagen de Airflow en build time (`../../infra/airflow/Dockerfile` copia esta carpeta a `/opt/airflow/dbt/`) — simple y suficiente a esta escala; el patrón de mercado a mayor escala (imagen de dbt separada, disparada por un operator) queda documentado como camino de escalamiento en `../../spec/ARCHITECTURE.md`, no implementado ahora.
 
+**dbt corre en su propio virtualenv (`/opt/dbt-venv/`), no en el Python de Airflow.** Los paquetes transitivos de `dbt-postgres` (`isodate`, `pathspec`) chocan con las versiones exactas que fija el archivo de constraints de Airflow 3.3.0 — ninguna versión de dbt-postgres satisface ambos a la vez. El DAG debe invocar dbt con la ruta completa: `BashOperator(bash_command="/opt/dbt-venv/bin/dbt run --project-dir /opt/airflow/dbt")`, nunca solo `dbt` (que resolvería al PATH de Airflow, donde no está instalado).
+
 ## Estructura
 
 - `models/staging/stg_*.sql` — cast de tipos reales, `''` → `NULL`, sin lógica de negocio. Vistas en el schema `staging`.

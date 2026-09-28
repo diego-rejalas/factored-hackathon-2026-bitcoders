@@ -2,11 +2,8 @@
 # Example:
 # pendulum==3.0.0
 
-# dbt (data/dbt/) runs from a BashOperator inside the ingestion DAG.
-# Needs psycopg2 built from source — libpq-dev/gcc installed in the
-# Dockerfile before this step (dbt-postgres depends on the source
-# package, not psycopg2-binary).
-dbt-postgres
+# dbt-postgres is installed into its own venv (see Dockerfile) — its deps
+# conflict with Airflow's own constraints file, so it can't go here.
 
 # ingestion task: S3 -> raw.* (no version pin — Airflow's own constraints
 # file already pins a compatible boto3, pinning here conflicts with it)
