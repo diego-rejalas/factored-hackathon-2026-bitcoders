@@ -5,7 +5,7 @@
 This repository is an AI-first banking customer-service hackathon prototype. Read `doc/Factored AI & Data Hackathon 2026.md` before changing product behavior, then use `spec/CRITERIA.md`, `spec/DATA_FINDINGS.md`, and `spec/ARCHITECTURE.md` as the implementation contract.
 
 - `data/dags/` contains Airflow ingestion code (`S3 -> data.bronze.*`); shared DAG helpers live in `data/dags/lib/`.
-- `data/dbt/` contains dbt models: `models/staging/` builds `silver.*` and `models/clean/` supplies `gold.*` tables.
+- `data/dbt/` contains dbt models: `models/staging/` builds `silver.*` and `models/gold/` supplies `gold.*` tables.
 - `infra/airflow/` and `infra/dbt/` contain deployment images and the dbt HTTP runner. Railway configuration is centralized in `.railway/railway.ts`.
 - `backend/`, `agent/`, and `frontend/` are reserved for the banking tool layer, guarded agent, and chat UI. Follow their README contracts when adding them.
 - `doc/` is organizer material; do not edit it.
@@ -25,7 +25,7 @@ Railway configuration changes should be previewed with `railway config plan` bef
 
 ## Coding Style & Naming Conventions
 
-Use four-space indentation for Python and SQL. Keep DAG code small and place reusable ingestion logic in `data/dags/lib/`. Name dbt models by layer and entity: `stg_<entity>.sql` for source normalization and `clean_<entity>.sql` for backend-ready relations. Define model contracts in the adjacent `schema.yml`/`sources.yml` files.
+Use four-space indentation for Python and SQL. Keep DAG code small and place reusable ingestion logic in `data/dags/lib/`. Name dbt models by layer and entity: `stg_<entity>.sql` in `models/staging/` for source normalization, and `<entity>.sql` (no prefix) in `models/gold/` for backend-ready relations — medallion reserves cleaning for silver, so gold models are named by business entity/consumer, not "clean_*". Define model contracts in the adjacent `schema.yml`/`sources.yml` files.
 
 Prefer deterministic policy and permission checks outside LLM prompts. The agent must access banking data only through the backend HTTP tool layer, never directly through Postgres. Preserve the documented rule that fraud ground-truth fields are not agent inputs.
 
