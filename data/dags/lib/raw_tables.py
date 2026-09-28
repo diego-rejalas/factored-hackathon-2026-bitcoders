@@ -14,6 +14,14 @@ class TableSpec:
     # Non-partitioned tables live at data/<name>.csv in the bucket.
     # Partitioned tables live at data/<name>/year=YYYY/month=MM/day=DD/<name>_YYYYMMDD.csv
     partitioned: bool
+    # Natural PK columns. Defaults to (columns[0],) when omitted — set
+    # explicitly for tables with a composite key (e.g. daily_exchange_rates
+    # has no single-column identity).
+    pk: tuple[str, ...] | None = None
+
+    @property
+    def pk_columns(self) -> tuple[str, ...]:
+        return self.pk if self.pk is not None else (self.columns[0],)
 
 
 CUSTOMERS = TableSpec(
@@ -79,4 +87,98 @@ CALL_CENTER_INTERACTIONS = TableSpec(
     ],
 )
 
-ALL_TABLES = [CUSTOMERS, PRODUCTS, TRANSACTIONS, COMPLAINTS, CALL_CENTER_INTERACTIONS]
+BRANCHES = TableSpec(
+    name="branches",
+    partitioned=False,
+    columns=[
+        "branch_id", "branch_code", "branch_name", "branch_type", "address", "city",
+        "state", "country", "postal_code", "geographic_zone", "phone", "email",
+        "opening_time", "closing_time", "has_atms", "atm_count", "has_teller_windows",
+        "teller_window_count", "latitude", "longitude", "branch_opening_date",
+        "branch_status",
+    ],
+)
+
+SERVICE_AGENTS = TableSpec(
+    name="service_agents",
+    partitioned=False,
+    columns=[
+        "agent_id", "employee_code", "first_name", "last_name", "email", "phone",
+        "native_accent", "country_of_origin", "assigned_branch_id", "agent_type",
+        "experience_level", "languages", "specialty", "hire_date", "avg_csat",
+        "total_monthly_interactions", "agent_status", "work_shift",
+    ],
+)
+
+MARKETING_CAMPAIGNS = TableSpec(
+    name="marketing_campaigns",
+    partitioned=False,
+    columns=[
+        "campaign_id", "campaign_name", "description", "campaign_type",
+        "campaign_objective", "promoted_product", "target_segment", "target_country",
+        "start_date", "end_date", "budget", "campaign_status", "expected_conversion_rate",
+    ],
+)
+
+DAILY_EXCHANGE_RATES = TableSpec(
+    name="daily_exchange_rates",
+    partitioned=False,
+    columns=[
+        "date", "source_currency", "target_currency", "exchange_rate", "buy_rate",
+        "sell_rate", "source",
+    ],
+    pk=("date", "source_currency", "target_currency"),
+)
+
+CALL_TRANSCRIPTS = TableSpec(
+    name="call_transcripts",
+    partitioned=True,
+    columns=[
+        "transcript_id", "interaction_id", "process_date", "customer_id", "agent_id",
+        "full_text", "customer_text", "agent_text", "detected_language", "detected_accent",
+        "accent_confidence", "detected_keywords", "mentioned_entities", "detected_intents",
+        "main_topics", "transcription_model", "audio_quality", "duration_seconds",
+    ],
+)
+
+SATISFACTION_SURVEYS = TableSpec(
+    name="satisfaction_surveys",
+    partitioned=True,
+    columns=[
+        "survey_id", "survey_date", "process_date", "interaction_id", "customer_id",
+        "agent_id", "survey_type", "send_channel", "main_score", "nps_category",
+        "question_1_text", "question_1_response", "question_2_text", "question_2_response",
+        "question_3_text", "question_3_response", "open_comments", "comment_sentiment",
+        "response_time_hours", "campaign_response_rate",
+    ],
+)
+
+CAMPAIGN_SENDS = TableSpec(
+    name="campaign_sends",
+    partitioned=True,
+    columns=[
+        "send_id", "send_date", "process_date", "campaign_id", "customer_id",
+        "send_channel", "template_used", "subject", "send_status", "was_delivered",
+        "was_opened", "open_date", "was_clicked", "click_date", "click_count",
+        "had_conversion", "conversion_date", "conversion_value", "open_device",
+        "open_country", "failure_reason", "send_cost",
+    ],
+)
+
+DIGITAL_EVENTS = TableSpec(
+    name="digital_events",
+    partitioned=True,
+    columns=[
+        "event_id", "event_date", "process_date", "customer_id", "session_id",
+        "event_type", "event_category", "channel", "platform", "browser",
+        "app_version", "page_url", "page_title", "action", "element_id", "product_id",
+        "event_value", "duration_seconds", "ip_address", "ip_country", "ip_city",
+        "is_mobile", "referrer", "utm_source", "utm_medium", "utm_campaign",
+    ],
+)
+
+ALL_TABLES = [
+    CUSTOMERS, PRODUCTS, TRANSACTIONS, COMPLAINTS, CALL_CENTER_INTERACTIONS,
+    BRANCHES, SERVICE_AGENTS, MARKETING_CAMPAIGNS, DAILY_EXCHANGE_RATES,
+    CALL_TRANSCRIPTS, SATISFACTION_SURVEYS, CAMPAIGN_SENDS, DIGITAL_EVENTS,
+]
