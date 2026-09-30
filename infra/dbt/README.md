@@ -1,0 +1,29 @@
+# infra/dbt/ — dbt como servicio Railway propio
+
+Deployment config para correr dbt como su propio servicio (visible aparte en el canvas de Railway, dentro del grupo "Data Pipeline" junto a Postgres y Airflow) — no horneado en la imagen de Airflow. El proyecto dbt real (modelos, tests) vive en `../../data/dbt/`, separado a propósito (ver `../../spec/ARCHITECTURE.md`).
+
+## Por qué HTTP y no cron
+
+Un cron propio en este servicio correría dbt en un horario fijo, sin garantía de que la ingesta (Airflow) ya haya terminado de cargar `bronze.*`. En cambio: expone `POST /run` (FastAPI, `app.py`), y el DAG de ingesta en `../../data/dags/` le pega recién después de que la task de carga S3→`bronze.*` termina bien — así el orden queda correcto sin acoplar los dos contenedores en un solo proceso.
+
+## Endpoints
+
+- `GET /health` — healthcheck de Railway.
+- `POST /run` — corre `dbt build` (cada modelo se construye y se prueba antes de pasar a los que dependen de él, así un test fallido en silver frena gold). Devuelve `exit_code`/`stdout`/`stderr` en el body (nunca lanza una excepción HTTP por un fallo de dbt). Si ya hay un build en curso responde 409 en lugar de encolar otro.
+
+## Variables de entorno
+
+Las mismas de `../../data/dbt/.env.example` (`DBT_PG_HOST`, `DBT_PG_PORT`, `DBT_PG_USER`, `DBT_PG_PASSWORD`, `DBT_PG_DATABASE`). En Railway, `DBT_PG_DATABASE` es `data`; host, puerto, usuario y password se referencian desde el servicio `Postgres`.
+
+## Cómo lo llama el DAG
+
+```python
+import requests
+
+resp = requests.post(f"http://{os.environ['DBT_SERVICE_URL']}/run", timeout=600)
+result = resp.json()
+if not result["ok"]:
+    raise AirflowException(result)
+```
+
+`DBT_SERVICE_URL` ya está declarado en el servicio `airflow` dentro de `../../.railway/railway.ts` (dominio privado del servicio `dbt`).

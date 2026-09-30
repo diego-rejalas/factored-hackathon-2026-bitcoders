@@ -1,3 +1,9 @@
+{{ config(indexes=[
+    {'columns': ['transaction_id'], 'unique': True},
+    {'columns': ['customer_id', 'transaction_date']},
+    {'columns': ['product_id']},
+]) }}
+
 -- is_fraud/fraud_score deliberately excluded: this is what backend/ (the
 -- tool layer) reads from. Ground truth stays only in stg_transactions /
 -- the eval dataset, never as input the agent or its tools can see.

@@ -1,8 +1,10 @@
 # data/dbt/ — dbt (bronze. → silver. → gold.)
 
-Vertical 2 de `../../spec/ARCHITECTURE.md`. Transforma `bronze.*` en `silver.*` y `gold.*` (lo que lee `../../backend/`) **dentro de DuckDB**, como parte del job de `../../etl/`: el job carga bronze desde S3, corre `dbt build` con el adaptador dbt-duckdb y, solo si todos los tests pasan, publica gold a Postgres.
+Vertical 2 de `../../spec/ARCHITECTURE.md`. Transforma `bronze.*` (que carga el DAG con DuckDB, ver `../dags/`) en `silver.*` y `gold.*` (lo que lee `../../backend/`), dentro de la base `data` de Postgres.
 
-Contenido de datos, no de infraestructura: cómo se despliega el job vive en `../../etl/` y `../../.railway/railway.ts`.
+Contenido de datos, no de infraestructura: cómo se despliega dbt vive aparte en `../../infra/dbt/`.
+
+**dbt corre como su propio servicio Railway** (`../../infra/dbt/`, ver su README), no horneado en la imagen de Airflow: los paquetes transitivos de `dbt` (`isodate`, `pathspec`) chocan con las versiones exactas que fija el archivo de constraints de Airflow, y además queda visible como pieza propia en el canvas de Railway. El DAG le pega por HTTP (`POST /run`) después de cargar las 13 tablas de `bronze.*`.
 
 ## Estructura
 
@@ -21,15 +23,14 @@ Contenido de datos, no de infraestructura: cómo se despliega el job vive en `..
 
 ## Correr localmente
 
-El job de `../../etl/` construye el archivo de DuckDB con bronze y lo transforma. Para iterar solo sobre los modelos, con un archivo ya cargado:
-
 ```bash
 cd data/dbt
-export DUCKDB_PATH=/tmp/latam.duckdb   # archivo que dejó etl/run.py
+cp .env.example .env   # completar con las credenciales del Postgres de Railway
+export $(cat .env | xargs)
 dbt build   # modelos + tests, cada modelo se prueba antes de construir lo que depende de él
 ```
 
-Dos cuidados propios de DuckDB: un `::numeric` a secas es `DECIMAL(18,3)` y redondea (usar las macros `to_int` y `to_decimal` de `macros/casts.sql`, que fijan la precisión), y la config `indexes` de los modelos es de Postgres (los índices se crean al publicar, en `etl/run.py`).
+Necesita que `bronze.*` ya esté cargado (lo hace el DAG `latam_bank_pipeline`).
 
 ## Great Expectations
 
