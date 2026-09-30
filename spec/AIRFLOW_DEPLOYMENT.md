@@ -1,3 +1,5 @@
+> **RETIRADO (2026-09-30).** El pipeline ahora es un job de DuckDB (`etl/`, ver `ARCHITECTURE.md`). Este documento describe el despliegue anterior con Airflow y se conserva solo como historia; se elimina junto con el servicio.
+
 # Despliegue de Airflow — mapeo completo
 
 Estado real en Railway (proyecto `factored-hackathon`, servicio `airflow`), gestionado como código en `../.railway/railway.ts` (ver `ARCHITECTURE.md`, sección "Configuración de Railway como código"). El fork suelto `diego-rejalas/railwayapp-airflow-private` (fix original) quedó solo como referencia — la fuente real es este repo.
