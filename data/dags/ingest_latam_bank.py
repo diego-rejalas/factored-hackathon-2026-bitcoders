@@ -4,13 +4,17 @@ Each table loads independently and in parallel; dbt only runs after all of
 them succeed, so it never transforms a half-loaded bronze.*. See
 spec/ARCHITECTURE.md (Vertical 1 y 2) for why dbt is a separate HTTP service
 instead of a task in this same container.
+
+Loads are incremental: files already recorded in bronze._ingest_log are
+skipped, so a re-run costs seconds instead of re-reading all of S3. Trigger
+with {"full_refresh": true} to truncate bronze and reload everything.
 """
 import os
 from datetime import datetime
 
 import requests
 from airflow.exceptions import AirflowException
-from airflow.sdk import DAG, task
+from airflow.sdk import DAG, Param, get_current_context, task
 
 from lib.raw_tables import ALL_TABLES
 from lib.s3_to_raw import bootstrap_data_platform, load_table
@@ -22,6 +26,13 @@ with DAG(
     start_date=datetime(2026, 1, 1),
     catchup=False,
     tags=["ingestion", "dbt"],
+    params={
+        "full_refresh": Param(
+            False,
+            type="boolean",
+            description="Truncate every bronze table and its ingest-ledger rows, then reload all files from S3.",
+        )
+    },
 ):
 
     @task(task_id="bootstrap_data_platform")
@@ -34,7 +45,8 @@ with DAG(
 
         @task(task_id=f"load_{spec.name}")
         def _load(table_name: str = spec.name) -> dict:
-            return load_table(table_name)
+            full_refresh = bool(get_current_context()["params"]["full_refresh"])
+            return load_table(table_name, full_refresh=full_refresh)
 
         load_task = _load()
         bootstrap_task >> load_task
@@ -43,7 +55,7 @@ with DAG(
     @task(task_id="run_dbt")
     def run_dbt(*_upstream_results) -> dict:
         url = f"http://{os.environ['DBT_SERVICE_URL']}/run"
-        resp = requests.post(url, timeout=900)
+        resp = requests.post(url, timeout=1800)
         resp.raise_for_status()
         result = resp.json()
         if not result.get("ok"):
