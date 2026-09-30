@@ -13,9 +13,8 @@ Prototipo de sistema de atención al cliente bancario AI-first para el Factored 
 
 | Carpeta | Rol / vertical | Estado |
 |---|---|---|
-| `infra/airflow/` | Infra — deployment de Airflow (ingesta orquestada) | Desplegado en Railway |
-| `data/dags/` | Lógica — DAGs reales (S3 → `data.bronze.*`) | Implementado |
-| `data/dbt/` | Lógica — dbt (`bronze.*` → `silver.*` → `gold.*`) | Implementado |
+| `etl/` | Pipeline completo en un job: DuckDB lee S3, `dbt build`, publica `gold` a Postgres | Desplegado en Railway |
+| `data/dbt/` | Lógica — dbt sobre DuckDB (`bronze.*` → `silver.*` → `gold.*`), 121 tests | Implementado |
 | `backend/` | Backend — microservicio de banca (tool layer, permisos) | Por crear |
 | `agent/` | AI engineer — agente + guardrail (LangGraph) | Por crear |
 | `frontend/` | Chat UI (Vercel) | Por crear |

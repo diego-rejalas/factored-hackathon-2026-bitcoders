@@ -3,24 +3,18 @@ name: CI
 on:
   pull_request:
     branches: [main]
-    paths: ["infra/airflow/**", "infra/dbt/**", "data/dags/**"]
+    paths: ["etl/**", "data/dbt/**"]
   push:
     branches: [main]
-    paths: ["infra/airflow/**", "infra/dbt/**", "data/dags/**"]
+    paths: ["etl/**", "data/dbt/**"]
 
 jobs:
-  airflow-build:
-    name: Build infra/airflow/Dockerfile
+  etl:
+    name: Build the ETL image and parse the dbt project
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Build image (sanity check only, not pushed anywhere)
-        run: docker build . -f infra/airflow/Dockerfile -t airflow-ci-check
-
-  dbt-build:
-    name: Build infra/dbt/Dockerfile
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build image (sanity check only, not pushed anywhere)
-        run: docker build . -f infra/dbt/Dockerfile -t dbt-ci-check
+        run: docker build . -f etl/Dockerfile -t etl-ci-check
+      - name: dbt parse inside the image (every model, source and test must compile)
+        run: docker run --rm -w /app/dbt etl-ci-check dbt parse --profiles-dir . --project-dir .
