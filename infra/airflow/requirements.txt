@@ -1,13 +1,9 @@
-# Add extra PyPI packages required by your DAGs, one per line.
-# Example:
-# pendulum==3.0.0
+# Extra packages for the DAGs. No version pins: Airflow's own constraints file
+# already pins compatible versions of what it shares, and pinning here conflicts
+# with it.
 
-# dbt runs as its own Railway service (infra/dbt/) — the DAG calls it over
-# HTTP, no dbt package needed in this image at all.
+# dbt runs as its own Railway service (infra/dbt/): the DAG calls it over HTTP.
+# dbt's dependencies clash with Airflow's constraints, so it is not installed here.
 
-# ingestion task: S3 -> bronze.* (no version pins — Airflow's own constraints
-# file already pins compatible versions of these, pinning here conflicts
-# with it, same lesson as the boto3/dbt-postgres fixes above)
-boto3
-psycopg2-binary
-polars
+# Extraction and load: DuckDB reads S3 and writes into Postgres in one statement.
+duckdb
