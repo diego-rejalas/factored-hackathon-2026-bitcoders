@@ -4,7 +4,7 @@ sources:
   - name: bronze
     description: >
       Espejo crudo de las 13 tablas del dataset LATAM Bank, cargado por
-      etl/run.py directo desde S3 con DuckDB. Columnas como texto tal cual
+      el DAG latam_bank_pipeline directo desde S3 con DuckDB. Columnas como texto tal cual
       llegan, sin transformar. Cada fila trae _source_key (objeto de S3 de
       origen) y _ingested_at.
       Ver spec/DATA_FINDINGS.md antes de asumir tipos o nulos. Es un snapshot
