@@ -71,9 +71,29 @@ export default defineRailway(() => {
     },
   });
 
+  // Tool layer (backend/): reads gold through a read-only Postgres role. It has a
+  // public URL for now only because the frontend (Vercel) calls it directly; once
+  // the agent exists the agent is the public piece and this goes private.
+  const backend = service("backend", {
+    source: github(REPO, { checkSuites: false, rootDirectory: "/backend" }),
+    build: { buildEnvironment: "V3", builder: "DOCKERFILE", dockerfilePath: "Dockerfile", watchPatterns: ["backend/**"] },
+    healthcheck: "/health",
+    replicas: { [REGION]: 1 },
+    env: {
+      DB_HOST: Postgres.env.PGHOST,
+      DB_PORT: Postgres.env.PGPORT,
+      DB_NAME: "data",
+      DB_USER: "backend_ro",
+      // Password of the read-only role, set directly in Railway (never in git).
+      DB_PASSWORD: preserve(),
+      PORT: "8000",
+    },
+  });
+
   const dataPipeline = group("Data Pipeline", [Postgres, AirflowDb, airflow, dbt, airflowData, postgresVolume]);
+  const app = group("App", [backend]);
 
   return project("factored-hackathon", {
-    resources: [dataPipeline],
+    resources: [dataPipeline, app],
   });
 });

@@ -103,5 +103,5 @@ Opción A.
    agente sin humano (Declined/Reversed simple) vs cuáles siempre escalan
    (fraude, montos altos, ambigüedad no resuelta).
 4. Una vez confirmado: escribir los modelos gold reales para disputas,
-   arrancar `backend/` (tool layer) y `agent/` (LangGraph + guardrail +
+   arrancar `backend/` (tool layer) y `agent/` (PydanticAI + guardrail +
    TypeSafe, ver `ARCHITECTURE.md`).

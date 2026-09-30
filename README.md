@@ -13,11 +13,11 @@ Prototipo de sistema de atención al cliente bancario AI-first para el Factored 
 
 | Carpeta | Rol / vertical | Estado |
 |---|---|---|
-| `etl/` | Pipeline completo en un job: DuckDB lee S3, `dbt build`, publica `gold` a Postgres | Desplegado en Railway |
-| `data/dbt/` | Lógica — dbt sobre DuckDB (`bronze.*` → `silver.*` → `gold.*`), 121 tests | Implementado |
-| `backend/` | Backend — microservicio de banca (tool layer, permisos) | Por crear |
-| `agent/` | AI engineer — agente + guardrail (LangGraph) | Por crear |
-| `frontend/` | Chat UI (Vercel) | Por crear |
+| `infra/airflow/`, `data/dags/` | Airflow orquesta; DuckDB extrae de S3 y carga a `bronze.*` | Desplegado en Railway |
+| `infra/dbt/`, `data/dbt/` | Lógica — dbt sobre Postgres (`bronze.*` → `silver.*` → `gold.*`), 121 tests | Implementado |
+| `backend/` | Backend — tool layer de banca (FastAPI, rol de solo lectura) | Cascarón desplegado en Railway |
+| `agent/` | AI engineer — agente + guardrail (PydanticAI) | Por crear |
+| `frontend/` | Interfaz de chat (Next.js en Vercel) | Cascarón |
 | `.railway/railway.ts` | Infra — despliegue completo como código (reemplaza `railway.toml`, deprecado) | Vigente |
 | `spec/` | Documentación de diseño y decisiones | — |
 | `doc/` | Material del organizador (no editar) | — |

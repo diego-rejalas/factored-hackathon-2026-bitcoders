@@ -2,23 +2,23 @@
 
 **Fecha:** 2026-09-30. **Alcance:** ingesta (Airflow + loader S3 a bronze), transformación (dbt, silver y gold), despliegue (Railway) y calidad de datos. Todo lo de abajo se midió contra el estado real: repo en `main`, Postgres de Railway con las 13 tablas cargadas y una corrida completa de la DAG. Es una revisión de ingeniería de datos, no cambia código por sí sola. Las correcciones propuestas están al final, en orden.
 
-## Estado actual: migración a DuckDB (2026-09-30)
+## Estado actual (2026-10-01)
 
-Después de esta revisión el pipeline se rehízo como **un solo job con DuckDB** (`etl/`, ver `ARCHITECTURE.md`). Lo que sigue describe el diagnóstico original; esta tabla dice qué quedó de cada hallazgo.
+Después de esta revisión el pipeline se rehízo: **Airflow orquesta, DuckDB extrae y carga a Postgres, dbt transforma** (ver `ARCHITECTURE.md`). Se probó también un job único sin orquestador (DuckDB + dbt-duckdb, ~4 minutos) y se descartó por decisión del equipo de mantener Airflow como orquestador. Esta tabla dice qué quedó de cada hallazgo.
 
 | Hallazgo original | Estado |
 |---|---|
-| P0.1 los tests corrían después de publicar | **Resuelto.** `dbt build` prueba cada modelo antes de los dependientes y el job solo publica a Postgres si no hubo errores; si falla, queda el último gold válido. |
+| P0.1 los tests corrían después de publicar | **Resuelto.** `dbt build` prueba cada modelo antes de los dependientes: si un test de silver falla, gold no se reconstruye y conserva el último dato válido. |
 | P0.2 silver cubría 5 de 13 tablas | **Resuelto.** 13 modelos silver y 121 tests. |
-| P0.3 sin linaje de carga, y cada corrida releía todo S3 para no insertar nada | **Resuelto por otro camino.** Sin ledger: cada fila trae su objeto de S3 en `_source_key`. Releer todo S3 cuesta ~2 min porque DuckDB lo carga en paralelo (antes 394 s solo para no insertar nada). |
-| P0.4 un solo usuario con todos los privilegios | **Parcial.** Las etiquetas de fraude ya no están expuestas: `silver` (donde estaban) vive en un archivo efímero de DuckDB, y Postgres solo tiene `gold`, que las excluye. Falta crear un rol de solo lectura sobre `gold` para `backend/` y un rol de escritura limitado para el job. |
+| P0.3 sin linaje de carga, y cada corrida releía todo S3 para no insertar nada | **Resuelto por otro camino.** Sin tabla de control: cada fila trae su objeto de S3 en `_source_key`. La recarga es completa y DuckDB lee S3 en paralelo. |
+| P0.4 un solo usuario con todos los privilegios | **Parcial.** El backend usa un rol de solo lectura (`backend_ro`: `SELECT` sobre `gold` y `ops`, sin acceso a `silver` ni `bronze`). Falta un rol de escritura limitado para dbt y para la carga. |
 | P1.5 documentación desactualizada | **Resuelto.** `sources.yml` declara las 13 tablas con conteos reales. |
 | P1.6 tests débiles | **Resuelto.** Claves foráneas, valores aceptados, rangos y reglas de negocio; los defectos conocidos corren como advertencias con su conteo. |
 | P1.7 sin contratos de modelo | **Abierto.** La sintaxis deprecada de los tests sí se corrigió; falta `contract: enforced` con tipos. |
-| P1.8 gold es copia de silver y reconstruye todo | **Abierto en lo semántico** (gold sigue siendo pass-through hasta elegir workflow). Reconstruir ya no importa: `transactions` tarda 11 s. |
+| P1.8 gold es copia de silver | **Abierto en lo semántico** (gold sigue siendo pass-through hasta elegir workflow). |
 | P1.9 `profiles.yml` (`dev`, schema `bronze`) | **Resuelto.** Target `prod`, schema por defecto `silver`. |
-| P1.10 sin reintentos ni lock | **Resuelto.** Desapareció el runner HTTP; el job reintenta hasta 3 veces (`ON_FAILURE` de Railway). |
-| P2 CI sin `dbt parse` | **Resuelto.** El CI construye la imagen del job y corre `dbt parse` dentro. |
+| P1.10 sin reintentos ni lock | **Resuelto.** Las cargas reintentan 2 veces, `dbt build` corre con un candado en el runner. |
+| P2 CI sin `dbt parse` | **Resuelto.** El CI construye las imágenes de Airflow y dbt, comprueba que el DAG importe y corre `dbt parse` dentro de la imagen de dbt. |
 | `amount_usd` nulo en ~5% de ARS y COP | **Abierto.** Falta derivarlo en silver. |
 
 ## 1. Por qué hay 10 modelos y no 13
@@ -82,9 +82,9 @@ Hoy cada corrida de dbt reconstruye por completo cada tabla gold: borra y vuelve
 
 No lo hacemos porque el dataset es un snapshot estático que termina el 2026-06-18, la tabla más grande (4,4M filas) se reconstruye en 112 s, y un incremental agrega riesgos sin beneficio visible: manejo de clave única, filas viejas desactualizadas, y la necesidad de un `--full-refresh` cada vez que cambia la lógica. Si el volumen creciera, el primer candidato sería `transactions` incremental por `process_date`. Se documenta como camino de escalamiento.
 
-### Airflow (retirado)
+### Airflow (se mantiene)
 
-Se llegó a mover la base de metadatos de Airflow a un Postgres propio y a limitar los redeploys con `watchPatterns`. Después se comprobó que el pipeline completo cabe en un job de DuckDB de ~4 minutos sin orquestador, y Airflow, su Postgres y el runner de dbt se retiraron. `watchPatterns` se mantiene en el servicio `etl` (redeploy solo si cambian `etl/` o `data/dbt/`).
+Se llegó a mover la metadata de Airflow a un Postgres propio (`airflow-db`), a limitar los redeploys con `watchPatterns` y, por un momento, a retirar Airflow a favor de un job único de DuckDB. El equipo decidió mantener Airflow como orquestador, con DuckDB para la extracción y la carga y dbt para la transformación. `watchPatterns` se mantiene en todos los servicios (redeploy solo si cambian sus rutas).
 
 ## 6. Plan sugerido
 
