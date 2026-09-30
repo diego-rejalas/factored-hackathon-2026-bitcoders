@@ -24,7 +24,7 @@ railway config plan   # previsualizar
 railway config apply  # aplicar
 ```
 
-- Volumen montado en `/opt/airflow/data` (metadata DB SQLite + logs + password file — todo persistente ahí).
+- Volumen montado en `/opt/airflow/data` (logs + password file, persistentes ahí). La metadata de Airflow vive en su propio Postgres (`airflow-db`), no en el volumen.
 - Variables: ver `.env.example`. **`_AIRFLOW_WWW_USER_PASSWORD` debe rotarse** (el default `replace-with-strong-password` no sirve) — se mantiene con `preserve()` en el IaC, no se pisa desde el archivo.
 - Deploy automático en cada push a `main` (Railway sigue el repo por GitHub App); `.railway/railway.ts` solo gestiona configuración, no dispara el build.
 
