@@ -1,15 +1,13 @@
 # data/dbt/ — dbt (bronze. → silver. → gold.)
 
-Vertical 2 de `../../spec/ARCHITECTURE.md`. Transforma `bronze.*` (volcado por el DAG en `../dags/`) en `silver.*` y `gold.*` (lo que lee `../../backend/`), dentro de la base `data`.
+Vertical 2 de `../../spec/ARCHITECTURE.md`. Transforma `bronze.*` en `silver.*` y `gold.*` (lo que lee `../../backend/`) **dentro de DuckDB**, como parte del job de `../../etl/`: el job carga bronze desde S3, corre `dbt build` con el adaptador dbt-duckdb y, solo si todos los tests pasan, publica gold a Postgres.
 
-Contenido de datos, no de infraestructura — la config de cómo se despliega (Airflow y dbt) vive aparte en `../../infra/`.
-
-**dbt corre como su propio servicio Railway** (`../../infra/dbt/`, ver su README), no horneado en la imagen de Airflow — eso fue la primera versión, descartada por dos motivos: (1) los paquetes transitivos de `dbt-postgres` (`isodate`, `pathspec`) chocan con las versiones exactas que fija el archivo de constraints de Airflow 3.3.0, ninguna versión de dbt-postgres satisface ambos a la vez, y (2) el equipo quería dbt visible como pieza propia en el canvas de Railway, junto a Postgres y Airflow (grupo "Data Pipeline" en `../../.railway/railway.ts`). El DAG le pega por HTTP (`POST /run`) después de terminar la carga a `bronze.*` — no un cron suelto, para garantizar el orden.
+Contenido de datos, no de infraestructura: cómo se despliega el job vive en `../../etl/` y `../../.railway/railway.ts`.
 
 ## Estructura
 
 - `models/staging/stg_*.sql` — una vista por cada una de las 13 tablas de bronze: cast de tipos reales, `''` → `NULL`, sin lógica de negocio salvo conformar valores (`macros/normalize_country.sql` unifica 'Mexico' y 'México'). Vistas en el schema `silver`.
-- `models/staging/sources.yml` — declara `bronze.*` como fuente, con los hallazgos de `../../spec/DATA_FINDINGS.md` documentados por tabla.
+- `models/staging/sources.yml` — declara las 13 tablas de `bronze.*` como fuente, con los hallazgos de `../../spec/DATA_FINDINGS.md` documentados por tabla.
 - `models/staging/schema.yml` — tests (`not_null`, `unique`, `accepted_values`, `relationships`, `accepted_range`, `unique_combination`) — son los "contratos de datos" que pide el reto. Los defectos conocidos de los datos corren con `severity: warn`: no frenan la corrida, pero aparecen con su conteo en cada build.
 - `tests/generic/` — tests genéricos propios (`accepted_range`, `unique_combination`); `tests/*.sql` — reglas de negocio (titularidad transacción-producto, defectos medidos de quejas, saldo sobre límite, etc.).
 - `models/gold/<entidad>.sql` — tablas materializadas en el schema `gold`, lo que lee el tool layer (`backend/`). Sin prefijo `clean_`: medallion reserva la limpieza (casts, nulls) para silver — gold nombra por entidad/consumidor de negocio. Por ahora son pass-through de silver (sin joins todavía) — los joins/agregaciones específicos de workflow se agregan cuando el equipo vote entre las opciones A/B/C/D.
@@ -23,12 +21,15 @@ Contenido de datos, no de infraestructura — la config de cómo se despliega (A
 
 ## Correr localmente
 
+El job de `../../etl/` construye el archivo de DuckDB con bronze y lo transforma. Para iterar solo sobre los modelos, con un archivo ya cargado:
+
 ```bash
 cd data/dbt
-cp .env.example .env   # completar con las credenciales del Postgres de Railway
-export $(cat .env | xargs)
+export DUCKDB_PATH=/tmp/latam.duckdb   # archivo que dejó etl/run.py
 dbt build   # modelos + tests, cada modelo se prueba antes de construir lo que depende de él
 ```
+
+Dos cuidados propios de DuckDB: un `::numeric` a secas es `DECIMAL(18,3)` y redondea (usar las macros `to_int` y `to_decimal` de `macros/casts.sql`, que fijan la precisión), y la config `indexes` de los modelos es de Postgres (los índices se crean al publicar, en `etl/run.py`).
 
 ## Great Expectations
 
