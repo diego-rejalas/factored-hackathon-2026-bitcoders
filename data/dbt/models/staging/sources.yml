@@ -3,18 +3,37 @@ version: 2
 sources:
   - name: bronze
     description: >
-      Espejo crudo de las tablas del dataset LATAM Bank, cargado por
+      Espejo crudo de las 13 tablas del dataset LATAM Bank, cargado por
       data/dags/ (ingesta). Columnas como texto tal cual llegan de S3, sin
-      transformar — ver spec/DATA_FINDINGS.md antes de asumir tipos/nulls.
+      transformar. Cada fila trae _source_key (archivo de origen) y
+      _ingested_at, y cada archivo queda registrado en bronze._ingest_log.
+      Ver spec/DATA_FINDINGS.md antes de asumir tipos o nulos. Es un snapshot
+      estático (hechos del 2023-06-17 al 2026-06-18): no hay freshness que medir.
     schema: bronze
     tables:
       - name: customers
-        description: "150,000 filas. Ver spec/DATA_FINDINGS.md: nulls variables por campo (landline_phone 50%, detected_accent 30%)."
+        description: "150.000 filas. Nulos variables por campo (landline_phone 50%, detected_accent 30%). registration_branch_id no cruza con branches (149.995 de 150.000 huérfanos)."
       - name: products
-        description: "400,000 filas. Ver spec/DATA_FINDINGS.md: currency solo trae USD/COP/ARS, cero MXN pese a 50% de clientes mexicanos."
+        description: "400.000 filas. currency solo trae USD/COP/ARS, cero MXN pese a 50% de clientes mexicanos."
       - name: transactions
-        description: "5,000,000 filas, particionado por fecha. Mismo hallazgo de ausencia de MXN que products."
+        description: "4.425.008 filas, un archivo por día. Sin MXN. amount_usd nulo en toda transacción en USD y en ~5% de ARS/COP."
       - name: complaints
-        description: "80,000 filas (PQR). description/resolution son texto plantilla, no texto libre real — ver spec/DATA_FINDINGS.md."
+        description: "67.095 filas (PQR). description y resolution son texto plantilla. affected_product_id apunta al producto de otro cliente en el 100% de los casos; origin_interaction_id siempre vacío."
       - name: call_center_interactions
-        description: "800,000 filas. contact_reason y reason_category son literalmente los mismos 6 valores (menos granular que lo que sugiere el data dictionary)."
+        description: "686.296 filas. contact_reason y reason_category son los mismos 6 valores."
+      - name: branches
+        description: "350 filas. geographic_zone es 100% 'Urbana'; has_atms y has_teller_windows son True en todas."
+      - name: service_agents
+        description: "1.200 filas. 129 hablan portugués. assigned_branch_id no cruza con branches (831 huérfanos de 833 con valor). country_of_origin usa 'Mexico' sin tilde."
+      - name: marketing_campaigns
+        description: "200 filas. Sin uso en atención al cliente. target_country usa 'Mexico' sin tilde."
+      - name: daily_exchange_rates
+        description: "13.164 filas, incluye pares con MXN. Clave compuesta (date, source_currency, target_currency)."
+      - name: call_transcripts
+        description: "171.321 filas. 95% con intención consulta_general, 100% en español, texto plantilla."
+      - name: satisfaction_surveys
+        description: "212.759 filas. main_score de 1 a 7 para CSAT, NPS y CES; nps_category sin Promoter."
+      - name: campaign_sends
+        description: "1.746.801 filas en 1.083 archivos (faltan 14 días respecto de las otras tablas). Sin uso en atención al cliente."
+      - name: digital_events
+        description: "15.620.994 filas. customer_id vacío en ~24% (sesiones anónimas). ip_country trae 'Mexico' y 'México'."
