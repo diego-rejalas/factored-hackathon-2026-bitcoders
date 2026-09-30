@@ -14,6 +14,10 @@ RUN pip install --no-cache-dir \
       --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYTHON_VERSION}.txt" \
       -r /requirements.txt
 
+# Fetch the DuckDB extensions now (as the airflow user, whose home they are
+# installed under) so a task never depends on extensions.duckdb.org at run time.
+RUN python -c "import duckdb; c = duckdb.connect(); c.execute('INSTALL httpfs'); c.execute('INSTALL postgres')"
+
 # DAG content lives in data/dags/ (data engineering logic), separate from
 # this deployment config (infra/airflow/) — build context is the repo root
 # so it's reachable here. dbt runs as its own Railway service
