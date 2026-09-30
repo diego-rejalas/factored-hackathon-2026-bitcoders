@@ -17,8 +17,7 @@ Work is the data pipeline. From `data/dbt/`, configure credentials before runnin
 ```bash
 cp .env.example .env
 export $(cat .env | xargs)
-dbt run       # build silver and gold models
-dbt test      # validate declared data contracts
+dbt build     # build silver and gold models, testing each one before its dependents
 ```
 
 Railway configuration changes should be previewed with `railway config plan` before `railway config apply`. Do not invent npm, Python, lint, or test commands for the not-yet-created services; add verified commands here with the implementation.
@@ -31,7 +30,7 @@ Prefer deterministic policy and permission checks outside LLM prompts. The agent
 
 ## Testing Guidelines
 
-Add dbt tests for keys, required values, accepted values, and relationships whenever a model changes. Run both `dbt run` and `dbt test` against the intended database before submitting data-pipeline work. For future services, add focused tests alongside the code and document the exact test command before treating it as required.
+Add dbt tests for keys, required values, accepted values, and relationships whenever a model changes. Run `dbt build` against the intended database before submitting data-pipeline work. For future services, add focused tests alongside the code and document the exact test command before treating it as required.
 
 ## Commit & Pull Request Guidelines
 

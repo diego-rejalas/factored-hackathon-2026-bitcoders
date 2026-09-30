@@ -2,83 +2,467 @@ version: 2
 
 models:
   - name: stg_customers
-    description: "customers con tipos reales, empty-string normalizado a null."
+    description: "customers con tipos reales, vacío normalizado a null."
     columns:
       - name: customer_id
-        tests: [not_null, unique]
+        data_tests: [not_null, unique]
       - name: country
-        tests:
+        data_tests:
           - accepted_values:
-              values: ["México", "Colombia", "Argentina"]
+              arguments:
+                values: ["México", "Colombia", "Argentina"]
       - name: customer_status
-        tests:
+        data_tests:
           - accepted_values:
-              values: ["Active", "Inactive", "Suspended", "Closed"]
+              arguments:
+                values: ["Active", "Inactive", "Suspended", "Closed"]
+      - name: credit_score
+        description: "Nulo en 15,0%. Mínimo real 422."
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: 300
+                max_value: 850
+      - name: registration_branch_id
+        description: "DEFECTO CONOCIDO: 149.995 de 150.000 no existen en branches. La advertencia mide el defecto; no usar este campo."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_branches')
+                field: branch_id
+              config:
+                severity: warn
 
   - name: stg_products
-    description: "products con tipos reales. currency NUNCA trae MXN (limitación de datos conocida, ver spec/DATA_FINDINGS.md) — no agregar un test accepted_values que exija MXN."
+    description: "products con tipos reales. currency NUNCA trae MXN (limitación de datos conocida, ver spec/DATA_FINDINGS.md): no agregar un test accepted_values que exija MXN."
     columns:
       - name: product_id
-        tests: [not_null, unique]
+        data_tests: [not_null, unique]
       - name: customer_id
-        tests:
+        data_tests:
           - not_null
           - relationships:
-              to: ref('stg_customers')
-              field: customer_id
+              arguments:
+                to: ref('stg_customers')
+                field: customer_id
+      - name: product_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Cuenta Ahorro", "Cuenta Corriente", "Tarjeta Crédito", "Tarjeta Débito", "Préstamo Personal", "Préstamo Hipotecario", "Inversión", "Seguro"]
       - name: currency
-        tests:
+        data_tests:
           - accepted_values:
-              values: ["USD", "COP", "ARS"]
+              arguments:
+                values: ["USD", "COP", "ARS"]
       - name: product_status
-        tests:
+        data_tests:
           - accepted_values:
-              values: ["Active", "Closed", "Blocked", "Suspended"]
+              arguments:
+                values: ["Active", "Closed", "Blocked", "Suspended"]
+      - name: opening_branch_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_branches')
+                field: branch_id
+      - name: credit_limit
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: 0
 
   - name: stg_transactions
-    description: "transactions con tipos reales. is_fraud/fraud_score son ground truth de evaluación, no input para el agente."
+    description: "transactions con tipos reales. is_fraud y fraud_score son ground truth de evaluación, no input para el agente."
     columns:
       - name: transaction_id
-        tests: [not_null, unique]
+        data_tests: [not_null, unique]
       - name: customer_id
-        tests:
+        data_tests:
           - not_null
           - relationships:
-              to: ref('stg_customers')
-              field: customer_id
+              arguments:
+                to: ref('stg_customers')
+                field: customer_id
+      - name: product_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_products')
+                field: product_id
+      - name: branch_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_branches')
+                field: branch_id
       - name: transaction_status
-        tests:
+        data_tests:
           - accepted_values:
-              values: ["Approved", "Declined", "Pending", "Reversed"]
+              arguments:
+                values: ["Approved", "Declined", "Pending", "Reversed"]
+      - name: currency
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["USD", "COP", "ARS"]
+      - name: amount
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: 0.01
 
   - name: stg_complaints
-    description: "complaints (PQR) con tipos reales. description/resolution son texto plantilla, no texto libre — no construir clasificación de intención sobre esos campos."
+    description: "complaints (PQR) con tipos reales. description y resolution son texto plantilla: no construir clasificación de intención sobre esos campos."
     columns:
       - name: complaint_id
-        tests: [not_null, unique]
+        data_tests: [not_null, unique]
       - name: customer_id
-        tests:
+        data_tests:
           - not_null
           - relationships:
-              to: ref('stg_customers')
-              field: customer_id
+              arguments:
+                to: ref('stg_customers')
+                field: customer_id
       - name: case_type
-        tests:
+        data_tests:
           - accepted_values:
-              values: ["Complaint", "Claim", "Request", "Suggestion"]
+              arguments:
+                values: ["Complaint", "Claim", "Request", "Suggestion"]
+      - name: category
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Transactions", "Fees", "Technical", "Branch", "Service"]
       - name: status
-        tests:
+        data_tests:
           - accepted_values:
-              values: ["Open", "In Process", "Escalated", "Resolved", "Closed", "Rejected"]
+              arguments:
+                values: ["Open", "In Process", "Escalated", "Resolved", "Closed", "Rejected"]
+      - name: affected_product_id
+        description: "DEFECTO CONOCIDO: apunta al producto de otro cliente en el 100% de los casos. Ver tests/assert_complaint_affected_product_belongs_to_customer.sql. No usar para mostrar ni autorizar información de producto."
+      - name: related_branch_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_branches')
+                field: branch_id
+      - name: assigned_agent_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_service_agents')
+                field: agent_id
 
   - name: stg_call_center_interactions
     description: "call_center_interactions con tipos reales. contact_reason == reason_category en la práctica (ver spec/DATA_FINDINGS.md)."
     columns:
       - name: interaction_id
-        tests: [not_null, unique]
+        data_tests: [not_null, unique]
       - name: customer_id
-        tests:
+        data_tests:
           - not_null
           - relationships:
-              to: ref('stg_customers')
-              field: customer_id
+              arguments:
+                to: ref('stg_customers')
+                field: customer_id
+      - name: agent_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_service_agents')
+                field: agent_id
+      - name: reason_category
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Transaccional", "Producto", "Queja", "Técnico", "Comercial", "Retención"]
+
+  - name: stg_branches
+    description: "Sucursales. Dimensión que habilita las pruebas de clave foránea a sucursal."
+    columns:
+      - name: branch_id
+        data_tests: [not_null, unique]
+      - name: branch_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Corporate", "Express", "Main", "Premium"]
+      - name: branch_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Active", "Temporarily Closed"]
+      - name: country
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["México", "Colombia", "Argentina"]
+      - name: latitude
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: -90
+                max_value: 90
+      - name: longitude
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: -180
+                max_value: 180
+
+  - name: stg_service_agents
+    description: "Agentes de servicio. country_of_origin se conforma a 'México'. 129 hablan portugués."
+    columns:
+      - name: agent_id
+        data_tests: [not_null, unique]
+      - name: assigned_branch_id
+        description: "DEFECTO CONOCIDO: 831 de 833 con valor no existen en branches. La advertencia mide el defecto."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_branches')
+                field: branch_id
+              config:
+                severity: warn
+      - name: country_of_origin
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["México", "Colombia", "Argentina"]
+      - name: native_accent
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["argentine", "colombian", "mexican"]
+      - name: agent_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Digital", "Hybrid", "In-Person", "Phone"]
+      - name: experience_level
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Junior", "Mid-Senior", "Senior", "Specialist"]
+      - name: agent_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Active", "Inactive", "Leave", "Vacation"]
+      - name: work_shift
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Afternoon", "Morning", "Night", "Rotating"]
+
+  - name: stg_marketing_campaigns
+    description: "Campañas de marketing. Sin uso en atención al cliente; se modela para tener contrato y tests."
+    columns:
+      - name: campaign_id
+        data_tests: [not_null, unique]
+      - name: campaign_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Email", "Mix", "Push", "SMS", "Voice", "WhatsApp"]
+      - name: campaign_objective
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Acquisition", "Cross-sell", "Reactivation", "Retention", "Up-sell"]
+      - name: campaign_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Active", "Completed", "Paused"]
+      - name: target_country
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["México", "Colombia", "Argentina"]
+
+  - name: stg_daily_exchange_rates
+    description: "Tipo de cambio diario. Incluye MXN aunque ningún producto ni transacción esté en MXN. La columna origen `date` es rate_date."
+    data_tests:
+      - unique_combination:
+          arguments:
+            column_names: [rate_date, source_currency, target_currency]
+    columns:
+      - name: source_currency
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["ARS", "COP", "MXN", "USD"]
+      - name: target_currency
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["ARS", "COP", "MXN", "USD"]
+      - name: exchange_rate
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: 0.000001
+
+  - name: stg_call_transcripts
+    description: "Transcripciones. Texto plantilla, 100% español: no sirve para entrenar intención ni valida portugués."
+    columns:
+      - name: transcript_id
+        data_tests: [not_null, unique]
+      - name: interaction_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_call_center_interactions')
+                field: interaction_id
+      - name: customer_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_customers')
+                field: customer_id
+      - name: agent_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_service_agents')
+                field: agent_id
+      - name: detected_language
+        description: "Hoy solo 'es'. Si aparece otro idioma la advertencia avisa: cambiaría lo que se reporta sobre cobertura de portugués."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["es"]
+              config:
+                severity: warn
+      - name: main_topics
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Comercial", "Producto", "Queja", "Retención", "Técnico", "Transaccional"]
+      - name: transcription_model
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["AWS Transcribe", "Azure Speech", "Google STT", "Whisper v3"]
+
+  - name: stg_satisfaction_surveys
+    description: "Encuestas. main_score de 1 a 7 para CSAT, NPS y CES; nps_category nunca trae Promoter."
+    columns:
+      - name: survey_id
+        data_tests: [not_null, unique]
+      - name: interaction_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_call_center_interactions')
+                field: interaction_id
+      - name: customer_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_customers')
+                field: customer_id
+      - name: agent_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_service_agents')
+                field: agent_id
+      - name: survey_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["CES", "CSAT", "NPS"]
+      - name: main_score
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: 1
+                max_value: 7
+      - name: nps_category
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Detractor", "Passive", "Promoter"]
+      - name: comment_sentiment
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Negative", "Neutral", "Positive"]
+
+  - name: stg_campaign_sends
+    description: "Envíos de campañas. Sin uso en atención al cliente; se modela para tener contrato y tests."
+    columns:
+      - name: send_id
+        data_tests: [not_null, unique]
+      - name: campaign_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_marketing_campaigns')
+                field: campaign_id
+      - name: customer_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_customers')
+                field: customer_id
+      - name: send_channel
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Email", "Push", "SMS", "Voice", "WhatsApp"]
+      - name: send_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Blocked", "Bounced", "Failed", "Sent"]
+
+  - name: stg_digital_events
+    description: "Eventos digitales. customer_id nulo en ~24% (sesiones anónimas, no es un error). ip_country se conforma a 'México'."
+    columns:
+      - name: event_id
+        data_tests: [not_null, unique]
+      - name: customer_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_customers')
+                field: customer_id
+      - name: product_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_products')
+                field: product_id
+      - name: event_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Click", "Error", "FormSubmit", "Login", "Logout", "PageView", "Purchase"]
+      - name: event_category
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Authentication", "Navigation", "Product", "Transaction"]
+      - name: channel
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Android App", "Desktop Web", "iOS App", "Mobile Web"]
+      - name: ip_country
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["México", "Colombia", "Argentina"]

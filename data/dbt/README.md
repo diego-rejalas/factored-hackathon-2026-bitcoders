@@ -8,9 +8,10 @@ Contenido de datos, no de infraestructura — la config de cómo se despliega (A
 
 ## Estructura
 
-- `models/staging/stg_*.sql` — cast de tipos reales, `''` → `NULL`, sin lógica de negocio. Vistas en el schema `silver`.
+- `models/staging/stg_*.sql` — una vista por cada una de las 13 tablas de bronze: cast de tipos reales, `''` → `NULL`, sin lógica de negocio salvo conformar valores (`macros/normalize_country.sql` unifica 'Mexico' y 'México'). Vistas en el schema `silver`.
 - `models/staging/sources.yml` — declara `bronze.*` como fuente, con los hallazgos de `../../spec/DATA_FINDINGS.md` documentados por tabla.
-- `models/staging/schema.yml` — tests (`not_null`, `unique`, `accepted_values`, `relationships`) — son los "contratos de datos" que pide el reto.
+- `models/staging/schema.yml` — tests (`not_null`, `unique`, `accepted_values`, `relationships`, `accepted_range`, `unique_combination`) — son los "contratos de datos" que pide el reto. Los defectos conocidos de los datos corren con `severity: warn`: no frenan la corrida, pero aparecen con su conteo en cada build.
+- `tests/generic/` — tests genéricos propios (`accepted_range`, `unique_combination`); `tests/*.sql` — reglas de negocio (titularidad transacción-producto, defectos medidos de quejas, saldo sobre límite, etc.).
 - `models/gold/<entidad>.sql` — tablas materializadas en el schema `gold`, lo que lee el tool layer (`backend/`). Sin prefijo `clean_`: medallion reserva la limpieza (casts, nulls) para silver — gold nombra por entidad/consumidor de negocio. Por ahora son pass-through de silver (sin joins todavía) — los joins/agregaciones específicos de workflow se agregan cuando el equipo vote entre las opciones A/B/C/D.
 - `models/gold/schema.yml` — mismos tests sobre la capa final.
 
@@ -26,8 +27,7 @@ Contenido de datos, no de infraestructura — la config de cómo se despliega (A
 cd data/dbt
 cp .env.example .env   # completar con las credenciales del Postgres de Railway
 export $(cat .env | xargs)
-dbt run
-dbt test
+dbt build   # modelos + tests, cada modelo se prueba antes de construir lo que depende de él
 ```
 
 ## Great Expectations

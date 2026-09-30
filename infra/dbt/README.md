@@ -9,7 +9,7 @@ Un cron propio en este servicio correría dbt en un horario fijo, sin garantía 
 ## Endpoints
 
 - `GET /health` — healthcheck de Railway.
-- `POST /run` — corre `dbt run` y, si sale bien, `dbt test`. Devuelve `exit_code`/`stdout`/`stderr` de cada paso en el body (nunca lanza una excepción HTTP por un fallo de dbt — el caller decide qué hacer con `ok: false`).
+- `POST /run` — corre `dbt build` (cada modelo se construye y se prueba antes de pasar a los que dependen de él, así un test fallido en silver frena gold). Devuelve `exit_code`/`stdout`/`stderr` en el body (nunca lanza una excepción HTTP por un fallo de dbt). Si ya hay un build en curso responde 409 en lugar de encolar otro.
 
 ## Variables de entorno
 
