@@ -112,7 +112,9 @@ Las secciones anteriores salen de muestras de 1 a 5 días. Todo lo de abajo se m
 | digital_events | 15.620.994 |
 | branches / service_agents / marketing_campaigns / daily_exchange_rates | 350 / 1.200 / 200 / 13.164 |
 
-**Discrepancia abierta:** el resumen del organizador habla de ~5M transacciones, ~80k quejas, ~800k interacciones, ~200k transcripts y ~250k encuestas, es decir ~14-16% más que lo cargado, y de ~10M `digital_events`, es decir 56% menos que lo cargado. Con 1.097 archivos por tabla particionada (un archivo por día) no faltan días. Puede ser que las cifras del resumen sean nominales, o que el loader haya descartado filas duplicadas por clave primaria (`ON CONFLICT DO NOTHING`). Falta comparar `rows_read` (filas en S3) contra `rows_inserted` de la corrida de carga, que el loader ya reporta por separado. No afirmar pérdida ni duplicados hasta hacerlo.
+**Las cifras del resumen del organizador son nominales, no el contenido real.** Habla de ~5M transacciones, ~80k quejas, ~800k interacciones, ~200k transcripts y ~250k encuestas (14-16% más que lo cargado) y de ~10M `digital_events` (56% menos que lo cargado). Se verificó contra S3: en la corrida de carga del 2026-09-28, `rows_read` (filas leídas de los CSV) es **idéntico** a las filas de bronze en las 13 tablas (ej. transactions 4.425.008 leídas y 4.425.008 cargadas). Si los archivos trajeran claves primarias repetidas, se leerían más filas de las que quedan en bronze; no ocurre. El loader no descartó nada, y S3 no contiene "~2% de duplicados" a nivel de clave primaria.
+
+**Cobertura por archivo:** 1.097 archivos (un archivo por día) en cada tabla particionada, salvo `campaign_sends` con 1.083: faltan 14 días. En las 7 tablas particionadas, todos los archivos comparten un único encabezado (0 cambios de esquema entre fechas), así que la "evolución de esquema" que menciona el organizador no aparece en los encabezados.
 
 ### Quejas (`complaints`)
 
@@ -162,12 +164,11 @@ Seis columnas enteras llegan con formato decimal (`"26.0"`): `credit_score`, `du
 
 ### Pendiente de verificar (no afirmar hasta medirlo)
 
-- La discrepancia de volúmenes de arriba (`rows_read` vs `rows_inserted`).
-- Evolución de esquema entre particiones: el loader alinea cada archivo a las columnas esperadas, rellena faltantes con vacío y **ignora columnas nuevas sin avisar**. Falta comparar encabezados entre fechas.
-- "~2% de duplicados" y llegadas tardías documentados por el organizador: no se manifestaron en `transaction_id` ni en `product_id`.
+- Llegadas tardías (`process_date` posterior a la fecha del evento) documentadas por el organizador: no se midieron.
 - Moneda real del ingreso por país (se asume MXN para México).
+- Los 14 días sin archivo en `campaign_sends`: se desconoce si es intencional. Irrelevante para el workflow elegido.
+- Contenido de columnas entre particiones (el encabezado no cambia, pero no se comparó la distribución de valores por fecha).
 
 ## Próximos pasos de investigación sugeridos
 
-- Comparar filas en S3 contra filas insertadas y encabezados entre particiones (los dos pendientes de carga).
 - Decidir si `affected_product_id` sale de `gold.complaints` (propuesto: sí, con un test dbt en `warn` que mida el defecto).
