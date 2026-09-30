@@ -93,8 +93,81 @@ Con esta pasada quedan las 13 tablas del dataset revisadas con datos reales de S
 ### `campaign_sends` (1,974 filas, 1 día)
 - No relevante para los 4 workflows candidatos — es soporte del track de marketing, no de customer service.
 
-## Próximos pasos de investigación sugeridos (si hay tiempo antes de votar)
+## Verificación a escala completa (2026-09-30, 13 tablas cargadas en `bronze`)
 
-- Revisar distribución completa de `case_type`/`category` en `complaints` sobre varios días (no solo uno) para confirmar volumen real por categoría.
-- Confirmar si existe algún campo o tabla con texto de portugués real (no visto en la muestra — `call_transcripts.detected_language` observado hasta ahora es español).
-- **Confirmado:** `transactions.currency` en ~25,000 filas (5 días) tampoco trae MXN (solo USD/COP/ARS) — misma ausencia que en `products`. Es limitación de datos real del dataset sintético, no error de muestreo: documentarla explícitamente en la entrega ("report limitations in the supplied data"), sea cual sea el workflow elegido.
+Las secciones anteriores salen de muestras de 1 a 5 días. Todo lo de abajo se midió sobre las tablas completas en Postgres (`bronze.*` y `gold.*`). Donde una cifra de arriba difiere, **manda esta sección**.
+
+### Volúmenes cargados
+
+| Tabla | Filas cargadas |
+|---|---|
+| customers | 150.000 |
+| products | 400.000 |
+| transactions | 4.425.008 |
+| complaints | 67.095 |
+| call_center_interactions | 686.296 |
+| call_transcripts | 171.321 |
+| satisfaction_surveys | 212.759 |
+| campaign_sends | 1.746.801 |
+| digital_events | 15.620.994 |
+| branches / service_agents / marketing_campaigns / daily_exchange_rates | 350 / 1.200 / 200 / 13.164 |
+
+**Discrepancia abierta:** el resumen del organizador habla de ~5M transacciones, ~80k quejas, ~800k interacciones, ~200k transcripts y ~250k encuestas, es decir ~14-16% más que lo cargado, y de ~10M `digital_events`, es decir 56% menos que lo cargado. Con 1.097 archivos por tabla particionada (un archivo por día) no faltan días. Puede ser que las cifras del resumen sean nominales, o que el loader haya descartado filas duplicadas por clave primaria (`ON CONFLICT DO NOTHING`). Falta comparar `rows_read` (filas en S3) contra `rows_inserted` de la corrida de carga, que el loader ya reporta por separado. No afirmar pérdida ni duplicados hasta hacerlo.
+
+### Quejas (`complaints`)
+
+| Hallazgo | Evidencia |
+|---|---|
+| `affected_product_id` apunta al producto de otro cliente | 44.570 de 44.570 con valor (66,4% de las quejas); 0,00% coincide con el dueño |
+| El producto equivocado es aleatorio, no recuperable | mismo país 37,93% (azar 38,00%); misma sucursal 0,28% (azar ~0,29%); IDs opacos (`PRD-XXXXXXXXXXXX`), sin offset que corregir |
+| `origin_interaction_id` siempre vacío | 0 de 67.095 con valor, no hay cruce con `call_center_interactions` |
+| `claimed_amount` no se relaciona con ninguna transacción | 0 de 21.751 coinciden con alguna transacción del cliente; 0 de 14.388 con transacciones del dueño del producto o del producto mismo |
+| `subcategory` no aporta granularidad | es 1 a 1 con `category` (5 pares fijos) y está vacía en 9,98% |
+| Las 5 categorías pesan casi lo mismo | 17,7% a 18,3% cada una |
+| "Cargo no reconocido + Cobro indebido = 36,5%" es artefacto de uniformidad | 18,33% + 18,17%, dos de cinco categorías parejas; no indica más disputas que otras quejas |
+| Resultados idénticos entre tipos de queja | SLA incumplido 19,9-20,4%, resolución 15,4-15,9 días, `Escalated` ~5%, en todas |
+| `complaints.customer_id` válido | 67.095 de 67.095 existen en `customers`; 1,24 quejas por cliente en promedio |
+
+**Decisión de diseño:** la transacción o producto de una disputa lo elige el cliente autenticado entre los suyos. Nunca sale de `complaints`. Las quejas solo se usan a nivel de cliente.
+
+### Transacciones (`transactions`)
+
+- `transaction_status`: Declined 221.234 (5,00%), Reversed 44.750 (1,0%). Son la base del caso auto-resuelto (266k candidatas).
+- `response_code` de Declined y Reversed reparte casi igual entre 51, 14, 54 y 05 (~52,5k cada uno en Declined) y queda vacío en ~5% (10.962 Declined, 2.310 Reversed).
+- **El rechazo es independiente del producto:** las 4.425.008 transacciones están sobre productos `Active`. No hay relación entre rechazo y estado o saldo del producto, así que explicar un rechazo se limita al significado del código.
+- Titularidad transacción-producto consistente al 100% (4.425.008 de 4.425.008): relación apta para autorizar acceso a movimientos propios.
+- Cero duplicados exactos de `transaction_id`; los tests `unique` de dbt pasan en las 5 tablas modeladas.
+- Cero filas en MXN (solo USD/COP/ARS).
+
+### Crédito (`products` + `customers`)
+
+- **Sin señal predictiva de mora.** Tasa de mora `>=30` días o estado Blocked/Suspended: 17,4% con score <550, 16,5%, 16,4%, 16,5%, 16,6% con 780+; por terciles de ingreso 16,4 / 16,5 / 16,7%; por utilización plana salvo 80%+ con 18,3% (n=1.905). Correlación `credit_score` vs `days_past_due` = -0,004.
+- **`total_credit_products` no es señal de riesgo, es agregación.** La mora por cliente calza con independencia pura `1-(1-p)^n` (n=1: 11,68% observado vs 11,86% esperado; n=2: 22,75% vs 22,31%; n=3: 31,73% vs 31,53%) y la tasa **por producto** es plana (11,4% a 12,1%) sin importar cuántos productos tenga el cliente. El AUC de `n` solo es 0,63 porque la etiqueta `max(dpd)` se calcula sobre los mismos productos que se cuentan: fuga por construcción.
+- `days_past_due`: rango 0 a 180, pico exacto en 30 (~3.100 productos), 5% nulo entre productos de crédito (nulo no es cero). Sus tramos caben en las situaciones 1 a 3 de la clasificación de deudores del BCRA.
+- `credit_score`: nulo 15,0% (22.492), mínimo real 422 (la documentación sugiere 300). `estimated_monthly_income`: nulo 20,0% (30.033).
+- **Monedas:** México tiene 66.236 productos de crédito, todos en USD, con ingreso en escala MXN (mediana 39.219; Argentina 801.955 ARS, Colombia 9,19M COP). Argentina y Colombia usan ~90% moneda local y ~10% USD. 3.461 de 87.770 clientes con crédito (3,9%) tienen productos en más de una moneda. Cualquier DTI o suma de saldos requiere normalizar con `daily_exchange_rates`.
+- No hay reglas de elegibilidad aprobadas por el organizador: cualquier política de crédito es sintética y debe rotularse así.
+
+### Interacciones, transcripts y otras tablas
+
+- `call_center_interactions`: Transaccional 35,0% (resuelto 91,5%), Producto 22,0% (89,6%), Queja 17,1% (43,6%, 435 s), Técnico 15,0% (69,9%), Comercial 8,0% (65,2%), Retención 3,0% (60,2%). FCR global 76,6% y escalamiento 10,0%, **plano por motivo** (9,8% a 10,1%). `contact_reason` es idéntico a `reason_category`.
+- `call_transcripts` (171.321): 95% `consulta_general` (162.864), 100% en español, sin portugués.
+- `satisfaction_surveys` (212.759): `main_score` promedio 3,526 sin escalamiento vs 3,527 con escalamiento, sin relación.
+- Sin cadenas causales entre tablas: `digital_events` con error a contacto al call center 0% a 2,2%; `campaign_sends` a quejas en 2 días 0% a 0,23%.
+- `branches` 100% "Urbana"; `daily_exchange_rates` tiene MXN pero nada en MXN con qué cruzar; `service_agents` con portugués 129 de 1.200 (10,75%).
+
+### Calidad de tipos en la carga
+
+Seis columnas enteras llegan con formato decimal (`"26.0"`): `credit_score`, `duration_seconds`, `wait_time_seconds`, `resolution_days`, `resolution_satisfaction`, `days_past_due`. En todas las filas el decimal es `.0` (0 valores con decimal real), por eso `stg_*` las castea vía `::numeric::int` sin perder información.
+
+### Pendiente de verificar (no afirmar hasta medirlo)
+
+- La discrepancia de volúmenes de arriba (`rows_read` vs `rows_inserted`).
+- Evolución de esquema entre particiones: el loader alinea cada archivo a las columnas esperadas, rellena faltantes con vacío y **ignora columnas nuevas sin avisar**. Falta comparar encabezados entre fechas.
+- "~2% de duplicados" y llegadas tardías documentados por el organizador: no se manifestaron en `transaction_id` ni en `product_id`.
+- Moneda real del ingreso por país (se asume MXN para México).
+
+## Próximos pasos de investigación sugeridos
+
+- Comparar filas en S3 contra filas insertadas y encabezados entre particiones (los dos pendientes de carga).
+- Decidir si `affected_product_id` sale de `gold.complaints` (propuesto: sí, con un test dbt en `warn` que mida el defecto).
