@@ -3,18 +3,31 @@ name: CI
 on:
   pull_request:
     branches: [main]
-    paths: ["etl/**", "data/dbt/**"]
+    paths: ["infra/airflow/**", "infra/dbt/**", "data/dags/**", "data/dbt/**"]
   push:
     branches: [main]
-    paths: ["etl/**", "data/dbt/**"]
+    paths: ["infra/airflow/**", "infra/dbt/**", "data/dags/**", "data/dbt/**"]
 
 jobs:
-  etl:
-    name: Build the ETL image and parse the dbt project
+  airflow:
+    name: Build the Airflow image and check the DAG imports
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Build image (sanity check only, not pushed anywhere)
-        run: docker build . -f etl/Dockerfile -t etl-ci-check
+        run: docker build . -f infra/airflow/Dockerfile -t airflow-ci-check
+      - name: The DAG must import without errors
+        run: docker run --rm --entrypoint python airflow-ci-check -c "from airflow.models import DagBag; bag = DagBag('/opt/airflow/dags', include_examples=False); print(list(bag.dags)); assert not bag.import_errors, bag.import_errors"
+
+  dbt:
+    name: Build the dbt image and parse the project
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image (sanity check only, not pushed anywhere)
+        run: docker build . -f infra/dbt/Dockerfile -t dbt-ci-check
       - name: dbt parse inside the image (every model, source and test must compile)
-        run: docker run --rm -w /app/dbt etl-ci-check dbt parse --profiles-dir . --project-dir .
+        run: >
+          docker run --rm -w /app/dbt
+          -e DBT_PG_HOST=x -e DBT_PG_PORT=5432 -e DBT_PG_USER=x -e DBT_PG_PASSWORD=x -e DBT_PG_DATABASE=x
+          dbt-ci-check dbt parse --profiles-dir . --project-dir .
