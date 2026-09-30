@@ -1,0 +1,3 @@
+# duckdb reads S3, runs the transformations (through dbt) and publishes to Postgres
+duckdb>=1.3
+dbt-duckdb>=1.9
