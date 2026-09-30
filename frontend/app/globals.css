@@ -1,0 +1,20 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f6f7f9; --card: #fff; --ink: #14181f; --muted: #5b6472; --line: #e2e5ea; --ok: #157347; --bad: #b42318;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0f1216; --card: #171b21; --ink: #e8ebf0; --muted: #98a2b3; --line: #2a303a; --ok: #4ade80; --bad: #f97066; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, sans-serif; }
+main { max-width: 680px; margin: 0 auto; padding: 32px 16px; }
+h1 { font-size: 1.4rem; margin: 0 0 4px; }
+.sub { color: var(--muted); margin: 0 0 24px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin-bottom: 14px; }
+.card h2 { font-size: .8rem; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+.row { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; }
+.dot { display: inline-block; width: .6em; height: .6em; border-radius: 50%; margin-right: .5em; background: var(--muted); }
+.ok .dot { background: var(--ok); }
+.bad .dot { background: var(--bad); }
+.muted { color: var(--muted); }
+code { font-family: ui-monospace, monospace; font-size: .9em; }
