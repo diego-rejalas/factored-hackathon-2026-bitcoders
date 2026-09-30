@@ -28,7 +28,7 @@ Extraído de `doc/Factored AI & Data Hackathon 2026.md` y `doc/Datathon_2026_Kic
 
 ## Datos y ML
 
-- [x] Pipeline de datos repetible: contratos de esquema, checks de calidad, linaje, política de actualización/frescura. (job `etl/` reconstruible de punta a punta en ~4 min, 121 tests dbt que bloquean la publicación si fallan, linaje por fila en `_source_key`, snapshot estático sin política de frescura; `spec/ARCHITECTURE.md` Vertical 1-2)
+- [x] Pipeline de datos repetible: contratos de esquema, checks de calidad, linaje, política de actualización/frescura. (DAG de Airflow con DuckDB: reconstruye bronze desde S3 en cada corrida, 121 tests dbt que impiden reconstruir gold si silver falla, linaje por fila en `_source_key`; snapshot estático sin política de frescura; `spec/ARCHITECTURE.md` Vertical 1-2)
 - [ ] Al menos un componente aprendido evaluado contra un baseline apropiado.
 - [ ] Labels o juicios de relevancia válidos, sin leakage (ej. no usar `is_fraud` como input si se supone que el sistema lo "detecta").
 - [ ] Justificar representaciones, métricas, umbrales, y splits de evaluación.
