@@ -60,6 +60,9 @@ def _connect(with_s3: bool) -> duckdb.DuckDBPyConnection:
     con.execute("INSTALL postgres; LOAD postgres;")
     con.execute(f"ATTACH '{_pg_dsn()}' AS pg (TYPE postgres)")
     if with_s3:
+        missing = [n for n in ("LATAM_BANK_AWS_ACCESS_KEY_ID", "LATAM_BANK_AWS_SECRET_ACCESS_KEY") if not os.environ.get(n, "").strip()]
+        if missing:
+            raise RuntimeError(f"S3 credentials not set on the airflow service: {', '.join(missing)}")
         con.execute("INSTALL httpfs; LOAD httpfs;")
         con.execute(
             "CREATE OR REPLACE SECRET s3 (TYPE S3, KEY_ID '%s', SECRET '%s', REGION '%s')"
