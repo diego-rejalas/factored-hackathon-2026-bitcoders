@@ -158,13 +158,23 @@ Las secciones anteriores salen de muestras de 1 a 5 días. Todo lo de abajo se m
 - Sin cadenas causales entre tablas: `digital_events` con error a contacto al call center 0% a 2,2%; `campaign_sends` a quejas en 2 días 0% a 0,23%.
 - `branches` 100% "Urbana"; `daily_exchange_rates` tiene MXN pero nada en MXN con qué cruzar; `service_agents` con portugués 129 de 1.200 (10,75%).
 
+### Hallazgos adicionales de la revisión del pipeline (2026-09-30)
+
+- **`customers.registration_branch_id` es inservible:** 150.000 IDs distintos con formato válido, solo 5 existen en `branches` (149.995 huérfanos). Las demás FKs a sucursal y agente (`transactions.branch_id`, `products.opening_branch_id`, `complaints.related_branch_id`, `*.agent_id`) tienen 0 huérfanos.
+- **`transactions.amount_usd` nulo en 57%:** 100% nulo cuando `currency = USD` (el monto ya está en dólares) y ~5% en ARS y COP (99.477 huecos reales). Hay que derivarlo en silver.
+- **No hay llegadas tardías:** `process_date - transaction_date` vale solo 0 o -1 día (25% con -1, borde de fecha por zona horaria), nunca positivo.
+- **`response_code` por estado:** Approved trae `00` (3.867.312) o nulo (203.369, 5% de las Approved); Pending y Reversed llevan códigos 05, 14, 51 o 54. Mezcla de estados: Approved 91,99%, Declined 5,00%, Pending 2,00% (88.343), Reversed 1,01%.
+- **Reglas de negocio rotas:** 7.510 productos de crédito con saldo mayor al límite; 772 quejas Resolved o Closed sin `resolution_date`; 52.454 interacciones a la vez escaladas y resueltas.
+- Las fechas de hechos cubren 2023-06-17 a 2026-06-18 en transacciones, quejas e interacciones: es un snapshot estático.
+
+Detalle de la revisión y plan de corrección en `PIPELINE_REVIEW.md`.
+
 ### Calidad de tipos en la carga
 
 Seis columnas enteras llegan con formato decimal (`"26.0"`): `credit_score`, `duration_seconds`, `wait_time_seconds`, `resolution_days`, `resolution_satisfaction`, `days_past_due`. En todas las filas el decimal es `.0` (0 valores con decimal real), por eso `stg_*` las castea vía `::numeric::int` sin perder información.
 
 ### Pendiente de verificar (no afirmar hasta medirlo)
 
-- Llegadas tardías (`process_date` posterior a la fecha del evento) documentadas por el organizador: no se midieron.
 - Moneda real del ingreso por país (se asume MXN para México).
 - Los 14 días sin archivo en `campaign_sends`: se desconoce si es intencional. Irrelevante para el workflow elegido.
 - Contenido de columnas entre particiones (el encabezado no cambia, pero no se comparó la distribución de valores por fecha).
