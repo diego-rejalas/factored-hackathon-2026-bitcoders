@@ -1,3 +1,9 @@
 node_modules/
 __pycache__/
 doc/LATAM_Bank_Complete_Data_Dictionary.pdf
+
+# dbt local artifacts
+data/dbt/logs/
+data/dbt/target/
+data/dbt/dbt_packages/
+data/dbt/.user.yml
