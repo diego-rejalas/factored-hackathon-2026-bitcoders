@@ -17,5 +17,5 @@ select
     nullif(end_date, '')::date                           as end_date,
     nullif(budget, '')::numeric(15,2)                    as budget,
     campaign_status,
-    nullif(expected_conversion_rate, '')::numeric        as expected_conversion_rate
+    {{ to_decimal('expected_conversion_rate') }}        as expected_conversion_rate
 from source

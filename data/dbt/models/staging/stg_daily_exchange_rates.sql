@@ -8,8 +8,8 @@ select
     nullif("date", '')::date            as rate_date,
     source_currency,
     target_currency,
-    nullif(exchange_rate, '')::numeric  as exchange_rate,
-    nullif(buy_rate, '')::numeric       as buy_rate,
-    nullif(sell_rate, '')::numeric      as sell_rate,
+    {{ to_decimal('exchange_rate') }}  as exchange_rate,
+    {{ to_decimal('buy_rate') }}       as buy_rate,
+    {{ to_decimal('sell_rate') }}      as sell_rate,
     source
 from source

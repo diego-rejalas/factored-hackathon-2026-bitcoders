@@ -20,7 +20,7 @@ select
     product_status,
     opening_channel,
     (has_linked_app)::boolean                              as has_linked_app,
-    nullif(days_past_due, '')::numeric::int                 as days_past_due,
+    {{ to_int('days_past_due') }}                 as days_past_due,
     nullif(last_transaction_date, '')::timestamp           as last_transaction_date,
     last_updated::timestamp                               as last_updated
 from source

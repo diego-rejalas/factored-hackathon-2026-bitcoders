@@ -13,16 +13,16 @@ select
     agent_id,
     survey_type,
     send_channel,
-    nullif(main_score, '')::numeric::int           as main_score,
+    {{ to_int('main_score') }}           as main_score,
     nullif(nps_category, '')                       as nps_category,
     nullif(question_1_text, '')                    as question_1_text,
-    nullif(question_1_response, '')::numeric::int  as question_1_response,
+    {{ to_int('question_1_response') }}  as question_1_response,
     nullif(question_2_text, '')                    as question_2_text,
-    nullif(question_2_response, '')::numeric::int  as question_2_response,
+    {{ to_int('question_2_response') }}  as question_2_response,
     nullif(question_3_text, '')                    as question_3_text,
-    nullif(question_3_response, '')::numeric::int  as question_3_response,
+    {{ to_int('question_3_response') }}  as question_3_response,
     nullif(open_comments, '')                      as open_comments,
     nullif(comment_sentiment, '')                  as comment_sentiment,
-    nullif(response_time_hours, '')::numeric       as response_time_hours,
-    nullif(campaign_response_rate, '')::numeric    as campaign_response_rate
+    {{ to_decimal('response_time_hours') }}       as response_time_hours,
+    {{ to_decimal('campaign_response_rate') }}    as campaign_response_rate
 from source

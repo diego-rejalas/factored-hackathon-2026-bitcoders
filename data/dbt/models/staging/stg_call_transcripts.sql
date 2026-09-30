@@ -15,12 +15,12 @@ select
     agent_text,
     detected_language,
     nullif(detected_accent, '')                 as detected_accent,
-    nullif(accent_confidence, '')::numeric      as accent_confidence,
+    {{ to_decimal('accent_confidence') }}      as accent_confidence,
     nullif(detected_keywords, '')               as detected_keywords,
     nullif(mentioned_entities, '')              as mentioned_entities,
     nullif(detected_intents, '')                as detected_intents,
     main_topics,
     transcription_model,
     nullif(audio_quality, '')                   as audio_quality,
-    nullif(duration_seconds, '')::numeric::int  as duration_seconds
+    {{ to_int('duration_seconds') }}  as duration_seconds
 from source

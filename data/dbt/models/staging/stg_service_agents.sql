@@ -20,7 +20,7 @@ select
     nullif(specialty, '')                                 as specialty,
     nullif(hire_date, '')::date                           as hire_date,
     nullif(avg_csat, '')::numeric(4,2)                    as avg_csat,
-    nullif(total_monthly_interactions, '')::numeric::int  as total_monthly_interactions,
+    {{ to_int('total_monthly_interactions') }}  as total_monthly_interactions,
     agent_status,
     work_shift
 from source
