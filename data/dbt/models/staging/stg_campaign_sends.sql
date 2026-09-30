@@ -19,12 +19,12 @@ select
     nullif(open_date, '')::timestamp             as open_date,
     nullif(was_clicked, '')::boolean             as was_clicked,
     nullif(click_date, '')::timestamp            as click_date,
-    nullif(click_count, '')::numeric::int        as click_count,
+    {{ to_int('click_count') }}        as click_count,
     nullif(had_conversion, '')::boolean          as had_conversion,
     nullif(conversion_date, '')::timestamp       as conversion_date,
     nullif(conversion_value, '')::numeric(15,2)  as conversion_value,
     nullif(open_device, '')                      as open_device,
     nullif(open_country, '')                     as open_country,
     nullif(failure_reason, '')                   as failure_reason,
-    nullif(send_cost, '')::numeric               as send_cost
+    {{ to_decimal('send_cost') }}               as send_cost
 from source
