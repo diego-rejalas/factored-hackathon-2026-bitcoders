@@ -72,7 +72,30 @@ export default defineRailway(() => {
     },
   });
 
-  const dataPipeline = group("Data Pipeline", [Postgres, AirflowDb, railwayappAirflow, dbt, airflowData, postgresVolume]);
+  // One-shot ETL job (etl/run.py): S3 -> DuckDB -> dbt build -> Postgres gold.
+  // It runs to completion on every deploy and a failed run is retried a bounded
+  // number of times. Only etl/ and the dbt project trigger a redeploy.
+  const etl = service("etl", {
+    source: github("diego-rejalas/factored-hackathon-2026-bitcoders", { checkSuites: false, rootDirectory: "/" }),
+    build: { buildEnvironment: "V3", builder: "DOCKERFILE", dockerfilePath: "etl/Dockerfile", watchPatterns: ["etl/**", "data/dbt/**"] },
+    replicas: { "us-east4-eqdc4a": 1 },
+    deploy: { restartPolicyType: "ON_FAILURE", restartPolicyMaxRetries: 3 },
+    env: {
+      PG_HOST: Postgres.env.PGHOST,
+      PG_PORT: Postgres.env.PGPORT,
+      PG_USER: Postgres.env.PGUSER,
+      PG_PASSWORD: Postgres.env.PGPASSWORD,
+      PG_DATABASE: "data",
+      // Read-only S3 credentials of the organizer. Referenced from the airflow
+      // service (where they already live) so they are never read or copied here;
+      // once airflow is retired they must be set on this service directly.
+      LATAM_BANK_AWS_ACCESS_KEY_ID: railwayappAirflow.env.LATAM_BANK_AWS_ACCESS_KEY_ID,
+      LATAM_BANK_AWS_SECRET_ACCESS_KEY: railwayappAirflow.env.LATAM_BANK_AWS_SECRET_ACCESS_KEY,
+      AWS_REGION: "us-east-2",
+    },
+  });
+
+  const dataPipeline = group("Data Pipeline", [Postgres, AirflowDb, railwayappAirflow, dbt, etl, airflowData, postgresVolume]);
 
   return project("factored-hackathon", {
     resources: [dataPipeline],
