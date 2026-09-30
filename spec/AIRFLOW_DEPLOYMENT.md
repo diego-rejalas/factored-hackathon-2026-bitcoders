@@ -32,7 +32,7 @@ El template original crashea al montar un volumen de Railway porque:
 | Healthcheck | `/api/v2/monitor/health`, timeout 1800s |
 | Volumen | `airflow-data`, 5000 MB, montado en `/opt/airflow/data` |
 | Modo Airflow | `standalone` (SequentialExecutor, un solo proceso — apiserver+scheduler+DB en un contenedor) |
-| Metadata DB | SQLite en el volumen (`/opt/airflow/data/airflow.db`) — suficiente para el volumen de este proyecto, no para producción real |
+| Metadata DB | Postgres propio del servicio (`airflow-db`, declarado en `.railway/railway.ts`), separado del Postgres de datos. `AIRFLOW__DATABASE__SQL_ALCHEMY_CONN` apunta a `airflow-db.DATABASE_URL`. Antes era un SQLite en el volumen (`airflow.db`, monoescritor) |
 
 ## Variables de entorno (nombres — valores nunca en el repo)
 
@@ -65,4 +65,6 @@ railway config apply
 ## Pendiente / próximos pasos
 
 - [x] DAG de ingesta implementado: bootstrap de la base `data` y sus schemas `bronze`/`silver`/`gold`, S3 → `bronze.*` → trigger dbt. Cada cambio de DAG dispara rebuild de la imagen de Airflow (aceptado a esta escala, ver `ARCHITECTURE.md`).
-- [ ] SQLite alcanza para el hackathon; si se necesita concurrencia entre DAGs, migrar `AIRFLOW__DATABASE__SQL_ALCHEMY_CONN` al Postgres ya provisto en el proyecto, documentado como camino de escalamiento, no implementado ahora.
+- [x] Metadata de Airflow migrada de SQLite a un Postgres dedicado (`airflow-db`). Se hizo aparte del Postgres de datos a propósito: una caída o saturación de Airflow no toca bronze/silver/gold. Al migrar se perdió el historial de corridas anterior (no se conservó).
+- [ ] Sigue sin resolver para producción real: un solo scheduler y un solo worker (LocalExecutor en un contenedor); escalar a varios workers requiere CeleryExecutor con broker.
+- [x] Los redeploys de Airflow y dbt se disparan solo si cambian `infra/airflow/` y `data/dags/` (Airflow) o `infra/dbt/` y `data/dbt/` (dbt), vía `build.watchPatterns`; un push de solo documentación ya no los reinicia.

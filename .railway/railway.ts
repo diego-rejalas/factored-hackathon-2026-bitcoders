@@ -2,6 +2,10 @@ import { defineRailway, github, group, postgres, preserve, project, service, vol
 
 export default defineRailway(() => {
   const Postgres = postgres("postgres", { region: "us-east4-eqdc4a" });
+  // Airflow's own metadata DB (DAG runs, task states). Kept apart from the
+  // data Postgres so an Airflow problem can't touch bronze/silver/gold, and
+  // replaces the single-writer SQLite file that used to live on the volume.
+  const AirflowDb = postgres("airflow-db", { region: "us-east4-eqdc4a" });
   const airflowData = volume("airflow-data", { alerts: { usage: { "100": {}, "80": {}, "95": {} } }, allowOnlineResize: true, region: "us-east4-eqdc4a", sizeMB: 5000 });
   // Bound by name to the volume actually attached to `postgres` (was named
   // "postgres-volume" in this file, but the live one is "data-volume--Z5O" —
@@ -10,7 +14,9 @@ export default defineRailway(() => {
   const postgresVolume = volume("data-volume--Z5O", { alerts: { usage: { "100": {}, "80": {}, "95": {} } }, allowOnlineResize: true, region: "us-east4-eqdc4a", sizeMB: 30000 });
   const dbt = service("dbt", {
     source: github("diego-rejalas/factored-hackathon-2026-bitcoders", { checkSuites: false, rootDirectory: "/" }),
-    build: { buildEnvironment: "V3", builder: "DOCKERFILE", dockerfilePath: "infra/dbt/Dockerfile" },
+    // Redeploy only when something baked into this image changes (see
+    // infra/dbt/Dockerfile COPY lines) — a docs-only push must not restart it.
+    build: { buildEnvironment: "V3", builder: "DOCKERFILE", dockerfilePath: "infra/dbt/Dockerfile", watchPatterns: ["infra/dbt/**", "data/dbt/**"] },
     healthcheck: "/health",
     replicas: { "us-east4-eqdc4a": 1 },
     env: {
@@ -31,7 +37,9 @@ export default defineRailway(() => {
   });
   const railwayappAirflow = service("airflow", {
     source: github("diego-rejalas/factored-hackathon-2026-bitcoders", { checkSuites: false, rootDirectory: "/" }),
-    build: { buildEnvironment: "V3", builder: "DOCKERFILE", dockerfilePath: "infra/airflow/Dockerfile" },
+    // Same idea: only infra/airflow (Dockerfile, entrypoint, requirements) and
+    // data/dags (copied into the image) should trigger a redeploy.
+    build: { buildEnvironment: "V3", builder: "DOCKERFILE", dockerfilePath: "infra/airflow/Dockerfile", watchPatterns: ["infra/airflow/**", "data/dags/**"] },
     healthcheck: "/api/v2/monitor/health",
     healthcheckTimeout: 1800,
     replicas: { "us-east4-eqdc4a": 1 },
@@ -39,6 +47,8 @@ export default defineRailway(() => {
     env: {
       AIRFLOW_UID: "50000",
       AIRFLOW__CORE__LOAD_EXAMPLES: "False",
+      // SQLAlchemy accepts the postgresql:// scheme Railway provides (psycopg2).
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: AirflowDb.env.DATABASE_URL,
       // Literal, not preserve() — this service has been recreated a few
       // times during setup (renames), and preserve() has nothing to carry
       // forward on a brand-new resource, which silently dropped this var
@@ -62,7 +72,7 @@ export default defineRailway(() => {
     },
   });
 
-  const dataPipeline = group("Data Pipeline", [Postgres, railwayappAirflow, dbt, airflowData, postgresVolume]);
+  const dataPipeline = group("Data Pipeline", [Postgres, AirflowDb, railwayappAirflow, dbt, airflowData, postgresVolume]);
 
   return project("factored-hackathon", {
     resources: [dataPipeline],
