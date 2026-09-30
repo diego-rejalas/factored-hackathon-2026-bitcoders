@@ -55,19 +55,23 @@ Medidos en esta revisión (también registrados en `DATA_FINDINGS.md`):
 - Mezcla de estados: Approved 91,99%, Declined 5,00%, Pending 2,00%, Reversed 1,01%.
 - Almacenamiento: bronze 7,3 GB más gold 1,6 GB, 9,0 GB en total de 30 GB de volumen.
 
-## 5. Decisiones deliberadas: qué no hacemos ahora
+## 5. Decisiones sobre el alcance
 
-### Modelos incrementales
+### Modelos incrementales (no se hacen)
 
 Hoy cada corrida de dbt reconstruye por completo cada tabla gold: borra y vuelve a crear con un `SELECT` sobre todo silver. Un modelo **incremental** procesa solo las filas nuevas o cambiadas (por ejemplo, los días nuevos) y las fusiona por una clave única.
 
 No lo hacemos porque el dataset es un snapshot estático que termina el 2026-06-18, la tabla más grande (4,4M filas) se reconstruye en 112 s, y un incremental agrega riesgos sin beneficio visible: manejo de clave única, filas viejas desactualizadas, y la necesidad de un `--full-refresh` cada vez que cambia la lógica. Si el volumen creciera, el primer candidato sería `transactions` incremental por `process_date`. Se documenta como camino de escalamiento.
 
-### Mover los metadatos de Airflow a Postgres
+### Metadatos de Airflow en Postgres (hecho después de esta revisión)
 
-Airflow guarda su propio estado (corridas, estados de tareas, usuarios) en una base de datos de metadatos. Hoy es un archivo SQLite en el volumen (`/opt/airflow/data/airflow.db`). SQLite admite un solo escritor a la vez: sirve para un único contenedor, pero no permite varios schedulers o workers, tiene más riesgo de bloqueos y de corrupción si el contenedor cae, y no es lo recomendado para producción.
+Airflow guarda su propio estado (corridas, estados de tareas, usuarios) en una base de metadatos. Estaba en un archivo SQLite dentro del volumen: admite un solo escritor a la vez, sirve para un único contenedor, pero es más frágil ante bloqueos y cortes y no es lo recomendado para producción.
 
-Moverlo implicaría crear una base `airflow` en nuestro Postgres y apuntar `AIRFLOW__DATABASE__SQL_ALCHEMY_CONN` a ella. No lo hacemos porque las 13 tareas concurrentes ya funcionan bien sobre SQLite, y el cambio sumaría una migración y un acoplamiento (una caída del Postgres de datos también tumbaría a Airflow) sin ganancia en la demo. Es la respuesta honesta a "explicar límites de capacidad y qué falta para producción" y queda registrado como limitación conocida en `AIRFLOW_DEPLOYMENT.md`.
+Se decidió moverla a un **Postgres propio de Airflow** (`airflow-db`), separado del Postgres de datos, y no a una base dentro del mismo servidor de datos. Así una caída o saturación de Airflow no puede tocar bronze, silver ni gold, y al revés. El costo es un servicio más en Railway (pocos dólares al mes) y que el historial de corridas anterior no se migró. Quedan fuera de alcance los workers múltiples (CeleryExecutor con broker): con 13 tareas concurrentes en un solo contenedor alcanza.
+
+### Redeploys solo cuando cambia lo que va en la imagen
+
+Cada push al repo redeployaba Airflow y dbt, incluso los de solo documentación, y un reinicio cortó una conexión en plena verificación. Ahora `build.watchPatterns` limita el redeploy a `infra/airflow/` y `data/dags/` (Airflow) y a `infra/dbt/` y `data/dbt/` (dbt), que son exactamente las rutas que copian sus Dockerfiles.
 
 ## 6. Plan sugerido
 
