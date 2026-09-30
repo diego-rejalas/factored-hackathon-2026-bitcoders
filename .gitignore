@@ -7,3 +7,8 @@ data/dbt/logs/
 data/dbt/target/
 data/dbt/dbt_packages/
 data/dbt/.user.yml
+
+# Secrets: never commit. Copy the .env.example files to .env and fill them in.
+.env
+.env.*
+!.env.example
