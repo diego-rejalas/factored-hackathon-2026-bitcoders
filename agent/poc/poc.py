@@ -3,9 +3,9 @@
 The tool returns a few sample transactions from a local list (no database, no
 backend). It only proves the wiring: LLM through OpenRouter -> tool call -> answer.
 
-Run:
+Run (uv installs everything from pyproject.toml / uv.lock):
     cp .env.example .env        # then set OPENROUTER_API_KEY
-    python poc.py "Intente una transferencia de unos 4000 dolares, me la cobraron?"
+    uv run poc.py "Intente una transferencia de unos 4000 dolares, me la cobraron?"
 """
 import os
 import sys
