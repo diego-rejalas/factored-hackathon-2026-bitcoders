@@ -1,276 +1,393 @@
 version: 2
-
 models:
-  - name: customers
-    description: "Lo que lee backend/ para consultas de cliente."
-    config:
-      contract:
-        enforced: true
-    columns:
-      - name: customer_id
-        data_type: character varying
-        constraints:
-          - type: primary_key
-        data_tests: [not_null, unique]
-      - name: document_number
-        data_type: text
-      - name: document_type
-        data_type: text
-      - name: first_name
-        data_type: character varying
-      - name: last_name
-        data_type: character varying
-      - name: date_of_birth
-        data_type: date
-      - name: gender
-        data_type: text
-      - name: email
-        data_type: text
-      - name: mobile_phone
-        data_type: text
-      - name: landline_phone
-        data_type: text
-      - name: address
-        data_type: text
-      - name: city
-        data_type: character varying
-      - name: state
-        data_type: character varying
-      - name: country
-        data_type: character varying
-      - name: postal_code
-        data_type: text
-      - name: detected_accent
-        data_type: text
-      - name: segment
-        data_type: character varying
-      - name: credit_score
-        data_type: integer
-      - name: estimated_monthly_income
-        data_type: numeric(12,2)
-      - name: occupation
-        data_type: text
-      - name: marital_status
-        data_type: text
-      - name: education_level
-        data_type: text
-      - name: registration_date
-        data_type: timestamp without time zone
-      - name: registration_branch_id
-        data_type: character varying
-      - name: customer_status
-        data_type: character varying
-      - name: last_updated
-        data_type: timestamp without time zone
-      - name: accepts_marketing
-        data_type: boolean
-
-  - name: products
-    description: "Lo que lee backend/ para consultas de producto/tarjeta/cuenta."
-    config:
-      contract:
-        enforced: true
-    columns:
-      - name: product_id
-        data_type: character varying
-        constraints:
-          - type: primary_key
-        data_tests: [not_null, unique]
-      - name: customer_id
-        data_type: character varying
-      - name: product_type
-        data_type: character varying
-      - name: product_number
-        data_type: character varying
-      - name: currency
-        data_type: character varying
-      - name: current_balance
-        data_type: numeric(15,2)
-      - name: credit_limit
-        data_type: numeric(15,2)
-      - name: interest_rate
-        data_type: numeric(5,2)
-      - name: opening_date
-        data_type: date
-      - name: expiration_date
-        data_type: date
-      - name: opening_branch_id
-        data_type: character varying
-      - name: product_status
-        data_type: character varying
-      - name: opening_channel
-        data_type: character varying
-      - name: has_linked_app
-        data_type: boolean
-      - name: days_past_due
-        data_type: integer
-      - name: last_transaction_date
-        data_type: timestamp without time zone
-      - name: last_updated
-        data_type: timestamp without time zone
-
-  - name: transactions
-    description: "Lo que lee backend/. is_fraud/fraud_score excluidos deliberadamente — no son input del agente. El contrato impide que vuelvan a entrar por accidente: una columna nueva no declarada aquí rompe la construcción."
-    config:
-      contract:
-        enforced: true
-    columns:
-      - name: transaction_id
-        data_type: character varying
-        constraints:
-          - type: primary_key
-        data_tests: [not_null, unique]
-      - name: transaction_date
-        data_type: timestamp without time zone
-      - name: process_date
-        data_type: date
-      - name: product_id
-        data_type: character varying
-      - name: customer_id
-        data_type: character varying
-      - name: transaction_type
-        data_type: character varying
-      - name: transaction_category
-        data_type: character varying
-      - name: amount
-        data_type: numeric(15,2)
-      - name: currency
-        data_type: character varying
-      - name: amount_usd
-        data_type: numeric(15,2)
-      - name: channel
-        data_type: character varying
-      - name: branch_id
-        data_type: text
-      - name: merchant_name
-        data_type: text
-      - name: merchant_category
-        data_type: text
-      - name: transaction_country
-        data_type: character varying
-      - name: transaction_city
-        data_type: text
-      - name: transaction_status
-        data_type: character varying
-      - name: response_code
-        data_type: text
-      - name: latitude
-        data_type: numeric(10,7)
-      - name: longitude
-        data_type: numeric(10,7)
-
-  - name: complaints
-    description: "Lo que lee backend/ si el workflow elegido es disputas (Opción A)."
-    config:
-      contract:
-        enforced: true
-    columns:
-      - name: complaint_id
-        data_type: character varying
-        constraints:
-          - type: primary_key
-        data_tests: [not_null, unique]
-      - name: creation_date
-        data_type: timestamp without time zone
-      - name: process_date
-        data_type: date
-      - name: customer_id
-        data_type: character varying
-      - name: case_type
-        data_type: character varying
-      - name: category
-        data_type: character varying
-      - name: subcategory
-        data_type: text
-      - name: reception_channel
-        data_type: character varying
-      - name: affected_product_id
-        data_type: text
-      - name: related_branch_id
-        data_type: text
-      - name: origin_interaction_id
-        data_type: text
-      - name: description
-        data_type: character varying
-      - name: claimed_amount
-        data_type: numeric(15,2)
-      - name: currency
-        data_type: text
-      - name: priority
-        data_type: character varying
-      - name: status
-        data_type: character varying
-      - name: assigned_agent_id
-        data_type: text
-      - name: assignment_date
-        data_type: timestamp without time zone
-      - name: first_response_date
-        data_type: timestamp without time zone
-      - name: resolution_date
-        data_type: timestamp without time zone
-      - name: closing_date
-        data_type: timestamp without time zone
-      - name: sla_breached
-        data_type: boolean
-      - name: resolution_days
-        data_type: integer
-      - name: resolution
-        data_type: text
-      - name: compensation_granted
-        data_type: numeric(15,2)
-      - name: resolution_satisfaction
-        data_type: integer
-      - name: is_repeat_complainer
-        data_type: boolean
-
-  - name: call_center_interactions
-    description: "Contexto de interacciones previas — soporte, no núcleo de ningún workflow por sí solo."
-    config:
-      contract:
-        enforced: true
-    columns:
-      - name: interaction_id
-        data_type: character varying
-        constraints:
-          - type: primary_key
-        data_tests: [not_null, unique]
-      - name: interaction_date
-        data_type: timestamp without time zone
-      - name: process_date
-        data_type: date
-      - name: customer_id
-        data_type: character varying
-      - name: agent_id
-        data_type: text
-      - name: interaction_type
-        data_type: character varying
-      - name: channel
-        data_type: character varying
-      - name: contact_reason
-        data_type: character varying
-      - name: reason_category
-        data_type: character varying
-      - name: duration_seconds
-        data_type: integer
-      - name: wait_time_seconds
-        data_type: integer
-      - name: was_resolved
-        data_type: boolean
-      - name: requires_followup
-        data_type: boolean
-      - name: detected_sentiment
-        data_type: text
-      - name: sentiment_score
-        data_type: numeric(3,2)
-      - name: customer_detected_accent
-        data_type: text
-      - name: agent_used_accent
-        data_type: text
-      - name: was_escalated
-        data_type: boolean
-      - name: mentioned_products
-        data_type: text
-      - name: has_transcript
-        data_type: boolean
-      - name: has_recording
-        data_type: boolean
+- name: customers
+  description: Lo que lee backend/ para consultas de cliente.
+  config:
+    contract:
+      enforced: true
+  columns:
+  - name: customer_id
+    description: Identificador del cliente (clave en customers; referencia en el resto de tablas).
+    data_type: character varying
+    constraints:
+    - type: primary_key
+    data_tests:
+    - not_null
+    - unique
+  - name: document_number
+    description: Número del documento de identidad (ficticio).
+    data_type: text
+  - name: document_type
+    description: Tipo de documento de identidad.
+    data_type: text
+  - name: first_name
+    description: Nombre del cliente (ficticio).
+    data_type: character varying
+  - name: last_name
+    description: Apellido del cliente (ficticio).
+    data_type: character varying
+  - name: date_of_birth
+    description: Fecha de nacimiento.
+    data_type: date
+  - name: gender
+    description: Género declarado.
+    data_type: text
+  - name: email
+    description: Correo electrónico (ficticio).
+    data_type: text
+  - name: mobile_phone
+    description: Teléfono móvil (ficticio).
+    data_type: text
+  - name: landline_phone
+    description: Teléfono fijo (ficticio).
+    data_type: text
+  - name: address
+    description: Dirección postal.
+    data_type: text
+  - name: city
+    description: Ciudad del cliente.
+    data_type: character varying
+  - name: state
+    description: Estado o departamento del cliente.
+    data_type: character varying
+  - name: country
+    description: País del cliente (México, Colombia o Argentina, normalizado).
+    data_type: character varying
+  - name: postal_code
+    description: Código postal.
+    data_type: text
+  - name: detected_accent
+    description: Acento regional detectado a partir de la voz del cliente.
+    data_type: text
+  - name: segment
+    description: Segmento comercial del cliente.
+    data_type: character varying
+  - name: credit_score
+    description: Nulo en 15,0%. Mínimo real 422.
+    data_type: integer
+  - name: estimated_monthly_income
+    description: Ingreso mensual estimado, en la moneda del país del cliente.
+    data_type: numeric(12,2)
+  - name: occupation
+    description: Ocupación declarada.
+    data_type: text
+  - name: marital_status
+    description: Estado civil.
+    data_type: text
+  - name: education_level
+    description: Nivel educativo.
+    data_type: text
+  - name: registration_date
+    description: Fecha y hora de registro del cliente.
+    data_type: timestamp without time zone
+  - name: registration_branch_id
+    description: 'DEFECTO CONOCIDO: 149.995 de 150.000 no existen en branches. La advertencia mide el defecto; no usar este campo.'
+    data_type: character varying
+  - name: customer_status
+    description: 'Estado del cliente: Active, Inactive, Suspended o Closed.'
+    data_type: character varying
+  - name: last_updated
+    description: Última actualización del registro del cliente.
+    data_type: timestamp without time zone
+  - name: accepts_marketing
+    description: El cliente acepta recibir comunicaciones de marketing.
+    data_type: boolean
+- name: products
+  description: Lo que lee backend/ para consultas de producto/tarjeta/cuenta.
+  config:
+    contract:
+      enforced: true
+  columns:
+  - name: product_id
+    description: Identificador del producto bancario (clave en products).
+    data_type: character varying
+    constraints:
+    - type: primary_key
+    data_tests:
+    - not_null
+    - unique
+  - name: customer_id
+    description: Identificador del cliente (clave en customers; referencia en el resto de tablas).
+    data_type: character varying
+  - name: product_type
+    description: Tipo de producto (cuenta, tarjeta, crédito, etc.).
+    data_type: character varying
+  - name: product_number
+    description: Número del producto (cuenta o tarjeta) tal como lo ve el cliente.
+    data_type: character varying
+  - name: currency
+    description: Moneda del producto.
+    data_type: character varying
+  - name: current_balance
+    description: Saldo actual, en la moneda del producto.
+    data_type: numeric(15,2)
+  - name: credit_limit
+    description: Límite de crédito, en la moneda del producto.
+    data_type: numeric(15,2)
+  - name: interest_rate
+    description: Tasa de interés del producto.
+    data_type: numeric(5,2)
+  - name: opening_date
+    description: Fecha de apertura del producto.
+    data_type: date
+  - name: expiration_date
+    description: Fecha de vencimiento del producto (por ejemplo, de la tarjeta).
+    data_type: date
+  - name: opening_branch_id
+    description: Sucursal donde se abrió el producto.
+    data_type: character varying
+  - name: product_status
+    description: Estado del producto.
+    data_type: character varying
+  - name: opening_channel
+    description: Canal por el que se abrió el producto.
+    data_type: character varying
+  - name: has_linked_app
+    description: El cliente tiene la aplicación vinculada.
+    data_type: boolean
+  - name: days_past_due
+    description: Días de atraso en el pago; 0 si está al día.
+    data_type: integer
+  - name: last_transaction_date
+    description: Fecha de la última transacción del producto.
+    data_type: timestamp without time zone
+  - name: last_updated
+    description: Última actualización del registro del cliente.
+    data_type: timestamp without time zone
+- name: transactions
+  description: 'Lo que lee backend/. is_fraud/fraud_score excluidos deliberadamente — no son input del agente. El contrato impide que vuelvan a entrar por accidente: una columna nueva no declarada aquí rompe la construcción.'
+  config:
+    contract:
+      enforced: true
+  columns:
+  - name: transaction_id
+    description: Identificador único de la transacción.
+    data_type: character varying
+    constraints:
+    - type: primary_key
+    data_tests:
+    - not_null
+    - unique
+  - name: transaction_date
+    description: Fecha y hora en que ocurrió la transacción.
+    data_type: timestamp without time zone
+  - name: process_date
+    description: Fecha en que el banco procesó la transacción (nunca posterior a un día de la transacción).
+    data_type: date
+  - name: product_id
+    description: Identificador del producto bancario (clave en products).
+    data_type: character varying
+  - name: customer_id
+    description: Identificador del cliente (clave en customers; referencia en el resto de tablas).
+    data_type: character varying
+  - name: transaction_type
+    description: Tipo de transacción.
+    data_type: character varying
+  - name: transaction_category
+    description: Categoría de la transacción.
+    data_type: character varying
+  - name: amount
+    description: Monto en la moneda original de la transacción.
+    data_type: numeric(15,2)
+  - name: currency
+    description: Moneda original de la transacción.
+    data_type: character varying
+  - name: amount_usd
+    description: Monto convertido a dólares; nulo en una parte de las transacciones en moneda local.
+    data_type: numeric(15,2)
+  - name: channel
+    description: Canal por el que se hizo la transacción.
+    data_type: character varying
+  - name: branch_id
+    description: Identificador de la sucursal.
+    data_type: text
+  - name: merchant_name
+    description: Nombre del comercio.
+    data_type: text
+  - name: merchant_category
+    description: Categoría del comercio.
+    data_type: text
+  - name: transaction_country
+    description: País donde ocurrió la transacción.
+    data_type: character varying
+  - name: transaction_city
+    description: Ciudad donde ocurrió la transacción.
+    data_type: text
+  - name: transaction_status
+    description: Estado de la transacción (por ejemplo, Completed, Declined, Reversed).
+    data_type: character varying
+  - name: response_code
+    description: Código de respuesta del autorizador.
+    data_type: text
+  - name: latitude
+    description: Latitud de la transacción.
+    data_type: numeric(10,7)
+  - name: longitude
+    description: Longitud de la transacción.
+    data_type: numeric(10,7)
+- name: complaints
+  description: Lo que lee backend/ si el workflow elegido es disputas (Opción A).
+  config:
+    contract:
+      enforced: true
+  columns:
+  - name: complaint_id
+    description: Identificador único del reclamo (PQR).
+    data_type: character varying
+    constraints:
+    - type: primary_key
+    data_tests:
+    - not_null
+    - unique
+  - name: creation_date
+    description: Fecha de creación del reclamo.
+    data_type: timestamp without time zone
+  - name: process_date
+    description: Fecha en que el banco procesó la transacción (nunca posterior a un día de la transacción).
+    data_type: date
+  - name: customer_id
+    description: Identificador del cliente (clave en customers; referencia en el resto de tablas).
+    data_type: character varying
+  - name: case_type
+    description: Tipo de caso.
+    data_type: character varying
+  - name: category
+    description: Categoría del reclamo.
+    data_type: character varying
+  - name: subcategory
+    description: Subcategoría del reclamo.
+    data_type: text
+  - name: reception_channel
+    description: Canal por el que se recibió el reclamo.
+    data_type: character varying
+  - name: affected_product_id
+    description: 'DEFECTO CONOCIDO: apunta al producto de otro cliente en el 100% de los casos. Ver tests/assert_complaint_affected_product_belongs_to_customer.sql. No usar para mostrar ni autorizar información de producto.'
+    data_type: text
+  - name: related_branch_id
+    description: Sucursal relacionada con el reclamo.
+    data_type: text
+  - name: origin_interaction_id
+    description: Interacción de call center que originó el reclamo.
+    data_type: text
+  - name: description
+    description: Descripción del reclamo en texto libre (plantilla, no señal real).
+    data_type: character varying
+  - name: claimed_amount
+    description: Monto que reclama el cliente.
+    data_type: numeric(15,2)
+  - name: currency
+    description: Moneda del monto reclamado.
+    data_type: text
+  - name: priority
+    description: Prioridad asignada al reclamo.
+    data_type: character varying
+  - name: status
+    description: Estado del reclamo.
+    data_type: character varying
+  - name: assigned_agent_id
+    description: Agente al que se asignó el reclamo.
+    data_type: text
+  - name: assignment_date
+    description: Fecha en que se asignó el reclamo a un agente.
+    data_type: timestamp without time zone
+  - name: first_response_date
+    description: Fecha de la primera respuesta al reclamo.
+    data_type: timestamp without time zone
+  - name: resolution_date
+    description: Fecha de resolución; nula si el reclamo sigue abierto.
+    data_type: timestamp without time zone
+  - name: closing_date
+    description: Fecha de cierre del reclamo.
+    data_type: timestamp without time zone
+  - name: sla_breached
+    description: Se incumplió el plazo de servicio comprometido.
+    data_type: boolean
+  - name: resolution_days
+    description: Días transcurridos entre la creación y la resolución.
+    data_type: integer
+  - name: resolution
+    description: Tipo de resolución del reclamo.
+    data_type: text
+  - name: compensation_granted
+    description: Monto compensado al cliente.
+    data_type: numeric(15,2)
+  - name: resolution_satisfaction
+    description: Satisfacción del cliente con la resolución.
+    data_type: integer
+  - name: is_repeat_complainer
+    description: El cliente ya había presentado reclamos antes.
+    data_type: boolean
+- name: call_center_interactions
+  description: Contexto de interacciones previas — soporte, no núcleo de ningún workflow por sí solo.
+  config:
+    contract:
+      enforced: true
+  columns:
+  - name: interaction_id
+    description: Identificador único de la interacción de call center.
+    data_type: character varying
+    constraints:
+    - type: primary_key
+    data_tests:
+    - not_null
+    - unique
+  - name: interaction_date
+    description: Fecha y hora de la interacción.
+    data_type: timestamp without time zone
+  - name: process_date
+    description: Fecha en que el banco procesó la transacción (nunca posterior a un día de la transacción).
+    data_type: date
+  - name: customer_id
+    description: Identificador del cliente (clave en customers; referencia en el resto de tablas).
+    data_type: character varying
+  - name: agent_id
+    description: Identificador del agente de servicio.
+    data_type: text
+  - name: interaction_type
+    description: Tipo de interacción.
+    data_type: character varying
+  - name: channel
+    description: Canal de la interacción.
+    data_type: character varying
+  - name: contact_reason
+    description: Motivo del contacto.
+    data_type: character varying
+  - name: reason_category
+    description: Categoría del motivo del reclamo.
+    data_type: character varying
+  - name: duration_seconds
+    description: Duración en segundos.
+    data_type: integer
+  - name: wait_time_seconds
+    description: Tiempo de espera antes de ser atendido, en segundos.
+    data_type: integer
+  - name: was_resolved
+    description: La interacción quedó resuelta.
+    data_type: boolean
+  - name: requires_followup
+    description: El reclamo requiere seguimiento.
+    data_type: boolean
+  - name: detected_sentiment
+    description: Sentimiento detectado en el texto.
+    data_type: text
+  - name: sentiment_score
+    description: Puntaje de sentimiento de la interacción.
+    data_type: numeric(3,2)
+  - name: customer_detected_accent
+    description: Acento detectado en el cliente.
+    data_type: text
+  - name: agent_used_accent
+    description: Acento usado por el agente.
+    data_type: text
+  - name: was_escalated
+    description: La interacción se escaló.
+    data_type: boolean
+  - name: mentioned_products
+    description: Productos mencionados en la conversación.
+    data_type: text
+  - name: has_transcript
+    description: Existe transcripción de la llamada.
+    data_type: boolean
+  - name: has_recording
+    description: Existe grabación de la llamada.
+    data_type: boolean

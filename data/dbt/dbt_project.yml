@@ -11,6 +11,10 @@ clean-targets: ["target", "dbt_packages"]
 
 models:
   latam_bank:
+    # Descriptions go to Postgres comments (tables and columns) so psql and BI tools see them too.
+    +persist_docs:
+      relation: true
+      columns: true
     staging:
       +materialized: view
       +schema: silver
