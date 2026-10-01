@@ -25,6 +25,7 @@ DBT_DIR = os.environ.get("DBT_DIR", "/app/dbt")
 PUBLISH_SCHEMA = os.environ.get("PUBLISH_SCHEMA", "gold")
 THREADS = int(os.environ.get("DUCKDB_THREADS", "4"))
 MEMORY_LIMIT = os.environ.get("DUCKDB_MEMORY_LIMIT", "8GB")
+LAKE_STORAGE_URI = os.environ.get("LAKE_STORAGE_URI", "").rstrip("/")
 
 # data/<name>.csv
 FLAT = ["customers", "products", "branches", "service_agents", "marketing_campaigns", "daily_exchange_rates"]
@@ -109,6 +110,94 @@ def extract_load_bronze(con: duckdb.DuckDBPyConnection) -> dict[str, int]:
         log(f"bronze.{table}: {row_count:,} rows loaded")
         if row_count == 0:
             raise RuntimeError(f"bronze.{table} is empty: nothing matched s3://{BUCKET}/{path}")
+    return counts
+
+
+def configure_lake_storage(con: duckdb.DuckDBPyConnection, lake_uri: str) -> None:
+    """Prepare DuckDB for writing to lake_uri (GCS bucket or local directory)."""
+    if lake_uri.startswith("gs://"):
+        con.execute("INSTALL httpfs; LOAD httpfs;")
+        try:
+            con.execute("CREATE OR REPLACE SECRET gcs_lake (TYPE GCS, PROVIDER CREDENTIAL_CHAIN)")
+        except Exception as exc:
+            log(f"note: GCS credential chain initialization: {exc}")
+    else:
+        Path(f"{lake_uri}/bronze").mkdir(parents=True, exist_ok=True)
+        Path(f"{lake_uri}/silver").mkdir(parents=True, exist_ok=True)
+
+
+def persist_bronze_parquet(con: duckdb.DuckDBPyConnection, lake_uri: str) -> dict[str, int]:
+    """Persist raw bronze tables to Parquet in the lakehouse (GCS or local path)."""
+    if not lake_uri:
+        log("lake storage URI not set; skipping bronze Parquet export")
+        return {}
+
+    configure_lake_storage(con, lake_uri)
+    counts: dict[str, int] = {}
+    log(f"persisting Bronze layer in Parquet to {lake_uri}/bronze/...")
+
+    for table in FLAT + PARTITIONED:
+        target = f"{lake_uri}/bronze/{table}"
+        if table in FLAT:
+            file_path = f"{target}/{table}.parquet"
+            if not lake_uri.startswith("gs://"):
+                Path(target).mkdir(parents=True, exist_ok=True)
+            con.execute(f"COPY bronze.{table} TO '{file_path}' (FORMAT PARQUET, COMPRESSION ZSTD)")
+        else:
+            if not lake_uri.startswith("gs://"):
+                Path(target).mkdir(parents=True, exist_ok=True)
+            con.execute(
+                f"""
+                COPY (SELECT * FROM bronze.{table})
+                TO '{target}'
+                (FORMAT PARQUET, COMPRESSION ZSTD, PARTITION_BY (year, month, day), OVERWRITE_OR_IGNORE true)
+                """
+            )
+        row_count = con.execute(f"SELECT count(*) FROM bronze.{table}").fetchone()[0]
+        counts[table] = row_count
+        log(f"lakehouse bronze.{table}: {row_count:,} rows exported")
+
+    return counts
+
+
+def persist_silver_parquet(con: duckdb.DuckDBPyConnection, lake_uri: str) -> dict[str, int]:
+    """Persist validated and typed silver models to Parquet in the lakehouse (GCS or local path)."""
+    if not lake_uri:
+        log("lake storage URI not set; skipping silver Parquet export")
+        return {}
+
+    configure_lake_storage(con, lake_uri)
+    counts: dict[str, int] = {}
+    log(f"persisting Silver layer in Parquet to {lake_uri}/silver/...")
+
+    for table in FLAT + PARTITIONED:
+        target = f"{lake_uri}/silver/{table}"
+        if table in FLAT:
+            file_path = f"{target}/{table}.parquet"
+            if not lake_uri.startswith("gs://"):
+                Path(target).mkdir(parents=True, exist_ok=True)
+            con.execute(f"COPY silver.stg_{table} TO '{file_path}' (FORMAT PARQUET, COMPRESSION ZSTD)")
+        else:
+            # Derived partition fields from process_date to mirror Hive partitioning
+            if not lake_uri.startswith("gs://"):
+                Path(target).mkdir(parents=True, exist_ok=True)
+            con.execute(
+                f"""
+                COPY (
+                    SELECT *,
+                           coalesce(strftime(process_date, '%Y'), 'unknown') AS year,
+                           coalesce(strftime(process_date, '%m'), 'unknown') AS month,
+                           coalesce(strftime(process_date, '%d'), 'unknown') AS day
+                    FROM silver.stg_{table}
+                )
+                TO '{target}'
+                (FORMAT PARQUET, COMPRESSION ZSTD, PARTITION_BY (year, month, day), OVERWRITE_OR_IGNORE true)
+                """
+            )
+        row_count = con.execute(f"SELECT count(*) FROM silver.stg_{table}").fetchone()[0]
+        counts[table] = row_count
+        log(f"lakehouse silver.{table}: {row_count:,} rows exported")
+
     return counts
 
 
@@ -215,7 +304,10 @@ def main() -> int:
     run_id = uuid.uuid4().hex
     started = dt.datetime.now(dt.timezone.utc)
     log(f"starting ultra-lightweight ETL pipeline (run_id: {run_id[:8]})")
-    detail: dict = {"publish_schema": PUBLISH_SCHEMA}
+    detail: dict = {
+        "publish_schema": PUBLISH_SCHEMA,
+        "lake_storage_uri": LAKE_STORAGE_URI if LAKE_STORAGE_URI else "disabled",
+    }
     status = "failed"
 
     try:
@@ -225,14 +317,25 @@ def main() -> int:
 
         # 2. Extract & Load to local DuckDB (Bronze)
         detail["bronze_rows"] = extract_load_bronze(con)
+
+        # 3. Persist Bronze to Data Lakehouse (Parquet in GCS / local)
+        if LAKE_STORAGE_URI:
+            detail["lakehouse_bronze"] = persist_bronze_parquet(con, LAKE_STORAGE_URI)
+
         con.close()  # Close connection before dbt opens it (single writer)
 
-        # 3. Transform & Test with dbt-duckdb (Silver, Gold & 121 tests)
+        # 4. Transform & Test with dbt-duckdb (Silver, Gold & 121 tests)
         code, detail["dbt"] = run_dbt()
         if code != 0:
             raise RuntimeError(f"dbt build failed with summary: {detail['dbt']}. Nothing was published.")
 
-        # 4. Publish only gold.* to Cloud SQL PostgreSQL
+        # 5. Persist Silver to Data Lakehouse (Parquet in GCS / local)
+        if LAKE_STORAGE_URI:
+            con_silver = duckdb.connect(DB_PATH)
+            detail["lakehouse_silver"] = persist_silver_parquet(con_silver, LAKE_STORAGE_URI)
+            con_silver.close()
+
+        # 6. Publish only gold.* to Cloud SQL PostgreSQL
         detail["published_rows"] = publish_gold(run_id)
         status = "success"
     except Exception as exc:

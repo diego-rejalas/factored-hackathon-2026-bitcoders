@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Data Lakehouse Preservation for Bronze & Silver (`infra/gcp/etl/`)**:
+  - Implemented persistent export of raw `bronze.*` and typed `silver.*` datasets in compressed columnar Parquet format (ZSTD) to Google Cloud Storage (`gs://<lakehouse_bucket>/`).
+  - Added configurable `LAKE_STORAGE_URI` supporting local offline directory exports (`./data/lake/`) and cloud buckets.
+  - Mirrored date-based Hive partitioning (`year=YYYY/month=MM/day=DD/`) for transactional tables and digital events, with flat Parquet files for dimension tables.
+- **Terraform Lakehouse Infrastructure (`infra/gcp/main.tf`, `infra/gcp/variables.tf`)**:
+  - Declared `google_storage_bucket.lakehouse` with Standard storage class and 30-day Nearline transition lifecycle.
+  - Granted `roles/storage.objectAdmin` to `etl-job` Service Account and injected bucket URI into Cloud Run Job environment.
+  - Enabled `storage.googleapis.com` API and added `lakehouse_bucket` output.
+- **Enterprise Architecture Assessment & TCO Scaling Specification (`spec/ENTERPRISE_ARCHITECTURE_EVALUATION.md`)**:
+  - Created comprehensive architectural assessment evaluating enterprise viability (FinTech/Neobank vs. Tier-1 Corporate Bank).
+  - Modeled granular TCO projections across 3 phases (MVP ~$34/mo, Scale-Up ~$820/mo, Tier-1 ~$17,000/mo) with unit economics per MAU and transaction.
+  - Documented failure modes, regulatory compliance requirements (PCI-DSS, PII tokenization), and 3-phase migration roadmap.
 - **Banking Backend Microservice (`backend/`)**:
   - FastAPI service providing authenticated REST endpoints for customer lookup, cards, transactions, and dispute creation.
   - Deterministic role-based permission enforcement outside LLM prompt context.
