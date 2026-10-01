@@ -113,17 +113,42 @@ def extract_load_bronze(con: duckdb.DuckDBPyConnection) -> dict[str, int]:
     return counts
 
 
-def configure_lake_storage(con: duckdb.DuckDBPyConnection, lake_uri: str) -> None:
-    """Prepare DuckDB for writing to lake_uri (GCS bucket or local directory)."""
-    if lake_uri.startswith("gs://"):
-        con.execute("INSTALL httpfs; LOAD httpfs;")
-        try:
-            con.execute("CREATE OR REPLACE SECRET gcs_lake (TYPE GCS, PROVIDER CREDENTIAL_CHAIN)")
-        except Exception as exc:
-            log(f"note: GCS credential chain initialization: {exc}")
-    else:
-        Path(f"{lake_uri}/bronze").mkdir(parents=True, exist_ok=True)
-        Path(f"{lake_uri}/silver").mkdir(parents=True, exist_ok=True)
+def sync_local_dir_to_gcs(local_dir: Path, gcs_uri: str) -> int:
+    """Upload all files from local_dir to gcs_uri using the native Google Cloud Storage SDK."""
+    from google.cloud import storage
+    from google.cloud.storage import transfer_manager
+    import shutil
+
+    if not local_dir.exists():
+        return 0
+
+    clean = gcs_uri.replace("gs://", "").strip("/")
+    parts = clean.split("/", 1)
+    bucket_name = parts[0]
+    prefix = parts[1].strip("/") + "/" if len(parts) > 1 and parts[1].strip() else ""
+
+    client = storage.Client()
+    bucket = client.bucket(bucket_name)
+
+    filenames = [p.relative_to(local_dir).as_posix() for p in local_dir.rglob("*") if p.is_file()]
+    if not filenames:
+        log(f"no files found in {local_dir} to upload")
+        return 0
+
+    log(f"uploading {len(filenames)} files from {local_dir} to gs://{bucket_name}/{prefix} in parallel...")
+    transfer_manager.upload_many_from_filenames(
+        bucket,
+        filenames,
+        source_directory=str(local_dir),
+        blob_name_prefix=prefix,
+        max_workers=8,
+        raise_exception=True,
+    )
+    log(f"successfully uploaded {len(filenames)} files to gs://{bucket_name}/{prefix}")
+
+    # Reclaim RAM in Cloud Run container by deleting local copy
+    shutil.rmtree(local_dir, ignore_errors=True)
+    return len(filenames)
 
 
 def persist_bronze_parquet(con: duckdb.DuckDBPyConnection, lake_uri: str) -> dict[str, int]:
@@ -132,30 +157,33 @@ def persist_bronze_parquet(con: duckdb.DuckDBPyConnection, lake_uri: str) -> dic
         log("lake storage URI not set; skipping bronze Parquet export")
         return {}
 
-    configure_lake_storage(con, lake_uri)
+    is_gcs = lake_uri.startswith("gs://")
+    local_base = Path("/tmp/lakehouse/bronze") if is_gcs else Path(f"{lake_uri}/bronze")
+    local_base.mkdir(parents=True, exist_ok=True)
+
     counts: dict[str, int] = {}
-    log(f"persisting Bronze layer in Parquet to {lake_uri}/bronze/...")
+    log(f"exporting Bronze layer in Parquet ZSTD to {local_base}...")
 
     for table in FLAT + PARTITIONED:
-        target = f"{lake_uri}/bronze/{table}"
+        target = local_base / table
+        target.mkdir(parents=True, exist_ok=True)
         if table in FLAT:
-            file_path = f"{target}/{table}.parquet"
-            if not lake_uri.startswith("gs://"):
-                Path(target).mkdir(parents=True, exist_ok=True)
+            file_path = (target / f"{table}.parquet").as_posix()
             con.execute(f"COPY bronze.{table} TO '{file_path}' (FORMAT PARQUET, COMPRESSION ZSTD)")
         else:
-            if not lake_uri.startswith("gs://"):
-                Path(target).mkdir(parents=True, exist_ok=True)
             con.execute(
                 f"""
                 COPY (SELECT * FROM bronze.{table})
-                TO '{target}'
+                TO '{target.as_posix()}'
                 (FORMAT PARQUET, COMPRESSION ZSTD, PARTITION_BY (year, month, day), OVERWRITE_OR_IGNORE true)
                 """
             )
         row_count = con.execute(f"SELECT count(*) FROM bronze.{table}").fetchone()[0]
         counts[table] = row_count
         log(f"lakehouse bronze.{table}: {row_count:,} rows exported")
+
+    if is_gcs:
+        sync_local_dir_to_gcs(local_base, f"{lake_uri}/bronze")
 
     return counts
 
@@ -166,21 +194,20 @@ def persist_silver_parquet(con: duckdb.DuckDBPyConnection, lake_uri: str) -> dic
         log("lake storage URI not set; skipping silver Parquet export")
         return {}
 
-    configure_lake_storage(con, lake_uri)
+    is_gcs = lake_uri.startswith("gs://")
+    local_base = Path("/tmp/lakehouse/silver") if is_gcs else Path(f"{lake_uri}/silver")
+    local_base.mkdir(parents=True, exist_ok=True)
+
     counts: dict[str, int] = {}
-    log(f"persisting Silver layer in Parquet to {lake_uri}/silver/...")
+    log(f"exporting Silver layer in Parquet ZSTD to {local_base}...")
 
     for table in FLAT + PARTITIONED:
-        target = f"{lake_uri}/silver/{table}"
+        target = local_base / table
+        target.mkdir(parents=True, exist_ok=True)
         if table in FLAT:
-            file_path = f"{target}/{table}.parquet"
-            if not lake_uri.startswith("gs://"):
-                Path(target).mkdir(parents=True, exist_ok=True)
+            file_path = (target / f"{table}.parquet").as_posix()
             con.execute(f"COPY silver.stg_{table} TO '{file_path}' (FORMAT PARQUET, COMPRESSION ZSTD)")
         else:
-            # Derived partition fields from process_date to mirror Hive partitioning
-            if not lake_uri.startswith("gs://"):
-                Path(target).mkdir(parents=True, exist_ok=True)
             con.execute(
                 f"""
                 COPY (
@@ -190,13 +217,16 @@ def persist_silver_parquet(con: duckdb.DuckDBPyConnection, lake_uri: str) -> dic
                            coalesce(strftime(process_date, '%d'), 'unknown') AS day
                     FROM silver.stg_{table}
                 )
-                TO '{target}'
+                TO '{target.as_posix()}'
                 (FORMAT PARQUET, COMPRESSION ZSTD, PARTITION_BY (year, month, day), OVERWRITE_OR_IGNORE true)
                 """
             )
         row_count = con.execute(f"SELECT count(*) FROM silver.stg_{table}").fetchone()[0]
         counts[table] = row_count
         log(f"lakehouse silver.{table}: {row_count:,} rows exported")
+
+    if is_gcs:
+        sync_local_dir_to_gcs(local_base, f"{lake_uri}/silver")
 
     return counts
 
@@ -274,6 +304,15 @@ def publish_gold(run_id: str) -> dict[str, int]:
             f"DROP TABLE IF EXISTS {schema}.{table}__old",
         ]
     _pg(con, "; ".join(swap))
+    _pg(
+        con,
+        f"DO $$ BEGIN "
+        f"IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'drejalas') THEN "
+        f"  GRANT USAGE ON SCHEMA {schema} TO drejalas, rucaceres26; "
+        f"  GRANT SELECT ON ALL TABLES IN SCHEMA {schema} TO drejalas, rucaceres26; "
+        f"END IF; "
+        f"END $$;"
+    )
     log(f"successfully published and swapped {len(GOLD)} tables in schema {schema}")
     con.close()
     return counts
