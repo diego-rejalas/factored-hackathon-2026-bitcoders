@@ -85,6 +85,13 @@ export default async function Home() {
           <p className="muted">{meta ? "Todavía no hay corridas registradas." : "No disponible."}</p>
         )}
       </section>
+
+      <section>
+        <h2>Documentación de datos</h2>
+        <p className="muted">
+          <a href="/data-docs">Linaje y catálogo de columnas</a> del modelo de datos (generado con dbt).
+        </p>
+      </section>
     </main>
   );
 }
