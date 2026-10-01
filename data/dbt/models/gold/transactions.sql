@@ -1,5 +1,4 @@
 {{ config(indexes=[
-    {'columns': ['transaction_id'], 'unique': True},
     {'columns': ['customer_id', 'transaction_date']},
     {'columns': ['product_id']},
 ]) }}
