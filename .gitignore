@@ -12,3 +12,8 @@ data/dbt/.user.yml
 .env
 .env.*
 !.env.example
+
+# Local tooling & testing artifacts
+.kilo/
+.pytest_cache/
+
