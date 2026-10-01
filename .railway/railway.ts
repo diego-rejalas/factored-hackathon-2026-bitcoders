@@ -1,3 +1,8 @@
+// LEGACY (2026-10-01): tras la migración completa a GCP (infra/gcp/), este
+// archivo ya NO se aplica. NO corras `railway config plan/apply` contra él
+// salvo para el teardown controlado del proyecto viejo — ver infra/gcp/README.md.
+// Se conserva como referencia histórica y como plano del despliegue primario
+// anterior (Airflow + DuckDB + dbt en Railway).
 import { defineRailway, github, group, postgres, preserve, project, service, volume } from "railway/iac";
 
 export default defineRailway(() => {
@@ -73,7 +78,52 @@ export default defineRailway(() => {
 
   const dataPipeline = group("Data Pipeline", [Postgres, AirflowDb, airflow, dbt, airflowData, postgresVolume]);
 
+  // Vertical 3: mock banking service (tool layer). Reads gold.* read-only and
+  // owns the operational app.disputes/app.dispute_events tables. Permission
+  // enforcement lives here, not in the agent's prompt.
+  const backend = service("backend", {
+    source: github(REPO, { checkSuites: false, rootDirectory: "/" }),
+    build: { buildEnvironment: "V3", builder: "DOCKERFILE", dockerfilePath: "backend/Dockerfile", watchPatterns: ["backend/**"] },
+    healthcheck: "/health",
+    replicas: { [REGION]: 1 },
+    env: {
+      PG_HOST: Postgres.env.PGHOST,
+      PG_PORT: Postgres.env.PGPORT,
+      PG_USER: Postgres.env.PGUSER,
+      PG_PASSWORD: Postgres.env.PGPASSWORD,
+      PG_DATABASE: "data",
+      SESSION_JWT_SECRET: preserve(),
+      // Railway private networking implies port 80 (see the dbt service note).
+      PORT: "80",
+    },
+  });
+
+  // Vertical 4: agent + deterministic guardrail. The frontend only knows this
+  // service; every banking datum travels through the backend's HTTP tools with
+  // the user's token, so the backend re-validates (double enforcement). The
+  // agent writes only its own agent.trace_log, never reads gold.*.
+  const agent = service("agent", {
+    source: github(REPO, { checkSuites: false, rootDirectory: "/" }),
+    build: { buildEnvironment: "V3", builder: "DOCKERFILE", dockerfilePath: "agent/Dockerfile", watchPatterns: ["agent/**"] },
+    healthcheck: "/health",
+    replicas: { [REGION]: 1 },
+    env: {
+      BANK_URL: backend.env.RAILWAY_PRIVATE_DOMAIN,
+      SESSION_JWT_SECRET: backend.env.SESSION_JWT_SECRET,
+      OPENROUTER_API_KEY: preserve(),
+      OPENROUTER_MODEL: "openai/gpt-4o-mini",
+      TYPESAFE_API_KEY: preserve(),
+      GUARDRAIL_MAX_USD: "500",
+      PG_HOST: Postgres.env.PGHOST,
+      PG_PORT: Postgres.env.PGPORT,
+      PG_USER: Postgres.env.PGUSER,
+      PG_PASSWORD: Postgres.env.PGPASSWORD,
+      PG_DATABASE: "data",
+      PORT: "80",
+    },
+  });
+
   return project("factored-hackathon", {
-    resources: [dataPipeline],
+    resources: [dataPipeline, backend, agent],
   });
 });
