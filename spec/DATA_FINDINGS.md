@@ -2,6 +2,10 @@
 
 Investigación hecha bajando muestras reales del bucket `factored-datathon-2026-s3-157725502942-us-east-2-an` (credenciales read-only del data dictionary). Objetivo: verificar supuestos antes de comprometernos a un workflow. Actualizar este doc si se investiga más.
 
+## Procedencia de los datos
+
+Todo lo que entra al sistema hoy es **sintético y lo entrega el organizador** (dataset LATAM Bank v1.0.0, 13 tablas, bucket de S3 de solo lectura). No hay datos reales, ni de-identificados, ni generados por el equipo en el pipeline. Los nombres, documentos, teléfonos y correos de `customers` son ficticios. Lo que el equipo genere más adelante (enunciados de usuario para la evaluación, casos sintéticos con etiquetas conocidas) se rotulará como **generado por el equipo** y se mantendrá separado del dato del organizador.
+
 ## Texto libre es plantilla, no señal real
 
 - `call_transcripts`: muestra de 151 filas (un día) → solo 32 variantes únicas de `customer_text`, y 141/151 filas comparten el mismo `detected_intents` = `consulta_general`. El campo de intención detectada casi no varía.

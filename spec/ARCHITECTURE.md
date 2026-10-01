@@ -114,6 +114,13 @@ bootstrap -> extract_load x 13 (en paralelo, máx. 6) -> dbt_build -> record_run
 ### Por qué Airflow
 Orquesta con reintentos por tarea, paralelismo acotado, UI de corridas y programación, y es lo que muestra el orden de las dependencias (dbt solo corre cuando las 13 cargas terminaron). Con datos estáticos no es imprescindible para que el pipeline funcione; es una decisión de observabilidad y de demostrar orquestación. Su metadata vive en un Postgres propio (`airflow-db`), separado del de datos.
 
+### Política de actualización y frescura
+
+- **El dato es un snapshot estático y cerrado:** los hechos van del 2023-06-17 al 2026-06-18 en las tablas transaccionales, y no llega nada nuevo. Se verificó que no hay llegadas tardías (`process_date - transaction_date` vale 0 o -1 día, nunca positivo) ni cambios de esquema entre fechas (un solo encabezado por tabla en las ~7.700 particiones).
+- **Actualización:** recarga completa a demanda (se dispara el DAG a mano), sin programación. Cada corrida reconstruye bronze desde S3, y `gold` solo se reconstruye si los tests de `silver` pasan.
+- **Qué significa "fresco" acá:** el momento de la última corrida exitosa, que queda registrado en `ops.etl_runs`, se expone en `GET /meta/data` del backend y se muestra en el frontend. No hay un umbral de antigüedad que vigilar porque la fuente no cambia.
+- **Si el dato empezara a llegar:** programar el DAG (diario), pasar `transactions` y `digital_events` a modelos incrementales por partición, y declarar `loaded_at_field: _ingested_at` en las fuentes de dbt para que `dbt source freshness` alerte cuando una tabla se atrase.
+
 ### Escalabilidad (cómo se responde sin tener que correrlo)
 La carga completa cabe holgada en un nodo. Si el volumen creciera 10x, los puntos de extensión son filtrar por partición (`year/month/day` ya viene como columna) y pasar `transactions` y `digital_events` a modelos incrementales en dbt; más allá, mover la metadata de Airflow a varios workers (CeleryExecutor). Documentado como camino de escalamiento, no implementado.
 

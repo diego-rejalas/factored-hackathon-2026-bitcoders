@@ -28,7 +28,7 @@ Extraído de `doc/Factored AI & Data Hackathon 2026.md` y `doc/Datathon_2026_Kic
 
 ## Datos y ML
 
-- [x] Pipeline de datos repetible: contratos de esquema, checks de calidad, linaje, política de actualización/frescura. (DAG de Airflow con DuckDB: reconstruye bronze desde S3 en cada corrida, 121 tests dbt que impiden reconstruir gold si silver falla, linaje por fila en `_source_key`; snapshot estático sin política de frescura; `spec/ARCHITECTURE.md` Vertical 1-2)
+- [x] Pipeline de datos repetible: contratos de esquema, checks de calidad, linaje, política de actualización/frescura. (DAG de Airflow con DuckDB: reconstruye bronze desde S3 en cada corrida; 121 tests dbt, y si un test de silver falla `gold` no se reconstruye; linaje por fila en `_source_key`; política de frescura explícita en `ARCHITECTURE.md` (snapshot estático, recarga a demanda). Falta endurecer los contratos de `gold` a tipados con `contract: enforced`)
 - [ ] Al menos un componente aprendido evaluado contra un baseline apropiado.
 - [ ] Labels o juicios de relevancia válidos, sin leakage (ej. no usar `is_fraud` como input si se supone que el sistema lo "detecta").
 - [ ] Justificar representaciones, métricas, umbrales, y splits de evaluación.
@@ -52,9 +52,9 @@ Extraído de `doc/Factored AI & Data Hackathon 2026.md` y `doc/Datathon_2026_Kic
 ## Ruta a producción (honestidad, no implementación real)
 
 - [ ] Tracing / trazabilidad de cada decisión (evidencia de auditoría = fuentes + reglas de política + registros de ejecución; el chain-of-thought oculto del modelo NO cuenta como evidencia).
-- [ ] Reintentos acotados (bounded retries) y fallback seguro.
-- [ ] Setup reproducible.
-- [ ] Explicar límites de capacidad, monitoreo, controles de acceso, retención de datos, y qué falta para producción real.
+- [ ] Reintentos acotados (bounded retries) y fallback seguro. (Pipeline: hecho, las cargas reintentan 2 veces y `gold` conserva el último dato válido si algo falla. Falta lo mismo en el agente: reintentos acotados de herramientas y abstención/escalamiento ante un fallo)
+- [x] Setup reproducible. (Todo como código: `.railway/railway.ts`, Dockerfiles, CI que construye las imágenes y corre `dbt parse`; pasos en `spec/AIRFLOW_DEPLOYMENT.md`. El agente se suma a la misma IaC)
+- [ ] Explicar límites de capacidad, monitoreo, controles de acceso, retención de datos, y qué falta para producción real. (Capacidad y camino de escalamiento: `ARCHITECTURE.md`; monitoreo del pipeline: Airflow + `ops.etl_runs`; control de acceso: rol de solo lectura del backend. Faltan la política de retención y el resto cuando exista el agente)
 
 ## Libertad de arquitectura (lo que NO es obligatorio)
 
@@ -69,12 +69,12 @@ Extraído de `doc/Factored AI & Data Hackathon 2026.md` y `doc/Datathon_2026_Kic
 ## Fronteras de datos y ejecución
 
 - [x] Solo el dataset organizador-aprobado (LATAM Bank sintético) y recursos externos permitidos.
-- [ ] Identificar qué inputs son reales, de-identificados, sintéticos, o generados por el equipo.
+- [x] Identificar qué inputs son reales, de-identificados, sintéticos, o generados por el equipo. (`DATA_FINDINGS.md`, "Procedencia de los datos": todo es sintético del organizador; lo que genere el equipo se rotulará aparte)
 - [x] No incluir registros privados reales, credenciales, o datos restringidos en la entrega pública ni en requests a modelos externos. (PDF con AWS keys sacado del repo y de la historia de git — ver commits de purge)
 - [ ] Servicios sandbox / tools de banca simulados son aceptables si sus contratos y límites están documentados.
 - [ ] Autenticación con sesión de prueba confiable o servicio de identidad — un ID/número de cliente solo NO prueba identidad.
 - [ ] Permisos de acceso a registros de cada cliente enforced en la capa de servicio/tool, no en el prompt.
-- [ ] No se requiere ni autoriza mover dinero real ni decisiones de crédito en vivo.
+- [x] No se requiere ni autoriza mover dinero real ni decisiones de crédito en vivo. (Nada en el sistema mueve dinero; el backend es de solo lectura)
 
 ## Entrega (submission, antes de Oct 5)
 
