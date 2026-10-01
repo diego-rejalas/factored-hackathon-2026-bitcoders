@@ -1,0 +1,9 @@
+[project]
+name = "agent-poc"
+version = "0.1.0"
+description = "Minimal PydanticAI proof of concept: one LLM, one tool, no guardrail"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic-ai-slim[openai]>=2.52,<3",
+    "python-dotenv>=1.0",
+]
