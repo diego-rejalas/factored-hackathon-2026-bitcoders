@@ -1,5 +1,5 @@
--- Encuestas de satisfacción (212.759). main_score va de 1 a 7 para CSAT, NPS y CES; nps_category nunca trae Promoter.
--- Silver: tipos reales, '' -> NULL, sin lógica de negocio. Ver spec/DATA_FINDINGS.md.
+-- Satisfaction surveys (212,759 rows). main_score runs 1 to 7 across CSAT, NPS and CES; nps_category never contains Promoter.
+-- Silver: real types, '' -> NULL, no business logic. See spec/DATA_FINDINGS.md.
 with source as (
     select * from {{ source('bronze', 'satisfaction_surveys') }}
 )

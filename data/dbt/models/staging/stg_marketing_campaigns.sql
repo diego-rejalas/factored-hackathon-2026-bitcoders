@@ -1,5 +1,5 @@
--- Campañas de marketing (200). Sin uso en atención al cliente.
--- Silver: tipos reales, '' -> NULL, sin lógica de negocio. Ver spec/DATA_FINDINGS.md.
+-- Marketing campaigns (200 rows). Not used in customer service.
+-- Silver: real types, '' -> NULL, no business logic. See spec/DATA_FINDINGS.md.
 with source as (
     select * from {{ source('bronze', 'marketing_campaigns') }}
 )
