@@ -1,623 +1,241 @@
 version: 2
 sources:
 - name: bronze
-  description: >-
-    Raw copy of the 13 tables of the organizer-provided synthetic LATAM Bank dataset (v1.0.0), loaded
-    from S3 by the Airflow DAG `latam_bank_pipeline` with DuckDB.
-
-
-    Every column is text, exactly as it arrives in the CSV files, and every row carries `_source_key`
-    (S3 object of origin) and `_ingested_at` (load time). Each run reloads the tables in full. Nothing
-    reads bronze except dbt.
-
-
-    The data is a static, closed snapshot (facts from 2023-06-17 to 2026-06-18), so there is no freshness
-    to measure; see the project overview for the freshness policy.
+  description: Raw copy of the organizer-provided synthetic LATAM Bank dataset, loaded from S3 by the Airflow DAG
+    `latam_bank_pipeline` with DuckDB. Every column is text as it arrives, plus `_source_key` (S3 object of origin)
+    and `_ingested_at` (load time); tables are reloaded in full on every run and read only by dbt. The data is a
+    static snapshot, so there is no freshness to monitor (see the project overview).
   schema: bronze
   tables:
   - name: customers
-    description: >-
-      Customer master data: identity, contact, demographic and credit-profile attributes of each retail
-      customer of the bank in Mexico, Colombia and Argentina.
-
-
-      **Grain:** One row per customer.
-
-
-      **Primary key:** `customer_id` (not enforced in bronze; checked by dbt tests in silver).
-
-
-      **Source:** Organizer-provided synthetic LATAM Bank dataset (v1.0.0), a single CSV file on S3, copied
-      as-is by DuckDB from the Airflow DAG `latam_bank_pipeline`: every column is text, plus the lineage
-      columns `_source_key` and `_ingested_at`. Reloaded in full on every run.
-
-
-      **Coverage:** 150,000 customers registered between 2018-06-18 and 2026-06-17 (93,695 of them before
-      the 2023-06-17 start of the transactional history). México 74,907 (49.9%), Colombia 45,251 (30.2%),
-      Argentina 29,842 (19.9%). 139,578 of them hold at least one product.
-
-
-      **How we use it:** Read only by dbt, which builds `silver.stg_customers` from it. Profile lookup
-      for the authenticated customer in the customer-service dispute workflow and source of the credit-profile
-      inputs (`credit_score`, `estimated_monthly_income`). Every other table references `customer_id`.
-      All personal data is fictitious.
+    description: 'Retail customers of the bank (identity, contact, demographic and credit-profile attributes). One
+      row per customer; primary key `customer_id`. Profile lookup for the authenticated customer and source of the
+      credit-profile inputs; every other table references `customer_id`. Raw bronze copy: every column as text plus
+      `_source_key` and `_ingested_at`; reloaded in full on every run and read only by dbt.'
     meta:
       data_quality:
-      - >-
-        registration_branch_id does not join to branches: 149,995 of 150,000 values do not exist in branches.branch_id
-        (only 5 match). Do not use it.
-      - >-
-        Null rates by column: landline_phone 50.0%, detected_accent 29.9%, estimated_monthly_income 20.0%,
-        credit_score 15.0% (22,492 rows), education_level 12.0%, postal_code 10.0%, occupation 10.0%,
-        marital_status 8.0%, address 4.9%, mobile_phone 3.1%, email 2.0%.
-      - >-
-        credit_score has a minimum of 422 although the documentation suggests a 300 to 850 range; the
-        dbt range test accepts 300 to 850.
-      - >-
-        last_updated is later than the end of the snapshot (2026-06-18) in 9,316 rows, with a maximum
-        of 2027-06-15.
-      - >-
-        estimated_monthly_income carries no currency; magnitudes follow each customer's local currency
-        (median 39,219 for México, 801,955 for Argentina, 9,192,466 for Colombia), so values are not comparable
+      - 'registration_branch_id does not join to branches (test: relationships, warn). Do not use it.'
+      - credit_score minimum is above the documented range; covered by the accepted_range test.
+      - last_updated can be later than the snapshot end.
+      - estimated_monthly_income has no currency; it follows the customer's local currency, so it is not comparable
         across countries without conversion.
-      - >-
-        gender, marital_status and occupation are almost evenly distributed (about a third, a quarter
-        and 5% per value), which is typical of synthetic generation rather than of a real customer base.
+      - gender, marital_status and occupation are almost evenly distributed, typical of synthetic generation.
     columns:
     - name: _source_key
       description: '{{ doc("bronze_source_key") }}'
     - name: _ingested_at
       description: '{{ doc("bronze_ingested_at") }}'
   - name: products
-    description: >-
-      Financial products held by customers: savings and checking accounts, credit and debit cards, personal
-      and mortgage loans, investments and insurance policies.
-
-
-      **Grain:** One row per product held by a customer.
-
-
-      **Primary key:** `product_id` (not enforced in bronze; checked by dbt tests in silver).
-
-
-      **Source:** Organizer-provided synthetic LATAM Bank dataset (v1.0.0), a single CSV file on S3, copied
-      as-is by DuckDB from the Airflow DAG `latam_bank_pipeline`: every column is text, plus the lineage
-      columns `_source_key` and `_ingested_at`. Reloaded in full on every run.
-
-
-      **Coverage:** 400,000 products held by 139,578 of the 150,000 customers, opened between 2018-06-18
-      and 2026-06-17. By status: Active 339,965, Closed 32,039, Blocked 19,935 (about 5%), Suspended 8,061.
-      All 4,425,008 transactions belong to Active products.
-
-
-      **How we use it:** Read only by dbt, which builds `silver.stg_products` from it. Product lookup
-      scoped to the authenticated customer (ownership by `customer_id`) in the dispute workflow, for example
-      'my card is blocked'; credit exposure inputs (`credit_limit`, `current_balance`, `days_past_due`).
-      Amounts are in the product currency.
+    description: 'Bank products held by customers (accounts, cards, loans, investments, insurance). One row per
+      product; primary key `product_id`. Used to resolve which products a customer owns and to read balances, limits
+      and status. Raw bronze copy: every column as text plus `_source_key` and `_ingested_at`; reloaded in full
+      on every run and read only by dbt.'
     meta:
       data_quality:
-      - >-
-        currency never takes the value MXN (USD 220,501, COP 107,975, ARS 71,524) although 49.9% of customers
-        are in México; all 66,236 credit products of México customers are in USD.
-      - 7,510 credit products have current_balance greater than credit_limit (dbt warning).
-      - >-
-        credit_limit and days_past_due are NULL for the 68.7% of products that are not credit products;
-        days_past_due is also NULL for about 5% of credit products (NULL is not zero).
-      - >-
-        days_past_due takes only seven values (0, 15, 30, 60, 90, 120, 180); it spikes at exactly 30 (3,117
-        products) and carries no predictive signal of delinquency in this dataset.
-      - >-
-        interest_rate is NULL for 10.0%, expiration_date for 66.7% (only cards have one), last_transaction_date
-        for 23.6%.
-      - >-
-        last_updated is later than the end of the snapshot (2026-06-18) in 25,113 rows, with a maximum
-        of 2027-06-15.
-      - product_number has 399,994 distinct values over 400,000 rows, so it is not a key; use product_id.
-      - >-
-        Credit customers can hold products in more than one currency, so any total balance or debt-to-income
-        ratio needs conversion with daily_exchange_rates.
+      - currency is never MXN, even for Mexican customers (all of them appear in USD); balances are not comparable
+        across currencies.
+      - 'Some credit products have current_balance above credit_limit (test: assert_credit_balance_within_limit,
+        warn).'
+      - credit_limit and days_past_due are NULL for non-credit products; NULL is not zero.
+      - days_past_due takes a handful of discrete values and carries no predictive signal of delinquency.
+      - last_updated can be later than the snapshot end.
+      - product_number is not unique; use product_id.
     columns:
     - name: _source_key
       description: '{{ doc("bronze_source_key") }}'
     - name: _ingested_at
       description: '{{ doc("bronze_ingested_at") }}'
   - name: transactions
-    description: >-
-      Individual financial movements (purchases, withdrawals, transfers, payments, deposits and adjustments)
-      on customer products, including their authorization outcome.
-
-
-      **Grain:** One row per transaction.
-
-
-      **Primary key:** `transaction_id` (not enforced in bronze; checked by dbt tests in silver).
-
-
-      **Source:** Organizer-provided synthetic LATAM Bank dataset (v1.0.0), one CSV per day (1,097 files)
-      on S3, copied as-is by DuckDB from the Airflow DAG `latam_bank_pipeline`: every column is text,
-      plus the lineage columns `_source_key` and `_ingested_at`. Reloaded in full on every run.
-
-
-      **Coverage:** 4,425,008 transactions from 2023-06-17 06:01:30 to 2026-06-18 05:59:41 on 339,963
-      products of 134,515 customers, one source file per day (1,097 files). Status mix: Approved 91.99%,
-      Declined 5.00% (221,234), Pending 2.00%, Reversed 1.01% (44,750).
-
-
-      **How we use it:** Read only by dbt, which builds `silver.stg_transactions` from it. Evidence for
-      the dispute workflow: the authenticated customer's own movements and the Declined or Reversed ones
-      (about 266,000 candidates for automatic resolution). Ownership is consistent: the customer of every
-      transaction owns the product (4,425,008 of 4,425,008).
+    description: 'Card and account transactions (purchases, withdrawals, transfers, payments, deposits, adjustments).
+      One row per transaction; primary key `transaction_id`. Basis of the dispute workflow. Silver additionally
+      carries the fraud ground-truth columns, which are excluded from gold. Raw bronze copy: every column as text
+      plus `_source_key` and `_ingested_at`; reloaded in full on every run and read only by dbt.'
     meta:
       data_quality:
-      - >-
-        amount_usd is NULL in 57.3% of rows: every USD transaction (the amount is already in dollars)
-        and about 5% of ARS and COP ones (99,477 real gaps, dbt warning).
-      - >-
-        currency never takes the value MXN (USD 2,437,979, COP 1,194,444, ARS 792,585); all 2,216,431
-        transactions of México customers are in USD. Currency always equals the currency of the product.
-      - >-
-        transaction_country spells Mexico two ways, 'México' 2,105,794 and 'Mexico' 40,515, and the silver
-        view does not conform them; USA, Spain and Brazil add about 40,500 rows each.
-      - >-
-        response_code is NULL in 5.0% of rows (203,369 Approved, 10,962 Declined, 2,310 Reversed); Approved
-        rows carry '00' or NULL, the other statuses carry 05, 14, 51 or 54.
-      - >-
-        Declines are independent of the product: every transaction is on an Active product and Declined
-        codes are split almost evenly across 05, 14, 51 and 54 (about 52,500 each), so a decline can only
-        be explained by the meaning of its code.
-      - >-
-        transaction_category is NULL in 60.9% of rows and merchant_name in 76.7%; both are empty for every
-        Transfer, Withdrawal, Deposit and Adjustment.
-      - >-
-        latitude and longitude are NULL in 80.6% of rows, and 450,546 of the 857,328 populated pairs have
-        a latitude or longitude with absolute value below 1, so they are not usable as a geolocation.
-      - >-
-        There are no duplicated transaction_id values and no late arrivals: process_date is the date of
-        transaction_date or one day earlier, never later.
-      - >-
-        is_fraud is true for 4,316 transactions (0.10%) in the silver view; ground-truth labels only,
-        not present in gold.
+      - 'amount_usd is NULL for all USD rows and for some ARS and COP rows (test: assert_usd_amount_present_for_non_usd_transactions,
+        warn); derive it with daily_exchange_rates.'
+      - currency is never MXN; Mexican customers always transact in USD, always in the currency of the product.
+      - transaction_country spells Mexico two ways ('México' and 'Mexico') and is not conformed in silver.
+      - Declined codes are spread evenly and independent of the product; a decline is explained only by its response_code.
+      - transaction_category and merchant_name are empty for Transfer, Withdrawal, Deposit and Adjustment.
+      - latitude and longitude are mostly NULL and many values are close to zero; not usable as geolocation.
+      - 'process_date is the transaction date or one day earlier (test: assert_transactions_processed_within_a_day_of_event,
+        warn); there are no late arrivals.'
+      - is_fraud and fraud_score are evaluation ground truth, never an agent input; excluded from gold.
     columns:
     - name: _source_key
       description: '{{ doc("bronze_source_key") }}'
     - name: _ingested_at
       description: '{{ doc("bronze_ingested_at") }}'
   - name: complaints
-    description: >-
-      Complaints, claims, requests and suggestions (PQR: petitions, complaints and claims) that customers
-      register through any channel, with their handling and resolution timeline.
-
-
-      **Grain:** One row per registered case (PQR).
-
-
-      **Primary key:** `complaint_id` (not enforced in bronze; checked by dbt tests in silver).
-
-
-      **Source:** Organizer-provided synthetic LATAM Bank dataset (v1.0.0), one CSV per day (1,097 files)
-      on S3, copied as-is by DuckDB from the Airflow DAG `latam_bank_pipeline`: every column is text,
-      plus the lineage columns `_source_key` and `_ingested_at`. Reloaded in full on every run.
-
-
-      **Coverage:** 67,095 cases created between 2023-06-17 08:07:05 and 2026-06-18 07:56:52 by 54,145
-      customers (1.24 cases per customer), one source file per day. Status: In Process 26,823, Open 20,125,
-      Resolved 13,512, Escalated 3,321, Closed 2,609, Rejected 705.
-
-
-      **How we use it:** Read only by dbt, which builds `silver.stg_complaints` from it. Customer-level
-      complaint history for the dispute workflow (case type, category, status, SLA). It is never used
-      to choose the disputed transaction or product: that choice always comes from the authenticated customer's
-      own products and transactions.
+    description: 'Customer complaints, claims, requests and suggestions (PQR cases). One row per case; primary key
+      `complaint_id`. Case history and status source for the dispute workflow. Raw bronze copy: every column as
+      text plus `_source_key` and `_ingested_at`; reloaded in full on every run and read only by dbt.'
     meta:
       data_quality:
-      - >-
-        affected_product_id belongs to another customer in 100% of the rows that have one (44,570 of 44,570,
-        66.4% of cases); the assignment is random and not recoverable (dbt warning). Never use it to show
-        or authorize product information.
-      - >-
-        origin_interaction_id is empty in all 67,095 rows, so no case can be linked to a call-center interaction.
-      - >-
-        claimed_amount matches no transaction: 0 of 21,751 amounts equal any transaction of the customer.
-        It ranges from 50.27 to 4,999.93 in all four currencies, so it is not scaled to its currency.
-      - >-
-        description is one of five templated sentences ('Queja relacionada con ...') and resolution one
-        of five generic sentences; neither is real free text, so no intent classifier should be trained
-        on them.
-      - >-
-        subcategory is one to one with category (five fixed pairs) and NULL in 9.98% of rows, so it adds
-        no granularity.
-      - 772 cases are Resolved or Closed without a resolution_date (632 Resolved, 140 Closed; dbt warning).
-      - >-
-        Outcomes do not differ by category: SLA breached in about 20% of cases and resolution in 1 to
-        30 days whatever the category, and the five categories each hold 19.7% to 20.2% of cases.
-      - >-
-        resolution_date, closing_date and first_response_date run up to 2026-07-18, past the end of the
-        snapshot (2026-06-18).
-      - currency includes MXN (5,487 rows), the only table besides daily_exchange_rates where MXN appears.
+      - 'affected_product_id belongs to another customer (test: assert_complaint_affected_product_belongs_to_customer,
+        warn). Never use it to show or authorize product information.'
+      - origin_interaction_id is empty in every row, so no case links to a call-center interaction.
+      - claimed_amount matches no transaction and is not scaled to its currency; not a usable dispute amount.
+      - description and resolution are templated sentences, not free text; do not train intent classifiers on them.
+      - subcategory is one to one with category and adds no granularity.
+      - 'Some Resolved or Closed cases have no resolution_date (test: assert_resolved_complaints_have_resolution_date,
+        warn).'
+      - Outcomes (SLA breach, resolution time) do not differ by category.
+      - resolution_date, closing_date and first_response_date can be later than the snapshot end.
+      - currency includes MXN, the only table besides daily_exchange_rates where it appears.
     columns:
     - name: _source_key
       description: '{{ doc("bronze_source_key") }}'
     - name: _ingested_at
       description: '{{ doc("bronze_ingested_at") }}'
   - name: call_center_interactions
-    description: >-
-      Contacts between customers and the bank's service agents (calls, chats, emails and video) with channel,
-      duration, detected sentiment and outcome.
-
-
-      **Grain:** One row per contact-center interaction.
-
-
-      **Primary key:** `interaction_id` (not enforced in bronze; checked by dbt tests in silver).
-
-
-      **Source:** Organizer-provided synthetic LATAM Bank dataset (v1.0.0), one CSV per day (1,097 files)
-      on S3, copied as-is by DuckDB from the Airflow DAG `latam_bank_pipeline`: every column is text,
-      plus the lineage columns `_source_key` and `_ingested_at`. Reloaded in full on every run.
-
-
-      **Coverage:** 686,296 interactions from 2023-06-17 08:03:26 to 2026-06-18 07:58:13 by 148,443 customers
-      handled by 1,090 agents, one source file per day. First-contact resolution (`was_resolved`) is 76.6%
-      and escalation 10.0% overall.
-
-
-      **How we use it:** Read only by dbt, which builds `silver.stg_call_center_interactions` from it.
-      Baseline for containment and escalation metrics in the evaluation (resolution and escalation rates
-      by contact reason) and context on a customer's previous contacts. 171,321 interactions (25.0%) have
-      a transcript in call_transcripts.
+    description: 'Contact-center interactions (calls, chats, emails, video). One row per interaction; primary key
+      `interaction_id`. Interaction history of a customer, with reason, sentiment and outcome. Raw bronze copy:
+      every column as text plus `_source_key` and `_ingested_at`; reloaded in full on every run and read only by
+      dbt.'
     meta:
       data_quality:
-      - >-
-        contact_reason is identical to reason_category in all 686,296 rows (the same six values), so it
-        is not more granular than the category.
-      - 52,454 interactions are marked both escalated and resolved (dbt warning).
-      - >-
-        was_escalated is flat across contact reasons (9.8% to 10.1%), while resolution varies: Transaccional
-        91.5%, Producto 89.6%, Técnico 69.9%, Comercial 65.2%, Retención 60.2%, Queja 43.6%.
-      - >-
-        duration_seconds is NULL in 14.0% of rows, wait_time_seconds in 30.0%, and both accent columns
-        in 29.8%.
-      - >-
-        mentioned_products is NULL in 60.0% and holds comma separated product IDs that are not validated
-        against products.
-      - >-
-        Only 171,321 of 686,296 rows (25.0%) have has_transcript = true, exactly the rows of call_transcripts.
+      - contact_reason is identical to reason_category in every row; use one of the two.
+      - Some interactions are marked both escalated and resolved (no test).
+      - was_escalated is flat across contact reasons while resolution varies by reason.
+      - duration_seconds, wait_time_seconds and both accent columns are partly NULL.
+      - mentioned_products is a comma separated list of product IDs that is not validated against products.
+      - has_transcript is true exactly for the rows present in call_transcripts.
     columns:
     - name: _source_key
       description: '{{ doc("bronze_source_key") }}'
     - name: _ingested_at
       description: '{{ doc("bronze_ingested_at") }}'
   - name: branches
-    description: >-
-      Physical branches of the bank with location, opening hours and facilities.
-
-
-      **Grain:** One row per branch.
-
-
-      **Primary key:** `branch_id` (not enforced in bronze; checked by dbt tests in silver).
-
-
-      **Source:** Organizer-provided synthetic LATAM Bank dataset (v1.0.0), a single CSV file on S3, copied
-      as-is by DuckDB from the Airflow DAG `latam_bank_pipeline`: every column is text, plus the lineage
-      columns `_source_key` and `_ingested_at`. Reloaded in full on every run.
-
-
-      **Coverage:** 350 branches in 16 cities: México 175, Colombia 105, Argentina 70; opened between
-      1990-01-03 and 2023-05-11. Types: Express 130, Corporate 129, Premium 48, Main 43. Status: Active
-      336, Temporarily Closed 14.
-
-
-      **How we use it:** Read only by dbt, which builds `silver.stg_branches` from it. Reference for branch
-      names, cities and status referenced from products, transactions, complaints and agents. Not used
-      to resolve the dispute workflow itself.
+    description: 'Bank branches. One row per branch; primary key `branch_id`. Reference data for products, transactions
+      and complaints. Raw bronze copy: every column as text plus `_source_key` and `_ingested_at`; reloaded in full
+      on every run and read only by dbt.'
     meta:
       data_quality:
-      - geographic_zone is 'Urbana' in all 350 rows; the documented values Suburban and Rural never appear.
-      - has_atms and has_teller_windows are true in all 350 rows, so they carry no information.
-      - >-
-        latitude or longitude has an absolute value below 1 in 167 of 350 rows, which is not valid for
-        any of the three countries; coordinates are not usable for geolocation.
-      - >-
-        branch_id values referenced by customers.registration_branch_id and service_agents.assigned_branch_id
-        mostly do not exist here (149,995 of 150,000 and 831 of 833 orphans respectively); products, transactions
-        and complaints join with no orphans.
+      - 'geographic_zone is constant; the documented values Suburban and Rural never appear (test: accepted_values,
+        warn).'
+      - has_atms and has_teller_windows are constant and carry no information.
+      - Many latitude/longitude values are close to zero and invalid for the three countries; not usable for geolocation.
+      - branch_ids in customers.registration_branch_id and service_agents.assigned_branch_id mostly do not exist
+        here; products, transactions and complaints join without orphans.
     columns:
     - name: _source_key
       description: '{{ doc("bronze_source_key") }}'
     - name: _ingested_at
       description: '{{ doc("bronze_ingested_at") }}'
   - name: service_agents
-    description: >-
-      Customer-service agents (phone, digital, in-person and hybrid) with languages, accent, specialty,
-      shift and performance indicators.
-
-
-      **Grain:** One row per service agent.
-
-
-      **Primary key:** `agent_id` (not enforced in bronze; checked by dbt tests in silver).
-
-
-      **Source:** Organizer-provided synthetic LATAM Bank dataset (v1.0.0), a single CSV file on S3, copied
-      as-is by DuckDB from the Airflow DAG `latam_bank_pipeline`: every column is text, plus the lineage
-      columns `_source_key` and `_ingested_at`. Reloaded in full on every run.
-
-
-      **Coverage:** 1,200 agents hired between 2013-06-20 and 2026-03-17: México 600, Colombia 360, Argentina
-      240. Status: Active 1,090, Vacation 62, Leave 29, Inactive 19. 1,090 of them appear in call_center_interactions.
-
-
-      **How we use it:** Read only by dbt, which builds `silver.stg_service_agents` from it. Agent reference
-      for interactions, complaints and surveys, and the only evidence of Portuguese in the dataset: 129
-      of 1,200 agents (10.75%) speak it, which is why Portuguese support has to be solved in the agent
-      layer.
+    description: 'Customer-service agents. One row per agent; primary key `agent_id`. Reference data for interactions,
+      transcripts, surveys and complaints. Raw bronze copy: every column as text plus `_source_key` and `_ingested_at`;
+      reloaded in full on every run and read only by dbt.'
     meta:
       data_quality:
-      - >-
-        assigned_branch_id is NULL in 30.6% of agents (remote and digital agents) and 831 of its 833 distinct
-        values do not exist in branches (dbt warning).
-      - >-
-        129 of 1,200 agents speak Portuguese ('español, portugués' 68 and 'español, inglés, portugués'
-        61); no customer, transcript or text in the dataset is in Portuguese.
-      - country_of_origin spells 'Mexico' without accent in the source; silver conforms it to 'México'.
-      - >-
-        specialty is NULL in 39.7%, avg_csat in 11.2% (134 agents), total_monthly_interactions in 9.25%
-        and phone in 5.75%.
-      - employee_code has 1,187 distinct values over 1,200 agents, so it is not unique; use agent_id.
+      - 'assigned_branch_id is NULL for remote and digital agents and mostly does not exist in branches (test: relationships,
+        warn).'
+      - Some agents speak Portuguese, but no customer, transcript or text in the dataset is in Portuguese.
+      - country_of_origin is spelled 'Mexico' in the source; silver conforms it to 'México'.
+      - specialty, avg_csat, total_monthly_interactions and phone are partly NULL.
+      - employee_code is not unique; use agent_id.
     columns:
     - name: _source_key
       description: '{{ doc("bronze_source_key") }}'
     - name: _ingested_at
       description: '{{ doc("bronze_ingested_at") }}'
   - name: marketing_campaigns
-    description: >-
-      Marketing campaigns of the bank (acquisition, retention, cross-sell, up-sell, reactivation) with
-      type, target, budget and expected conversion.
-
-
-      **Grain:** One row per marketing campaign.
-
-
-      **Primary key:** `campaign_id` (not enforced in bronze; checked by dbt tests in silver).
-
-
-      **Source:** Organizer-provided synthetic LATAM Bank dataset (v1.0.0), a single CSV file on S3, copied
-      as-is by DuckDB from the Airflow DAG `latam_bank_pipeline`: every column is text, plus the lineage
-      columns `_source_key` and `_ingested_at`. Reloaded in full on every run.
-
-
-      **Coverage:** 200 campaigns starting between 2023-07-01 and 2026-06-14 (end dates up to 2026-08-20).
-      Status: Completed 172, Paused 25, Active 3. 175 of them have sends in campaign_sends.
-
-
-      **How we use it:** Read only by dbt, which builds `silver.stg_marketing_campaigns` from it. Not
-      used by the customer-service workflow; documented because it is one of the 13 organizer tables and
-      is the dimension of campaign_sends.
+    description: 'Marketing campaigns. One row per campaign; primary key `campaign_id`. Outside the customer-service
+      scope: documented but not exposed in gold. Raw bronze copy: every column as text plus `_source_key` and `_ingested_at`;
+      reloaded in full on every run and read only by dbt.'
     meta:
       data_quality:
-      - target_country spells 'Mexico' without accent in the source; silver conforms it to 'México'.
-      - >-
-        Null rates: target_country 55.5%, target_segment 39.5%, description 19.5%, budget 15.5%, promoted_product
-        11.0%, expected_conversion_rate 7.0%.
-      - budget carries no currency indicator.
-      - description mixes English and Spanish ('Campaña de acquisition para Tarjeta Crédito').
+      - target_country is spelled 'Mexico' in the source; silver conforms it to 'México'.
+      - target_country, target_segment, description, budget, promoted_product and expected_conversion_rate are partly
+        NULL.
+      - budget has no currency.
+      - description mixes English and Spanish.
     columns:
     - name: _source_key
       description: '{{ doc("bronze_source_key") }}'
     - name: _ingested_at
       description: '{{ doc("bronze_ingested_at") }}'
   - name: daily_exchange_rates
-    description: >-
-      Daily exchange rates between the four currencies of the dataset (USD, MXN, COP, ARS), used to convert
-      amounts to a common currency.
-
-
-      **Grain:** One row per currency pair and day.
-
-
-      **Primary key:** the composite key (`rate_date`, `source_currency`, `target_currency`) (not enforced
-      in bronze; checked by dbt tests in silver).
-
-
-      **Source:** Organizer-provided synthetic LATAM Bank dataset (v1.0.0), a single CSV file on S3, copied
-      as-is by DuckDB from the Airflow DAG `latam_bank_pipeline`: every column is text, plus the lineage
-      columns `_source_key` and `_ingested_at`. Reloaded in full on every run.
-
-
-      **Coverage:** 13,164 rows: 1,097 days (2023-06-17 to 2026-06-17) times 12 ordered currency pairs
-      (3,291 rows per currency on each side).
-
-
-      **How we use it:** Read only by dbt, which builds `silver.stg_daily_exchange_rates` from it. Normalising
-      amounts across currencies: transactions.amount_usd gaps, products and credit amounts, and any debt-to-income
-      calculation. It is the only table with a complete MXN series.
+    description: 'Daily exchange rates between COP, ARS, MXN and USD. One row per rate_date, source_currency and
+      target_currency; composite primary key enforced by the unique_combination test. Used to convert transaction
+      amounts to USD. Raw bronze copy: every column as text plus `_source_key` and `_ingested_at`; reloaded in full
+      on every run and read only by dbt.'
     meta:
       data_quality:
-      - >-
-        MXN exists here (all pairs, 1,097 rows each) while transactions and products contain no MXN, so
-        there is nothing in MXN to convert.
-      - >-
-        The source column is a random provider label per row (Bloomberg 3,303, Reuters 3,297, Internal
-        3,293, Central Bank 3,271), not a currency and not a consistent series.
-      - >-
-        There are no same-currency pairs, and buy_rate <= exchange_rate <= sell_rate holds in all 13,164
-        rows.
+      - MXN exists here, but transactions and products contain no MXN.
+      - source is a random provider label per row, not a currency and not a consistent series.
+      - No same-currency pairs; buy_rate <= exchange_rate <= sell_rate holds in every row.
     columns:
     - name: _source_key
       description: '{{ doc("bronze_source_key") }}'
     - name: _ingested_at
       description: '{{ doc("bronze_ingested_at") }}'
   - name: call_transcripts
-    description: >-
-      Text transcripts of contact-center calls with speaker turns, detected language, accent, topics and
-      speech-to-text metadata.
-
-
-      **Grain:** One row per call transcript (at most one per interaction).
-
-
-      **Primary key:** `transcript_id` (not enforced in bronze; checked by dbt tests in silver).
-
-
-      **Source:** Organizer-provided synthetic LATAM Bank dataset (v1.0.0), one CSV per day (1,097 files)
-      on S3, copied as-is by DuckDB from the Airflow DAG `latam_bank_pipeline`: every column is text,
-      plus the lineage columns `_source_key` and `_ingested_at`. Reloaded in full on every run.
-
-
-      **Coverage:** 171,321 transcripts from 2023-06-17 to 2026-06-17, one source file per day, each linked
-      one to one to a call_center_interactions row (the 171,321 interactions with has_transcript = true)
-      by 101,951 customers and 1,090 agents.
-
-
-      **How we use it:** Read only by dbt, which builds `silver.stg_call_transcripts` from it. Context
-      only. The text is templated, so it is not a basis for intent training; the real structured signal
-      sits in call_center_interactions.
+    description: 'Call transcripts and speech-analytics output. One row per transcript; primary key `transcript_id`;
+      at most one per interaction. Outside the customer-service scope: documented but not exposed in gold. Raw bronze
+      copy: every column as text plus `_source_key` and `_ingested_at`; reloaded in full on every run and read only
+      by dbt.'
     meta:
       data_quality:
-      - detected_language is 'es' in all 171,321 rows; there is no Portuguese or other language.
-      - >-
-        detected_intents is 'consulta_general' in 95.0% of rows (162,864) and NULL in 4.9%; it has a single
-        distinct value.
-      - >-
-        The text is templated: customer_text and agent_text have 42 distinct values each over 171,321
-        rows and full_text 546, and every full_text keeps unfilled placeholders (monto, moneda, limite)
-        in braces.
-      - detected_keywords only combines the words banco, cuenta and servicio (12 distinct values).
-      - detected_accent is NULL in 36.8% of rows, more than the 29.8% of the parent interaction.
-      - customer_id and agent_id match the parent interaction in 100% of rows.
+      - 'detected_language is always ''es'' (test: accepted_values, warn).'
+      - detected_intents has a single distinct value; no usable intent signal.
+      - The text is templated and repeated, with unfilled placeholders in braces; not real free text.
+      - detected_keywords only combines banco, cuenta and servicio.
+      - customer_id and agent_id match the parent interaction.
     columns:
     - name: _source_key
       description: '{{ doc("bronze_source_key") }}'
     - name: _ingested_at
       description: '{{ doc("bronze_ingested_at") }}'
   - name: satisfaction_surveys
-    description: >-
-      Post-interaction satisfaction surveys (CSAT, NPS and CES) answered by customers, with up to three
-      question responses and an optional comment.
-
-
-      **Grain:** One row per survey (one per interaction).
-
-
-      **Primary key:** `survey_id` (not enforced in bronze; checked by dbt tests in silver).
-
-
-      **Source:** Organizer-provided synthetic LATAM Bank dataset (v1.0.0), one CSV per day (1,097 files)
-      on S3, copied as-is by DuckDB from the Airflow DAG `latam_bank_pipeline`: every column is text,
-      plus the lineage columns `_source_key` and `_ingested_at`. Reloaded in full on every run.
-
-
-      **Coverage:** 212,759 surveys from 2023-06-17 09:29:20 to 2026-06-19 06:54:58, one source file per
-      day, each tied one to one to a call_center_interactions row (with the same customer and agent) by
-      113,640 customers. Types: CSAT 127,856, NPS 63,668, CES 21,235.
-
-
-      **How we use it:** Read only by dbt, which builds `silver.stg_satisfaction_surveys` from it. Satisfaction
-      context for the evaluation. The score has no relationship with escalation (average 3.526 without
-      escalation and 3.527 with it).
+    description: 'Post-interaction satisfaction surveys (CSAT, NPS, CES). One row per survey; primary key `survey_id`;
+      at most one per interaction. Outside the customer-service scope: documented but not exposed in gold. Raw bronze
+      copy: every column as text plus `_source_key` and `_ingested_at`; reloaded in full on every run and read only
+      by dbt.'
     meta:
       data_quality:
-      - >-
-        main_score does not use one scale per survey type: CSAT and CES surveys score 1 to 4 and NPS surveys
-        2 to 7, so it is not a standard 0 to 10 NPS.
-      - >-
-        nps_category never takes the value Promoter (Detractor 45,007, Passive 15,387) and is NULL in
-        3,274 of the 63,668 NPS surveys.
-      - question_1, question_2 and question_3 are NULL in 43.0%, 61.8% and 81.1% of rows.
-      - open_comments are 13 canned phrases, and comment_sentiment is NULL in 52.4% of rows.
-      - campaign_response_rate has no documented meaning on a survey (15.00 to 45.00, NULL in 15.1%).
+      - main_score has a different scale per survey type and is not a standard 0 to 10 NPS.
+      - nps_category never takes the value Promoter and is NULL for some NPS surveys.
+      - question_1, question_2 and question_3 are partly NULL.
+      - open_comments are a few canned phrases, and comment_sentiment is partly NULL.
+      - campaign_response_rate has no documented meaning on a survey.
     columns:
     - name: _source_key
       description: '{{ doc("bronze_source_key") }}'
     - name: _ingested_at
       description: '{{ doc("bronze_ingested_at") }}'
   - name: campaign_sends
-    description: >-
-      Individual marketing messages sent to customers within a campaign, with delivery, open, click and
-      conversion tracking.
-
-
-      **Grain:** One row per message sent to one customer.
-
-
-      **Primary key:** `send_id` (not enforced in bronze; checked by dbt tests in silver).
-
-
-      **Source:** Organizer-provided synthetic LATAM Bank dataset (v1.0.0), one CSV per day (1,083 files)
-      on S3, copied as-is by DuckDB from the Airflow DAG `latam_bank_pipeline`: every column is text,
-      plus the lineage columns `_source_key` and `_ingested_at`. Reloaded in full on every run.
-
-
-      **Coverage:** 1,746,801 sends from 2023-07-01 06:00:42 to 2026-06-18 05:59:53 in 1,083 daily files
-      (14 days fewer than the other partitioned tables), covering all 150,000 customers and 175 of the
-      200 campaigns. Delivered 1,642,044 (94.0%), Failed 52,306, Bounced 34,900, Blocked 17,551.
-
-
-      **How we use it:** Read only by dbt, which builds `silver.stg_campaign_sends` from it. Not used
-      by the customer-service workflow (it supports the marketing track). The chain from sends to complaints
-      within two days is 0% to 0.23%, so it carries no causal signal.
+    description: 'Marketing messages sent to customers. One row per send; primary key `send_id`. Outside the customer-service
+      scope: documented but not exposed in gold. Raw bronze copy: every column as text plus `_source_key` and `_ingested_at`;
+      reloaded in full on every run and read only by dbt.'
     meta:
       data_quality:
-      - >-
-        1,083 daily files instead of 1,097: 14 days are missing and it is unknown whether that is intentional.
-      - >-
-        subject contains the literal text 'nan' in 38,142 rows ('¡Oferta especial en nan!'), a missing
-        promoted product leaked as text.
-      - >-
-        was_opened is NULL in 27.7% of rows (all 104,757 undelivered sends plus 379,472 delivered ones);
-        open_date, open_device and open_country are NULL in 72.1% to 74.9%.
-      - >-
-        send_cost is NULL in 15.0% and conversion_value carries no currency; failure_reason is populated
-        for 99,597 of the 104,757 undelivered sends.
-      - >-
-        open_date, click_date and conversion_date run up to 2026-06-26, past the end of the snapshot (2026-06-18).
+      - 'The daily files have gaps: some days are missing and it is unknown whether that is intentional.'
+      - subject contains the literal text 'nan' where the promoted product is missing.
+      - was_opened is NULL for undelivered sends and for part of the delivered ones; NULL means unknown, not 'not
+        opened'.
+      - send_cost is partly NULL and conversion_value has no currency.
+      - open_date, click_date and conversion_date can be later than the snapshot end.
     columns:
     - name: _source_key
       description: '{{ doc("bronze_source_key") }}'
     - name: _ingested_at
       description: '{{ doc("bronze_ingested_at") }}'
   - name: digital_events
-    description: >-
-      Clickstream events of the bank's mobile apps and web (page views, clicks, logins, form submissions,
-      errors and purchases) grouped by session.
-
-
-      **Grain:** One row per digital event.
-
-
-      **Primary key:** `event_id` (not enforced in bronze; checked by dbt tests in silver).
-
-
-      **Source:** Organizer-provided synthetic LATAM Bank dataset (v1.0.0), one CSV per day (1,097 files)
-      on S3, copied as-is by DuckDB from the Airflow DAG `latam_bank_pipeline`: every column is text,
-      plus the lineage columns `_source_key` and `_ingested_at`. Reloaded in full on every run.
-
-
-      **Coverage:** 15,620,994 events from 2023-06-17 06:02:03 to 2026-06-18 06:04:05 in 1,837,415 sessions,
-      one source file per day. Event types: PageView 5,972,564, Click 3,585,034, Login 2,434,770, Logout
-      2,433,612, FormSubmit 596,908, Error 358,723, Purchase 239,383. The organizer summary announces
-      about 10 million events; 56% more were loaded.
-
-
-      **How we use it:** Read only by dbt, which builds `silver.stg_digital_events` from it. Context only
-      (did the customer try to solve the issue in the app before calling). The rate of an error event
-      followed by a call-center contact is 0% to 2.2% (spec/DATA_FINDINGS.md), so there is no causal chain
-      to exploit.
+    description: 'Digital-channel events (web and app page views, clicks, logins, purchases). One row per event;
+      primary key `event_id`. Outside the customer-service scope: documented but not exposed in gold. Raw bronze
+      copy: every column as text plus `_source_key` and `_ingested_at`; reloaded in full on every run and read only
+      by dbt.'
     meta:
       data_quality:
-      - >-
-        customer_id is NULL in 24.0% of events (3,745,446 events, 865,829 anonymous sessions); a session
-        never maps to more than one customer.
+      - customer_id is NULL for anonymous sessions; a session never maps to more than one customer.
       - ip_country has both 'Mexico' and 'México' in the source; silver conforms it to 'México'.
-      - >-
-        Null patterns follow the event type: event_value only for FormSubmit and Purchase, product_id
-        only for Click and PageView (9.2% of rows), duration_seconds only for PageView; referrer and utm_*
-        are NULL in about 94%.
-      - >-
-        browser is NULL on every app channel and app_version on every web channel; platform and ip_address
-        are NULL in 5.0% of rows.
-      - event_value carries no currency indicator.
+      - 'Null patterns follow the event type: event_value only for FormSubmit and Purchase, product_id only for
+        Click and PageView, duration_seconds only for PageView.'
+      - browser is NULL on app channels and app_version on web channels.
+      - event_value has no currency.
     columns:
     - name: _source_key
       description: '{{ doc("bronze_source_key") }}'
