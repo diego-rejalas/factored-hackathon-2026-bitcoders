@@ -163,6 +163,53 @@ Railway deprecó `railway.toml`/`railway.json` (Config as Code, corte duro 2026-
 - Flujo: `railway config plan` (previsualiza, nunca escribe nada) → revisar → `railway config apply` (confirma antes de aplicar; cambios destructivos requieren confirmación explícita).
 - El repo `railwayapp-airbyte-private` con los fixes de Airbyte queda como referencia local (por si se retoma), no como servicio activo en Railway ni en el IaC.
 
+## Despliegue primario en GCP (migración completa)
+
+Decisión registrada (2026-10-01): el stack se **migra por completo a GCP** en
+la rama `feat/app-layer` — GCP pasa a ser el despliegue primario y Railway
+queda como legacy en transición (`.railway/railway.ts` ya no se aplica; su
+teardown es posterior a la verificación del stack nuevo). Mismo código, mismos
+Dockerfiles; el frontend también vive en GCP (Next.js standalone con
+`AGENT_URL` como env de runtime).
+
+```mermaid
+flowchart TB
+    subgraph gcp["GCP (infra/gcp/, Terraform; CI: gcp-deploy.yml)"]
+        FE[Cloud Run: frontend<br/>Next.js standalone]
+        CR[Cloud Run: backend<br/>FastAPI tool layer]
+        CRA[Cloud Run: agent<br/>LangGraph + Guardrail]
+        JOB[Cloud Run Job: etl<br/>DuckDB + dbt-duckdb en RAM]
+        SQL[(Cloud SQL Postgres<br/>data: gold.*, app.*, ops.etl_runs<br/>Hibernación Just-in-Time)]
+        SM[Secret Manager<br/>JWT, OpenRouter, S3]
+        FE -->|AGENT_URL runtime| CRA
+        CRA -->|HTTP tools| CR
+        CR -->|SQL| SQL
+        CRA -->|trace_log| SQL
+        JOB -->|S3 a RAM bronze/silver| JOB
+        JOB -->|Publica solo gold.*| SQL
+        SM -.-> CR
+        SM -.-> CRA
+        SM -.-> JOB
+    end
+    USER((Usuario)) --> FE
+```
+
+Mapa y decisiones:
+
+| Pieza Railway/Vercel (legacy) | En GCP (primario) | Código |
+|---|---|---|
+| Postgres `data` | Cloud SQL PostgreSQL 16 (solo `gold.*`, `app.*`, `ops.*`) | Modo Just-in-Time (`./manage_db.sh pause/resume`) |
+| backend / agent | Cloud Run (mismos Dockerfiles) | sin cambios |
+| frontend (Vercel) | Cloud Run `frontend` (Next.js standalone); `AGENT_URL` en runtime | `output: standalone` + URL por prop |
+| pipeline (`etl/` job) | Cloud Run Job `etl`: DuckDB + `dbt-duckdb` en RAM | Procesamiento en RAM en 2.5 min; sin microservicio web `dbt`; esquemas crudos purgados |
+| `railway.ts` | Terraform (`infra/gcp/`) + `gcp-deploy.yml` | Equivalente declarativo con variable `db_activation_policy` |
+| secretos (`preserve()`) | Secret Manager (JWT autogenerado; S3/LLM se copian) | Gestionado con Google Secret Manager |
+
+Decisiones clave de optimización:
+1. **DuckDB y dbt en RAM efímera:** Se eliminó el microservicio independiente `dbt` de Cloud Run. El Job `etl` procesa los 23.5M de filas crudas y ejecuta los 121 tests en la RAM del contenedor (`/tmp/latam.duckdb`) en ~2.5 minutos, publicando únicamente las tablas `gold.*` finales a Cloud SQL.
+2. **Hibernación Just-in-Time:** Cloud SQL soporta apagado de cómputo e IP mediante política `NEVER` cuando no está en uso, reduciendo el costo de operación en reposo a ~$0.05 USD/día y reactivándose en 60 segundos para demostraciones.
+
+
 ## Próximo paso
 
 Falta definir, una vez el equipo vote el workflow: los endpoints exactos del microservicio de banca, los intents/tools del agente, y las reglas concretas del guardrail (qué se auto-resuelve, qué escala) — eso ya es específico de la Opción A/B/C/D elegida, no de esta arquitectura base.
