@@ -1,5 +1,5 @@
--- Tipo de cambio diario por par de monedas (13.164). Incluye pares con MXN. La columna origen `date` se renombra a `rate_date`.
--- Silver: tipos reales, '' -> NULL, sin lógica de negocio. Ver spec/DATA_FINDINGS.md.
+-- Daily exchange rate per currency pair (13,164 rows). Includes MXN pairs. The source column `date` is renamed to `rate_date`.
+-- Silver: real types, '' -> NULL, no business logic. See spec/DATA_FINDINGS.md.
 with source as (
     select * from {{ source('bronze', 'daily_exchange_rates') }}
 )

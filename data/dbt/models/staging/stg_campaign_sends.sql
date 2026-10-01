@@ -1,5 +1,5 @@
--- Envíos de campañas (1.746.801, 1.083 días). Sin uso en atención al cliente.
--- Silver: tipos reales, '' -> NULL, sin lógica de negocio. Ver spec/DATA_FINDINGS.md.
+-- Campaign sends (1,746,801 rows, 1,083 days). Not used in customer service.
+-- Silver: real types, '' -> NULL, no business logic. See spec/DATA_FINDINGS.md.
 with source as (
     select * from {{ source('bronze', 'campaign_sends') }}
 )

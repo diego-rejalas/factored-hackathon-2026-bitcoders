@@ -1,5 +1,5 @@
--- Agentes de servicio (1.200). 129 hablan portugués: única evidencia de portugués del dataset.
--- Silver: tipos reales, '' -> NULL, sin lógica de negocio. Ver spec/DATA_FINDINGS.md.
+-- Service agents (1,200 rows). 129 speak Portuguese: the only evidence of Portuguese in the dataset.
+-- Silver: real types, '' -> NULL, no business logic. See spec/DATA_FINDINGS.md.
 with source as (
     select * from {{ source('bronze', 'service_agents') }}
 )

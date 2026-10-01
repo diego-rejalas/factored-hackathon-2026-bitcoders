@@ -1,39 +1,131 @@
 version: 2
 models:
 - name: stg_customers
-  description: customers con tipos reales, vacío normalizado a null.
+  description: >-
+    Customer master data: identity, contact, demographic and credit-profile attributes of each retail
+    customer of the bank in Mexico, Colombia and Argentina.
+
+
+    **Grain:** One row per customer.
+
+
+    **Primary key:** `customer_id`.
+
+
+    **Source:** Organizer-provided synthetic LATAM Bank dataset (v1.0.0, CSV files on S3), loaded as `bronze.customers`.
+    This silver model is a typed view over bronze: real data types, empty strings turned into NULL.
+
+
+    **Coverage:** 150,000 customers registered between 2018-06-18 and 2026-06-17 (93,695 of them before
+    the 2023-06-17 start of the transactional history). México 74,907 (49.9%), Colombia 45,251 (30.2%),
+    Argentina 29,842 (19.9%). 139,578 of them hold at least one product.
+
+
+    **How we use it:** Profile lookup for the authenticated customer in the customer-service dispute workflow
+    and source of the credit-profile inputs (`credit_score`, `estimated_monthly_income`). Every other
+    table references `customer_id`. All personal data is fictitious.
+  meta:
+    layer: silver
+    grain: one row per customer
+    primary_key: customer_id
+    source_dataset: LATAM Bank synthetic dataset v1.0.0 (organizer-provided)
+    contains_pii: true
+    data_quality:
+    - >-
+      registration_branch_id does not join to branches: 149,995 of 150,000 values do not exist in branches.branch_id
+      (only 5 match). Do not use it.
+    - >-
+      Null rates by column: landline_phone 50.0%, detected_accent 29.9%, estimated_monthly_income 20.0%,
+      credit_score 15.0% (22,492 rows), education_level 12.0%, postal_code 10.0%, occupation 10.0%, marital_status
+      8.0%, address 4.9%, mobile_phone 3.1%, email 2.0%.
+    - >-
+      credit_score has a minimum of 422 although the documentation suggests a 300 to 850 range; the dbt
+      range test accepts 300 to 850.
+    - >-
+      last_updated is later than the end of the snapshot (2026-06-18) in 9,316 rows, with a maximum of
+      2027-06-15.
+    - >-
+      estimated_monthly_income carries no currency; magnitudes follow each customer's local currency (median
+      39,219 for México, 801,955 for Argentina, 9,192,466 for Colombia), so values are not comparable
+      across countries without conversion.
+    - >-
+      gender, marital_status and occupation are almost evenly distributed (about a third, a quarter and
+      5% per value), which is typical of synthetic generation rather than of a real customer base.
   columns:
   - name: customer_id
-    description: Identificador del cliente (clave en customers; referencia en el resto de tablas).
+    description: >-
+      Primary key of the customer. Format `CLI-` followed by 12 uppercase alphanumeric characters. Every
+      other table references it.
     data_tests:
     - not_null
     - unique
   - name: document_number
-    description: Número del documento de identidad (ficticio).
+    description: >-
+      National identity document number, digits stored as text (7 to 10 characters, format depends on
+      `document_type` and country). Unique: 150,000 distinct values. {{ doc("pii_synthetic") }}
+    meta:
+      contains_pii: true
   - name: document_type
-    description: Tipo de documento de identidad.
+    description: >-
+      Kind of identity document. `DNI` 104,749 (every customer in México and Argentina), `CE` 15,150,
+      `Pasaporte` 15,062 and `CC` 15,039; CE, Pasaporte and CC appear only for Colombian customers (CC
+      and CE are consistent with the Colombian cédula de ciudadanía and cédula de extranjería).
   - name: first_name
-    description: Nombre del cliente (ficticio).
+    description: Given name or names in one string (for example 'Alicia Marcela'). {{ doc("pii_synthetic")
+      }}
+    meta:
+      contains_pii: true
   - name: last_name
-    description: Apellido del cliente (ficticio).
+    description: >-
+      Surnames in one string, normally two in Spanish order (for example 'Contreras Rojas'). 3,460 distinct
+      values. {{ doc("pii_synthetic") }}
+    meta:
+      contains_pii: true
   - name: date_of_birth
-    description: Fecha de nacimiento.
+    description: >-
+      Date of birth. Ranges from 1942-07-07 to 2005-06-21; there is no customer born after 2005 and no
+      NULLs. {{ doc("pii_synthetic") }}
+    meta:
+      contains_pii: true
   - name: gender
-    description: Género declarado.
+    description: >-
+      Declared gender: `F` 50,508, `O` 49,808, `M` 49,684. The code `O` is not defined in the dataset
+      documentation (presumably 'other').
   - name: email
-    description: Correo electrónico (ficticio).
+    description: >-
+      Customer email address (free mail domains such as hotmail.com, live.com, protonmail.com). NULL for
+      2.0% of customers. {{ doc("pii_synthetic") }}
+    meta:
+      contains_pii: true
   - name: mobile_phone
-    description: Teléfono móvil (ficticio).
+    description: >-
+      Mobile phone number in international format with country prefix and spaces (for example '+57 323
+      568 8147'). NULL for 3.1%. {{ doc("pii_synthetic") }}
+    meta:
+      contains_pii: true
   - name: landline_phone
-    description: Teléfono fijo (ficticio).
+    description: >-
+      Landline phone number in international format. NULL for 50.0% of customers. {{ doc("pii_synthetic")
+      }}
+    meta:
+      contains_pii: true
   - name: address
-    description: Dirección postal.
+    description: >-
+      Street address in one string: street, number and neighbourhood. NULL for 4.9%. {{ doc("pii_synthetic")
+      }}
+    meta:
+      contains_pii: true
   - name: city
-    description: Ciudad del cliente.
+    description: >-
+      City of residence. 16 distinct values: Ciudad de México, Guadalajara, Monterrey, Puebla, Querétaro
+      and Tijuana (México); Bogotá, Medellín, Cali, Barranquilla and Cartagena (Colombia); Buenos Aires,
+      Córdoba, Rosario, Mendoza and La Plata (Argentina). Never NULL.
   - name: state
-    description: Estado o departamento del cliente.
+    description: >-
+      State, department or province matching `city` one to one (for example Jalisco for Guadalajara, Cundinamarca
+      for Bogotá). 16 distinct values. Never NULL.
   - name: country
-    description: País del cliente (México, Colombia o Argentina, normalizado).
+    description: '{{ doc("country_name") }} Distribution: México 74,907, Colombia 45,251, Argentina 29,842.'
     data_tests:
     - accepted_values:
         arguments:
@@ -42,30 +134,54 @@ models:
           - Colombia
           - Argentina
   - name: postal_code
-    description: Código postal.
+    description: >-
+      Postal code stored as text, 5 or 6 digits depending on country. NULL for 10.0% of customers. {{
+      doc("pii_synthetic") }}
+    meta:
+      contains_pii: true
   - name: detected_accent
-    description: Acento regional detectado a partir de la voz del cliente.
+    description: >-
+      Regional accent of the customer's voice as detected by the contact-center speech analysis: `mexican`
+      52,505, `colombian` 31,666, `argentine` 21,012. NULL for 29.9% (customers with no analysed call).
   - name: segment
-    description: Segmento comercial del cliente.
+    description: >-
+      Commercial segment: `Basic` 89,756, `Plus` 37,547, `Premium` 15,207, `Student` 7,490. The criteria
+      that define each segment are not documented.
   - name: credit_score
-    description: Nulo en 15,0%. Mínimo real 422.
+    description: >-
+      Credit score of the customer, integer from 422 to 850 (higher is better risk by convention; the
+      scale is not documented). NULL for 15.0% (22,492 customers): NULL means no score, not zero. In this
+      dataset it has no predictive relationship with delinquency (correlation with days_past_due of -0.004).
     data_tests:
     - accepted_range:
         arguments:
           min_value: 300
           max_value: 850
   - name: estimated_monthly_income
-    description: Ingreso mensual estimado, en la moneda del país del cliente.
+    description: >-
+      Estimated monthly income in the currency of the customer's country (currency is not stated; median
+      39,219 in México, 801,955 in Argentina, 9,192,466 in Colombia). Numeric with 2 decimals. NULL for
+      20.0% (30,033 customers). Not comparable across countries without conversion.
   - name: occupation
-    description: Ocupación declarada.
+    description: >-
+      Occupation label in English, 20 distinct values (for example Manager, Accountant, Doctor, Student,
+      Retired), each about 6,700 customers. NULL for 10.0%.
   - name: marital_status
-    description: Estado civil.
+    description: >-
+      Marital status: `Married` 34,765, `Divorced` 34,734, `Single` 34,474, `Widowed` 34,072. NULL for
+      8.0%.
   - name: education_level
-    description: Nivel educativo.
+    description: >-
+      Highest education level: `College Prep` 39,583, `High School` 33,120, `University` 32,870, `Graduate`
+      13,269, `Elementary` 13,206. NULL for 12.0%.
   - name: registration_date
-    description: Fecha y hora de registro del cliente.
+    description: >-
+      Date and time the customer registered with the bank, from 2018-06-18 to 2026-06-17. {{ doc("ts_no_tz")
+      }}
   - name: registration_branch_id
-    description: 'DEFECTO CONOCIDO: 149.995 de 150.000 no existen en branches. La advertencia mide el defecto; no usar este campo.'
+    description: >-
+      Branch where the customer registered. Do not use: 149,995 of 150,000 values do not exist in branches.branch_id
+      (150,000 distinct IDs, only 5 valid). Format `SUC-` followed by 8 alphanumeric characters.
     data_tests:
     - relationships:
         arguments:
@@ -74,7 +190,9 @@ models:
         config:
           severity: warn
   - name: customer_status
-    description: 'Estado del cliente: Active, Inactive, Suspended o Closed.'
+    description: >-
+      Lifecycle status of the customer: `Active` 127,700, `Inactive` 14,914, `Suspended` 4,407, `Closed`
+      2,979.
     data_tests:
     - accepted_values:
         arguments:
@@ -84,19 +202,75 @@ models:
           - Suspended
           - Closed
   - name: last_updated
-    description: Última actualización del registro del cliente.
+    description: >-
+      Date and time of the last modification of the customer record, 2018-06-18 to 2027-06-15. 9,316 values
+      are later than the end of the snapshot (2026-06-18). {{ doc("ts_no_tz") }}
   - name: accepts_marketing
-    description: El cliente acepta recibir comunicaciones de marketing.
+    description: >-
+      Whether the customer consented to receive marketing communications: `true` 74,993, `false` 75,007.
+      Check it before any outbound contact.
 - name: stg_products
-  description: 'products con tipos reales. currency NUNCA trae MXN (limitación de datos conocida, ver spec/DATA_FINDINGS.md): no agregar un test accepted_values que exija MXN.'
+  description: >-
+    Financial products held by customers: savings and checking accounts, credit and debit cards, personal
+    and mortgage loans, investments and insurance policies.
+
+
+    **Grain:** One row per product held by a customer.
+
+
+    **Primary key:** `product_id`.
+
+
+    **Source:** Organizer-provided synthetic LATAM Bank dataset (v1.0.0, CSV files on S3), loaded as `bronze.products`.
+    This silver model is a typed view over bronze: real data types, empty strings turned into NULL.
+
+
+    **Coverage:** 400,000 products held by 139,578 of the 150,000 customers, opened between 2018-06-18
+    and 2026-06-17. By status: Active 339,965, Closed 32,039, Blocked 19,935 (about 5%), Suspended 8,061.
+    All 4,425,008 transactions belong to Active products.
+
+
+    **How we use it:** Product lookup scoped to the authenticated customer (ownership by `customer_id`)
+    in the dispute workflow, for example 'my card is blocked'; credit exposure inputs (`credit_limit`,
+    `current_balance`, `days_past_due`). Amounts are in the product currency.
+  meta:
+    layer: silver
+    grain: one row per product held by a customer
+    primary_key: product_id
+    source_dataset: LATAM Bank synthetic dataset v1.0.0 (organizer-provided)
+    data_quality:
+    - >-
+      currency never takes the value MXN (USD 220,501, COP 107,975, ARS 71,524) although 49.9% of customers
+      are in México; all 66,236 credit products of México customers are in USD.
+    - 7,510 credit products have current_balance greater than credit_limit (dbt warning).
+    - >-
+      credit_limit and days_past_due are NULL for the 68.7% of products that are not credit products;
+      days_past_due is also NULL for about 5% of credit products (NULL is not zero).
+    - >-
+      days_past_due takes only seven values (0, 15, 30, 60, 90, 120, 180); it spikes at exactly 30 (3,117
+      products) and carries no predictive signal of delinquency in this dataset.
+    - >-
+      interest_rate is NULL for 10.0%, expiration_date for 66.7% (only cards have one), last_transaction_date
+      for 23.6%.
+    - >-
+      last_updated is later than the end of the snapshot (2026-06-18) in 25,113 rows, with a maximum of
+      2027-06-15.
+    - product_number has 399,994 distinct values over 400,000 rows, so it is not a key; use product_id.
+    - >-
+      Credit customers can hold products in more than one currency, so any total balance or debt-to-income
+      ratio needs conversion with daily_exchange_rates.
   columns:
   - name: product_id
-    description: Identificador del producto bancario (clave en products).
+    description: >-
+      Primary key of the product. Format `PRD-` followed by 12 uppercase alphanumeric characters. Referenced
+      by transactions, complaints, digital_events and call_center_interactions.mentioned_products.
     data_tests:
     - not_null
     - unique
   - name: customer_id
-    description: Identificador del cliente (clave en customers; referencia en el resto de tablas).
+    description: >-
+      Owner of the product (one owner per product). References customers.customer_id. 139,578 distinct
+      customers hold at least one product.
     data_tests:
     - not_null
     - relationships:
@@ -104,7 +278,12 @@ models:
           to: ref('stg_customers')
           field: customer_id
   - name: product_type
-    description: Tipo de producto (cuenta, tarjeta, crédito, etc.).
+    description: >-
+      Kind of product (labels are Spanish, as delivered): `Cuenta Ahorro` savings account 120,203, `Tarjeta
+      Crédito` credit card 100,102, `Cuenta Corriente` checking account 99,979, `Tarjeta Débito` debit
+      card 39,938, `Préstamo Personal` personal loan 19,960, `Préstamo Hipotecario` mortgage 11,910, `Inversión`
+      investment 5,859, `Seguro` insurance 2,049. Credit products (credit_limit and days_past_due populated)
+      are the credit card and the two loan types.
     data_tests:
     - accepted_values:
         arguments:
@@ -118,9 +297,13 @@ models:
           - Inversión
           - Seguro
   - name: product_number
-    description: Número del producto (cuenta o tarjeta) tal como lo ve el cliente.
+    description: >-
+      Customer-visible account or card number as text. Fictitious. 399,994 distinct values over 400,000
+      rows, so it is not unique; use product_id to identify a product.
   - name: currency
-    description: Moneda del producto.
+    description: >-
+      ISO 4217 currency of the product, in which `current_balance` and `credit_limit` are expressed: `USD`
+      220,501, `COP` 107,975, `ARS` 71,524. Never `MXN`, even for México customers.
     data_tests:
     - accepted_values:
         arguments:
@@ -129,28 +312,41 @@ models:
           - COP
           - ARS
   - name: current_balance
-    description: Saldo actual, en la moneda del producto.
+    description: >-
+      Current balance in the product currency, from 0.00 to 881,511,545.61, never NULL. For credit products
+      it is compared against `credit_limit` (7,510 products exceed it). The balance sign convention is
+      not documented; all values are zero or positive. Not comparable across currencies.
   - name: credit_limit
-    description: Límite de crédito, en la moneda del producto.
+    description: >-
+      Credit limit in the product currency, from 1,000.33 to 599,984,205.95. Populated only for credit
+      cards (95,043 of 100,102) and loans; NULL for the other 68.7% of products, where it does not apply.
     data_tests:
     - accepted_range:
         arguments:
           min_value: 0
   - name: interest_rate
-    description: Tasa de interés del producto.
+    description: >-
+      Interest rate as a percentage number from 0.00 to 45.00; the period (annual or monthly) is not documented.
+      NULL for 10.0% of products.
   - name: opening_date
-    description: Fecha de apertura del producto.
+    description: Date the product was opened, from 2018-06-18 to 2026-06-17.
   - name: expiration_date
-    description: Fecha de vencimiento del producto (por ejemplo, de la tarjeta).
+    description: >-
+      Expiration date of the card, from 2021-06-17 to 2031-06-16. Populated only for credit cards (95,119)
+      and debit cards (38,042); NULL for every other product type (66.7% overall).
   - name: opening_branch_id
-    description: Sucursal donde se abrió el producto.
+    description: >-
+      {{ doc("branch_id_fk") }} Branch where the product was opened; all 400,000 values exist in branches
+      and all 350 branches appear.
     data_tests:
     - relationships:
         arguments:
           to: ref('stg_branches')
           field: branch_id
   - name: product_status
-    description: Estado del producto.
+    description: >-
+      Status of the product: `Active` 339,965, `Closed` 32,039, `Blocked` 19,935, `Suspended` 8,061. `Blocked`
+      products (about 5%) are the data basis for card-blocked scenarios.
     data_tests:
     - accepted_values:
         arguments:
@@ -160,29 +356,104 @@ models:
           - Blocked
           - Suspended
   - name: opening_channel
-    description: Canal por el que se abrió el producto.
+    description: >-
+      Channel through which the product was opened: `Branch` 199,838, `Web` 100,282, `App` 79,726, `Call
+      Center` 20,154.
   - name: has_linked_app
-    description: El cliente tiene la aplicación vinculada.
+    description: >-
+      Whether the product is linked to the bank's mobile app: `true` 199,858, `false` 200,142. Meaning
+      inferred from the column name; not confirmed in the dataset documentation.
   - name: days_past_due
-    description: Días de atraso en el pago; 0 si está al día.
+    description: >-
+      Days the product payment is overdue. Only the values 0 (106,585), 15, 30, 60, 90, 120 and 180 appear.
+      NULL for non-credit products and for about 5% of credit products; NULL is not zero.
   - name: last_transaction_date
-    description: Fecha de la última transacción del producto.
+    description: >-
+      Date and time of the last transaction on the product, 2018-06-21 to 2026-06-17. NULL for 23.6% (no
+      transaction recorded). {{ doc("ts_no_tz") }}
   - name: last_updated
-    description: Última actualización del registro del cliente.
+    description: >-
+      Date and time of the last modification of the product record, 2018-06-20 to 2027-06-15. 25,113 values
+      are later than the end of the snapshot (2026-06-18). {{ doc("ts_no_tz") }}
 - name: stg_transactions
-  description: transactions con tipos reales. is_fraud y fraud_score son ground truth de evaluación, no input para el agente.
+  description: >-
+    Individual financial movements (purchases, withdrawals, transfers, payments, deposits and adjustments)
+    on customer products, including their authorization outcome.
+
+
+    **Grain:** One row per transaction.
+
+
+    **Primary key:** `transaction_id`.
+
+
+    **Source:** Organizer-provided synthetic LATAM Bank dataset (v1.0.0, CSV files on S3), loaded as `bronze.transactions`.
+    This silver model is a typed view over bronze: real data types, empty strings turned into NULL.
+
+
+    **Coverage:** 4,425,008 transactions from 2023-06-17 06:01:30 to 2026-06-18 05:59:41 on 339,963 products
+    of 134,515 customers, one source file per day (1,097 files). Status mix: Approved 91.99%, Declined
+    5.00% (221,234), Pending 2.00%, Reversed 1.01% (44,750).
+
+
+    **How we use it:** Evidence for the dispute workflow: the authenticated customer's own movements and
+    the Declined or Reversed ones (about 266,000 candidates for automatic resolution). Ownership is consistent:
+    the customer of every transaction owns the product (4,425,008 of 4,425,008).
+  meta:
+    layer: silver
+    grain: one row per transaction
+    primary_key: transaction_id
+    source_dataset: LATAM Bank synthetic dataset v1.0.0 (organizer-provided)
+    data_quality:
+    - >-
+      amount_usd is NULL in 57.3% of rows: every USD transaction (the amount is already in dollars) and
+      about 5% of ARS and COP ones (99,477 real gaps, dbt warning).
+    - >-
+      currency never takes the value MXN (USD 2,437,979, COP 1,194,444, ARS 792,585); all 2,216,431 transactions
+      of México customers are in USD. Currency always equals the currency of the product.
+    - >-
+      transaction_country spells Mexico two ways, 'México' 2,105,794 and 'Mexico' 40,515, and the silver
+      view does not conform them; USA, Spain and Brazil add about 40,500 rows each.
+    - >-
+      response_code is NULL in 5.0% of rows (203,369 Approved, 10,962 Declined, 2,310 Reversed); Approved
+      rows carry '00' or NULL, the other statuses carry 05, 14, 51 or 54.
+    - >-
+      Declines are independent of the product: every transaction is on an Active product and Declined
+      codes are split almost evenly across 05, 14, 51 and 54 (about 52,500 each), so a decline can only
+      be explained by the meaning of its code.
+    - >-
+      transaction_category is NULL in 60.9% of rows and merchant_name in 76.7%; both are empty for every
+      Transfer, Withdrawal, Deposit and Adjustment.
+    - >-
+      latitude and longitude are NULL in 80.6% of rows, and 450,546 of the 857,328 populated pairs have
+      a latitude or longitude with absolute value below 1, so they are not usable as a geolocation.
+    - >-
+      There are no duplicated transaction_id values and no late arrivals: process_date is the date of
+      transaction_date or one day earlier, never later.
+    - >-
+      is_fraud is true for 4,316 transactions (0.10%) in the silver view; ground-truth labels only, not
+      present in gold.
   columns:
   - name: transaction_id
-    description: Identificador único de la transacción.
+    description: >-
+      Primary key of the transaction. Format `TRX-` followed by 20 uppercase alphanumeric characters.
+      No duplicates in 4,425,008 rows.
     data_tests:
     - not_null
     - unique
   - name: transaction_date
-    description: Fecha y hora en que ocurrió la transacción.
+    description: >-
+      Date and time the transaction took place, from 2023-06-17 06:01:30 to 2026-06-18 05:59:41. {{ doc("ts_no_tz")
+      }}
   - name: process_date
-    description: Fecha en que el banco procesó la transacción (nunca posterior a un día de la transacción).
+    description: >-
+      {{ doc("process_date_partition") }} For transactions it equals the date of `transaction_date` or
+      one day earlier (about 25% of rows, a date-boundary or time-zone artifact); it is never later, so
+      there are no late arrivals.
   - name: product_id
-    description: Identificador del producto bancario (clave en products).
+    description: >-
+      {{ doc("product_id_fk") }} Product the transaction was made on; always owned by `customer_id` and
+      always an Active product.
     data_tests:
     - not_null
     - relationships:
@@ -190,7 +461,7 @@ models:
           to: ref('stg_products')
           field: product_id
   - name: customer_id
-    description: Identificador del cliente (clave en customers; referencia en el resto de tablas).
+    description: '{{ doc("customer_id_fk") }} Owner of the product; 134,515 distinct customers.'
     data_tests:
     - not_null
     - relationships:
@@ -198,17 +469,28 @@ models:
           to: ref('stg_customers')
           field: customer_id
   - name: transaction_type
-    description: Tipo de transacción.
+    description: >-
+      Kind of movement: `Purchase` 1,083,406, `Withdrawal` 964,673, `Transfer` 896,438, `Payment` 738,964,
+      `Deposit` 609,409, `Adjustment` 132,118. The direction of the money is given by the type, not by
+      the sign of `amount`.
   - name: transaction_category
-    description: Categoría de la transacción.
+    description: >-
+      Spending category: `Food` 432,468, `Services` 345,370, `Other` 260,518, `Transport` 260,316, `Entertainment`
+      259,643, `Health` 173,173. NULL in 60.9% of rows: always for Transfer, Withdrawal, Deposit and Adjustment,
+      and for about 5% of Purchase and Payment.
   - name: amount
-    description: Monto en la moneda original de la transacción.
+    description: >-
+      Transaction amount in the currency given by `currency` (the product currency), always positive,
+      from 5.00 to 39,999,828.48. Not comparable across currencies; use `amount_usd` or daily_exchange_rates
+      to compare.
     data_tests:
     - accepted_range:
         arguments:
           min_value: 0.01
   - name: currency
-    description: Moneda original de la transacción.
+    description: >-
+      ISO 4217 currency of `amount`, always the currency of the product: `USD` 2,437,979, `COP` 1,194,444,
+      `ARS` 792,585. Never `MXN`; every México customer transacts in USD.
     data_tests:
     - accepted_values:
         arguments:
@@ -217,26 +499,45 @@ models:
           - COP
           - ARS
   - name: amount_usd
-    description: Monto convertido a dólares; nulo en una parte de las transacciones en moneda local.
+    description: >-
+      Amount converted to US dollars, from 5.00 to 9,999.96. NULL in 57.3% of rows: always when `currency`
+      is USD (use `amount` instead) and for about 5% of ARS and COP transactions (99,477 true gaps that
+      have to be derived with daily_exchange_rates).
   - name: channel
-    description: Canal por el que se hizo la transacción.
+    description: >-
+      Channel through which the transaction was made: `POS` 1,548,161, `ATM` 1,328,334, `Web` 663,445,
+      `App` 663,414, `Branch` 132,495, `Transfer` 89,159.
   - name: branch_id
-    description: Identificador de la sucursal.
+    description: >-
+      {{ doc("branch_id_fk") }} Branch where the transaction took place. Populated almost only for the
+      `ATM` and `Branch` channels; NULL in 68.6% of rows (every POS, App, Web and Transfer transaction).
     data_tests:
     - relationships:
         arguments:
           to: ref('stg_branches')
           field: branch_id
   - name: merchant_name
-    description: Nombre del comercio.
+    description: >-
+      Name of the merchant for card purchases, 24 distinct values (for example 'Mercado Central', 'Cine
+      Premium'). NULL in 76.7% of rows, always for Transfer, Withdrawal, Deposit, Adjustment and Payment.
   - name: merchant_category
-    description: Categoría del comercio.
+    description: >-
+      Category of the merchant, with the same six labels as `transaction_category` (Food, Services, Other,
+      Transport, Entertainment, Health). NULL in 76.8% of rows. The two columns often disagree on the
+      same row; which one is authoritative is not documented.
   - name: transaction_country
-    description: País donde ocurrió la transacción.
+    description: >-
+      Country where the transaction took place: `México` 2,105,794, `Colombia` 1,289,503, `Argentina`
+      867,561, `USA` 40,621, `Spain` 40,542, `Mexico` 40,515, `Brazil` 40,472. 'Mexico' and 'México' are
+      the same country spelled two ways (not conformed in silver).
   - name: transaction_city
-    description: Ciudad donde ocurrió la transacción.
+    description: >-
+      City where the transaction took place, 28 distinct values (for example Monterrey, Tijuana, Valencia).
+      NULL in 10.0% of rows.
   - name: transaction_status
-    description: Estado de la transacción (por ejemplo, Completed, Declined, Reversed).
+    description: >-
+      Authorization outcome: `Approved` 4,070,681, `Declined` 221,234, `Pending` 88,343, `Reversed` 44,750.
+      Declined and Reversed are the basis of the automatically resolvable dispute cases.
     data_tests:
     - accepted_values:
         arguments:
@@ -246,29 +547,95 @@ models:
           - Pending
           - Reversed
   - name: response_code
-    description: Código de respuesta del autorizador.
+    description: >-
+      Authorization response code. Values: `00` 3,867,312 (approved), `14` 84,472, `51` 84,179, `05` 84,141,
+      `54` 83,871. The dataset does not define them; they match the standard card-network codes 05 do
+      not honor, 14 invalid card number, 51 insufficient funds and 54 expired card. NULL in 5.0% of rows
+      (including 203,369 Approved).
   - name: is_fraud
-    description: Etiqueta de fraude (verdad de referencia). No es entrada del agente.
+    description: '{{ doc("fraud_ground_truth") }} `true` for 4,316 transactions (0.10%), `false` for 4,420,692.'
   - name: fraud_score
-    description: Puntaje de fraude (verdad de referencia). No es entrada del agente.
+    description: >-
+      {{ doc("fraud_ground_truth") }} Score from 0.00 to 99.99, NULL in 20.0% of rows; the average is
+      49.5 for fraudulent and 15.0 for legitimate transactions, so it leaks the label.
   - name: latitude
-    description: Latitud de la transacción.
+    description: >-
+      Latitude in decimal degrees, from -35.60 to 5.71. NULL in 80.6% of rows (populated for most ATM,
+      POS and Branch transactions). Not reliable: values are not consistent with the transaction country
+      (see data quality notes).
   - name: longitude
-    description: Longitud de la transacción.
+    description: >-
+      Longitude in decimal degrees, from -75.07 to 1.00. NULL in 80.6% of rows. Not reliable: many values
+      are close to zero and inconsistent with the transaction country.
 - name: stg_complaints
-  description: 'complaints (PQR) con tipos reales. description y resolution son texto plantilla: no construir clasificación de intención sobre esos campos.'
+  description: >-
+    Complaints, claims, requests and suggestions (PQR: petitions, complaints and claims) that customers
+    register through any channel, with their handling and resolution timeline.
+
+
+    **Grain:** One row per registered case (PQR).
+
+
+    **Primary key:** `complaint_id`.
+
+
+    **Source:** Organizer-provided synthetic LATAM Bank dataset (v1.0.0, CSV files on S3), loaded as `bronze.complaints`.
+    This silver model is a typed view over bronze: real data types, empty strings turned into NULL.
+
+
+    **Coverage:** 67,095 cases created between 2023-06-17 08:07:05 and 2026-06-18 07:56:52 by 54,145 customers
+    (1.24 cases per customer), one source file per day. Status: In Process 26,823, Open 20,125, Resolved
+    13,512, Escalated 3,321, Closed 2,609, Rejected 705.
+
+
+    **How we use it:** Customer-level complaint history for the dispute workflow (case type, category,
+    status, SLA). It is never used to choose the disputed transaction or product: that choice always comes
+    from the authenticated customer's own products and transactions.
+  meta:
+    layer: silver
+    grain: one row per registered case (PQR)
+    primary_key: complaint_id
+    source_dataset: LATAM Bank synthetic dataset v1.0.0 (organizer-provided)
+    data_quality:
+    - >-
+      affected_product_id belongs to another customer in 100% of the rows that have one (44,570 of 44,570,
+      66.4% of cases); the assignment is random and not recoverable (dbt warning). Never use it to show
+      or authorize product information.
+    - >-
+      origin_interaction_id is empty in all 67,095 rows, so no case can be linked to a call-center interaction.
+    - >-
+      claimed_amount matches no transaction: 0 of 21,751 amounts equal any transaction of the customer.
+      It ranges from 50.27 to 4,999.93 in all four currencies, so it is not scaled to its currency.
+    - >-
+      description is one of five templated sentences ('Queja relacionada con ...') and resolution one
+      of five generic sentences; neither is real free text, so no intent classifier should be trained
+      on them.
+    - >-
+      subcategory is one to one with category (five fixed pairs) and NULL in 9.98% of rows, so it adds
+      no granularity.
+    - 772 cases are Resolved or Closed without a resolution_date (632 Resolved, 140 Closed; dbt warning).
+    - >-
+      Outcomes do not differ by category: SLA breached in about 20% of cases and resolution in 1 to 30
+      days whatever the category, and the five categories each hold 19.7% to 20.2% of cases.
+    - >-
+      resolution_date, closing_date and first_response_date run up to 2026-07-18, past the end of the
+      snapshot (2026-06-18).
+    - currency includes MXN (5,487 rows), the only table besides daily_exchange_rates where MXN appears.
   columns:
   - name: complaint_id
-    description: Identificador único del reclamo (PQR).
+    description: Primary key of the case. Format `CMP-` followed by 20 uppercase alphanumeric characters.
     data_tests:
     - not_null
     - unique
   - name: creation_date
-    description: Fecha de creación del reclamo.
+    description: >-
+      Date and time the case was registered, from 2023-06-17 08:07:05 to 2026-06-18 07:56:52. {{ doc("ts_no_tz")
+      }}
   - name: process_date
-    description: Fecha en que el banco procesó la transacción (nunca posterior a un día de la transacción).
+    description: '{{ doc("process_date_partition") }}'
   - name: customer_id
-    description: Identificador del cliente (clave en customers; referencia en el resto de tablas).
+    description: '{{ doc("customer_id_fk") }} Customer who registered the case; all 67,095 values exist
+      in customers.'
     data_tests:
     - not_null
     - relationships:
@@ -276,7 +643,8 @@ models:
           to: ref('stg_customers')
           field: customer_id
   - name: case_type
-    description: Tipo de caso.
+    description: 'Nature of the case: `Complaint` 40,452, `Claim` 16,598, `Request` 6,761, `Suggestion`
+      3,284.'
     data_tests:
     - accepted_values:
         arguments:
@@ -286,7 +654,9 @@ models:
           - Request
           - Suggestion
   - name: category
-    description: Categoría del reclamo.
+    description: >-
+      Topic of the case: `Transactions` 13,580, `Fees` 13,553, `Technical` 13,407, `Branch` 13,361, `Service`
+      13,194. Together with `subcategory` it is the real structured signal of the table.
     data_tests:
     - accepted_values:
         arguments:
@@ -297,30 +667,51 @@ models:
           - Branch
           - Service
   - name: subcategory
-    description: Subcategoría del reclamo.
+    description: >-
+      Detail of the topic, one fixed label per category: Transactions to `Cargo no reconocido` (unrecognised
+      charge) 12,297, Fees to `Cobro indebido` (improper charge) 12,194, Technical to `Problema con app`
+      (app problem) 12,128, Branch to `Atención en sucursal` (branch service) 11,892, Service to `Calidad
+      de servicio` (service quality) 11,886. NULL in 9.98% of rows.
   - name: reception_channel
-    description: Canal por el que se recibió el reclamo.
+    description: >-
+      Channel through which the case was received: `Call Center` 33,761, `Email` 13,323, `Web` 9,884,
+      `App` 6,727, `Branch` 2,683, `Regulator` 717.
   - name: affected_product_id
-    description: 'DEFECTO CONOCIDO: apunta al producto de otro cliente en el 100% de los casos. Ver tests/assert_complaint_affected_product_belongs_to_customer.sql. No usar para mostrar ni autorizar información de producto.'
+    description: >-
+      Product the case refers to, when there is one (NULL in 33.6%). Do not use: it belongs to another
+      customer in 100% of the 44,570 populated rows. Format `PRD-` followed by 12 characters; it would
+      reference products.product_id.
   - name: related_branch_id
-    description: Sucursal relacionada con el reclamo.
+    description: '{{ doc("branch_id_fk") }} Branch the case relates to; NULL in 71.4% of rows.'
     data_tests:
     - relationships:
         arguments:
           to: ref('stg_branches')
           field: branch_id
   - name: origin_interaction_id
-    description: Interacción de call center que originó el reclamo.
+    description: >-
+      Call-center interaction that originated the case. NULL in all 67,095 rows, so it cannot be used;
+      it would reference call_center_interactions.interaction_id.
   - name: description
-    description: Descripción del reclamo en texto libre (plantilla, no señal real).
+    description: >-
+      Templated text 'Queja relacionada con {category in lowercase}' (five distinct sentences, one per
+      category). Not real free text; do not use for intent classification.
   - name: claimed_amount
-    description: Monto que reclama el cliente.
+    description: >-
+      Amount the customer claims, from 50.27 to 4,999.93, in the currency given by `currency`. NULL in
+      67.6%. It matches no transaction of the customer and its range is the same in every currency, so
+      it is not a usable dispute amount.
   - name: currency
-    description: Moneda del monto reclamado.
+    description: >-
+      ISO 4217 currency of `claimed_amount`: `MXN` 5,487, `COP` 5,456, `USD` 5,431, `ARS` 5,402. NULL
+      in 67.5% of rows (nearly always when there is no claimed amount).
   - name: priority
-    description: Prioridad asignada al reclamo.
+    description: 'Handling priority: `Medium` 33,439, `Low` 20,411, `High` 9,890, `Critical` 3,355.'
   - name: status
-    description: Estado del reclamo.
+    description: >-
+      Handling status: `In Process` 26,823, `Open` 20,125, `Resolved` 13,512, `Escalated` 3,321, `Closed`
+      2,609, `Rejected` 705. Resolution, closing and satisfaction fields are only populated for Resolved
+      and Closed cases.
     data_tests:
     - accepted_values:
         arguments:
@@ -332,46 +723,116 @@ models:
           - Closed
           - Rejected
   - name: assigned_agent_id
-    description: Agente al que se asignó el reclamo.
+    description: '{{ doc("agent_id_fk") }} Agent the case is assigned to; NULL in 34.5% (unassigned).'
     data_tests:
     - relationships:
         arguments:
           to: ref('stg_service_agents')
           field: agent_id
   - name: assignment_date
-    description: Fecha en que se asignó el reclamo a un agente.
+    description: >-
+      Date and time the case was assigned to an agent. NULL in 34.5% (same rows as unassigned). {{ doc("ts_no_tz")
+      }}
   - name: first_response_date
-    description: Fecha de la primera respuesta al reclamo.
+    description: Date and time of the first response to the customer. NULL in 39.1%. {{ doc("ts_no_tz")
+      }}
   - name: resolution_date
-    description: Fecha de resolución; nula si el reclamo sigue abierto.
+    description: >-
+      Date and time the case was resolved. Populated only for Resolved and Closed cases (NULL in 77.1%);
+      772 of those have no date. Values run up to 2026-07-18, past the snapshot end. {{ doc("ts_no_tz")
+      }}
   - name: closing_date
-    description: Fecha de cierre del reclamo.
+    description: >-
+      Date and time the case was closed. Populated only for Closed cases (NULL in 96.3%). {{ doc("ts_no_tz")
+      }}
   - name: sla_breached
-    description: Se incumplió el plazo de servicio comprometido.
+    description: >-
+      Whether the service-level agreement deadline was breached: `true` 13,495 (20.1%), `false` 53,600.
+      The rate is about 20% for every status and category. The SLA deadlines themselves are not in the
+      dataset.
   - name: resolution_days
-    description: Días transcurridos entre la creación y la resolución.
+    description: >-
+      Days the case took to resolve, integer from 1 to 30. NULL in 77.1% (unresolved cases). It is not
+      populated for exactly the same rows as `resolution_date` (both present in 14,626 rows).
   - name: resolution
-    description: Tipo de resolución del reclamo.
+    description: >-
+      Templated resolution sentence in Spanish, one of five generic phrases (for example 'Se otorgó compensación
+      al cliente...'). NULL in 77.2%. Not real free text.
   - name: compensation_granted
-    description: Monto compensado al cliente.
+    description: >-
+      Compensation granted to the customer, from 10.15 to 499.98; the currency is not stated. Populated
+      only for Resolved (3,874) and Closed (767) cases; NULL in 93.1%.
   - name: resolution_satisfaction
-    description: Satisfacción del cliente con la resolución.
+    description: >-
+      Customer satisfaction with the resolution, integer 1 (worst) to 5 (best), almost evenly spread.
+      Populated only for Closed cases (2,484 of 2,609); NULL in 96.3%.
   - name: is_repeat_complainer
-    description: El cliente ya había presentado reclamos antes.
+    description: >-
+      Whether the customer has registered more than one case: `true` 10,086, `false` 57,009. The exact
+      rule used by the source is not documented.
 - name: stg_call_center_interactions
-  description: call_center_interactions con tipos reales. contact_reason == reason_category en la práctica (ver spec/DATA_FINDINGS.md).
+  description: >-
+    Contacts between customers and the bank's service agents (calls, chats, emails and video) with channel,
+    duration, detected sentiment and outcome.
+
+
+    **Grain:** One row per contact-center interaction.
+
+
+    **Primary key:** `interaction_id`.
+
+
+    **Source:** Organizer-provided synthetic LATAM Bank dataset (v1.0.0, CSV files on S3), loaded as `bronze.call_center_interactions`.
+    This silver model is a typed view over bronze: real data types, empty strings turned into NULL.
+
+
+    **Coverage:** 686,296 interactions from 2023-06-17 08:03:26 to 2026-06-18 07:58:13 by 148,443 customers
+    handled by 1,090 agents, one source file per day. First-contact resolution (`was_resolved`) is 76.6%
+    and escalation 10.0% overall.
+
+
+    **How we use it:** Baseline for containment and escalation metrics in the evaluation (resolution and
+    escalation rates by contact reason) and context on a customer's previous contacts. 171,321 interactions
+    (25.0%) have a transcript in call_transcripts.
+  meta:
+    layer: silver
+    grain: one row per contact-center interaction
+    primary_key: interaction_id
+    source_dataset: LATAM Bank synthetic dataset v1.0.0 (organizer-provided)
+    data_quality:
+    - >-
+      contact_reason is identical to reason_category in all 686,296 rows (the same six values), so it
+      is not more granular than the category.
+    - 52,454 interactions are marked both escalated and resolved (dbt warning).
+    - >-
+      was_escalated is flat across contact reasons (9.8% to 10.1%), while resolution varies: Transaccional
+      91.5%, Producto 89.6%, Técnico 69.9%, Comercial 65.2%, Retención 60.2%, Queja 43.6%.
+    - >-
+      duration_seconds is NULL in 14.0% of rows, wait_time_seconds in 30.0%, and both accent columns in
+      29.8%.
+    - >-
+      mentioned_products is NULL in 60.0% and holds comma separated product IDs that are not validated
+      against products.
+    - >-
+      Only 171,321 of 686,296 rows (25.0%) have has_transcript = true, exactly the rows of call_transcripts.
   columns:
   - name: interaction_id
-    description: Identificador único de la interacción de call center.
+    description: >-
+      Primary key of the interaction. Format `INT-` followed by 16 uppercase alphanumeric characters.
+      Referenced by call_transcripts and satisfaction_surveys (one to one).
     data_tests:
     - not_null
     - unique
   - name: interaction_date
-    description: Fecha y hora de la interacción.
+    description: >-
+      Date and time the interaction started, from 2023-06-17 08:03:26 to 2026-06-18 07:58:13. {{ doc("ts_no_tz")
+      }}
   - name: process_date
-    description: Fecha en que el banco procesó la transacción (nunca posterior a un día de la transacción).
+    description: '{{ doc("process_date_partition") }}'
   - name: customer_id
-    description: Identificador del cliente (clave en customers; referencia en el resto de tablas).
+    description: >-
+      {{ doc("customer_id_fk") }} Customer who contacted or was contacted by the bank; 148,443 distinct
+      customers.
     data_tests:
     - not_null
     - relationships:
@@ -379,20 +840,31 @@ models:
           to: ref('stg_customers')
           field: customer_id
   - name: agent_id
-    description: Identificador del agente de servicio.
+    description: '{{ doc("agent_id_fk") }} Agent who handled the interaction; never NULL, 1,090 distinct
+      agents.'
     data_tests:
     - relationships:
         arguments:
           to: ref('stg_service_agents')
           field: agent_id
   - name: interaction_type
-    description: Tipo de interacción.
+    description: >-
+      Type of contact: `Inbound Call` 480,678, `Outbound Call` 102,572, `Chat` 68,691, `Email` 27,543,
+      `Video` 6,812.
   - name: channel
-    description: Canal de la interacción.
+    description: >-
+      Channel used: `Phone` 583,250, `Email` 27,543, `App` 26,364, `WhatsApp` 22,888, `Web Chat` 22,856,
+      `Web` 3,395. It is not one to one with `interaction_type` (chats come through App, WhatsApp, Web
+      Chat or Web).
   - name: contact_reason
-    description: Motivo del contacto.
+    description: >-
+      Reason for the contact, in Spanish: `Transaccional` 240,056, `Producto` 150,863, `Queja` 117,021,
+      `Técnico` 102,899, `Comercial` 54,879, `Retención` 20,578. Identical to `reason_category` in every
+      row, so it is not a finer-grained field.
   - name: reason_category
-    description: Categoría del motivo del reclamo.
+    description: >-
+      Category of the contact reason, same six values and counts as `contact_reason` (identical in every
+      row). Use one of the two, not both.
     data_tests:
     - accepted_values:
         arguments:
@@ -404,43 +876,102 @@ models:
           - Comercial
           - Retención
   - name: duration_seconds
-    description: Duración en segundos.
+    description: Duration of the interaction in seconds, from 30 to 1,204. NULL in 14.0% of rows.
   - name: wait_time_seconds
-    description: Tiempo de espera antes de ser atendido, en segundos.
+    description: Time the customer waited before an agent answered, in seconds, from 0 to 424. NULL in
+      30.0% of rows.
   - name: was_resolved
-    description: La interacción quedó resuelta.
+    description: >-
+      Whether the issue was resolved in this interaction (used as first-contact resolution, FCR): `true`
+      526,030 (76.6%), `false` 160,266. By reason: Transaccional 91.5%, Producto 89.6%, Técnico 69.9%,
+      Comercial 65.2%, Retención 60.2%, Queja 43.6%. 52,454 rows are also escalated.
   - name: requires_followup
-    description: El reclamo requiere seguimiento.
+    description: 'Whether the interaction requires a follow-up contact: `true` 239,054 (34.8%), `false`
+      447,242.'
   - name: detected_sentiment
-    description: Sentimiento detectado en el texto.
+    description: >-
+      Customer sentiment detected in the interaction, in Spanish, tied to `sentiment_score`: `Neutral`
+      459,712, `Negativo` 94,322, `Positivo` 75,562, `Muy Negativo` 37,727, `Muy Positivo` 18,973.
   - name: sentiment_score
-    description: Puntaje de sentimiento de la interacción.
+    description: >-
+      Sentiment score from -1.00 (very negative) to 1.00 (very positive), 2 decimals. Bands match `detected_sentiment`:
+      Muy Negativo -1.00 to -0.70, Negativo -0.70 to -0.30, Neutral -0.30 to 0.30, Positivo 0.30 to 0.70,
+      Muy Positivo 0.70 to 1.00.
   - name: customer_detected_accent
-    description: Acento detectado en el cliente.
+    description: >-
+      Regional accent of the customer's voice detected in the call: `mexican` 240,674, `colombian` 144,712,
+      `argentine` 96,160. NULL in 29.8% (non-voice contacts or no detection).
   - name: agent_used_accent
-    description: Acento usado por el agente.
+    description: >-
+      Regional accent the agent used in the call: `mexican` 241,931, `colombian` 144,386, `argentine`
+      95,229. NULL in 29.8%.
   - name: was_escalated
-    description: La interacción se escaló.
+    description: >-
+      Whether the interaction was escalated to another level or agent: `true` 68,386 (10.0%), `false`
+      617,910. The rate is flat across contact reasons (9.8% to 10.1%).
   - name: mentioned_products
-    description: Productos mencionados en la conversación.
+    description: >-
+      Product IDs mentioned during the interaction, as one comma separated string (for example 'PRD-1SE86VVJ9G9H,PRD-4JF3EHW4I3VU').
+      NULL in 60.0%. Not validated against products.product_id.
   - name: has_transcript
-    description: Existe transcripción de la llamada.
+    description: 'Whether a transcript exists in call_transcripts: `true` 171,321 (25.0%), `false` 514,975.'
   - name: has_recording
-    description: Existe grabación de la llamada.
+    description: >-
+      Whether an audio recording exists: `true` 590,062 (86.0%), `false` 96,234. The recordings themselves
+      are not in the dataset.
 - name: stg_branches
-  description: Sucursales. Dimensión que habilita las pruebas de clave foránea a sucursal.
+  description: >-
+    Physical branches of the bank with location, opening hours and facilities.
+
+
+    **Grain:** One row per branch.
+
+
+    **Primary key:** `branch_id`.
+
+
+    **Source:** Organizer-provided synthetic LATAM Bank dataset (v1.0.0, CSV files on S3), loaded as `bronze.branches`.
+    This silver model is a typed view over bronze: real data types, empty strings turned into NULL.
+
+
+    **Coverage:** 350 branches in 16 cities: México 175, Colombia 105, Argentina 70; opened between 1990-01-03
+    and 2023-05-11. Types: Express 130, Corporate 129, Premium 48, Main 43. Status: Active 336, Temporarily
+    Closed 14.
+
+
+    **How we use it:** Reference for branch names, cities and status referenced from products, transactions,
+    complaints and agents. Not used to resolve the dispute workflow itself.
+  meta:
+    layer: silver
+    grain: one row per branch
+    primary_key: branch_id
+    source_dataset: LATAM Bank synthetic dataset v1.0.0 (organizer-provided)
+    data_quality:
+    - geographic_zone is 'Urbana' in all 350 rows; the documented values Suburban and Rural never appear.
+    - has_atms and has_teller_windows are true in all 350 rows, so they carry no information.
+    - >-
+      latitude or longitude has an absolute value below 1 in 167 of 350 rows, which is not valid for any
+      of the three countries; coordinates are not usable for geolocation.
+    - >-
+      branch_id values referenced by customers.registration_branch_id and service_agents.assigned_branch_id
+      mostly do not exist here (149,995 of 150,000 and 831 of 833 orphans respectively); products, transactions
+      and complaints join with no orphans.
   columns:
   - name: branch_id
-    description: Identificador de la sucursal.
+    description: >-
+      Primary key of the branch. Format `SUC-` followed by 8 uppercase alphanumeric characters (SUC is
+      the Spanish abbreviation of sucursal, branch).
     data_tests:
     - not_null
     - unique
   - name: branch_code
-    description: Código corto de la sucursal.
+    description: Short branch code `S0001` to `S0350`, unique per branch.
   - name: branch_name
-    description: Nombre de la sucursal.
+    description: >-
+      Display name, for example 'Banco LATAM Tijuana Sur' or 'Banco LATAM Puebla 3'. 175 distinct values
+      over 350 rows, so it is not unique.
   - name: branch_type
-    description: Tipo de sucursal.
+    description: 'Branch format: `Express` 130, `Corporate` 129, `Premium` 48, `Main` 43.'
     data_tests:
     - accepted_values:
         arguments:
@@ -450,13 +981,13 @@ models:
           - Main
           - Premium
   - name: address
-    description: Dirección postal.
+    description: Street address of the branch, unique per branch (350 distinct values).
   - name: city
-    description: Ciudad de la sucursal.
+    description: City of the branch, 16 distinct values (six in México, five in Colombia, five in Argentina).
   - name: state
-    description: Estado o departamento de la sucursal.
+    description: State, department or province of the branch, 16 distinct values.
   - name: country
-    description: País de la sucursal.
+    description: '{{ doc("country_name") }} Distribution: México 175, Colombia 105, Argentina 70.'
     data_tests:
     - accepted_values:
         arguments:
@@ -465,43 +996,47 @@ models:
           - Colombia
           - Argentina
   - name: postal_code
-    description: Código postal.
+    description: Postal code of the branch, 105 distinct values.
   - name: geographic_zone
-    description: Zona geográfica de la sucursal.
+    description: >-
+      Urban or rural classification of the branch area. Always `Urbana` (350 of 350): the other documented
+      values never appear, so it does not discriminate.
   - name: phone
-    description: Teléfono de la sucursal.
+    description: Branch phone number in international format. Fictitious, unique per branch.
   - name: email
-    description: Correo electrónico (ficticio).
+    description: Branch email address of the form sucursalNNNN@bancolatam.com, unique per branch.
   - name: opening_time
-    description: Hora de apertura de la sucursal.
+    description: 'Time of day the branch opens (local time, no date): 08:00 to 09:30.'
   - name: closing_time
-    description: Hora de cierre de la sucursal.
+    description: 'Time of day the branch closes (local time, no date): 17:00 to 20:00.'
   - name: has_atms
-    description: La sucursal tiene cajeros automáticos.
+    description: Whether the branch has ATMs. Always `true` in this dataset; no information content.
   - name: atm_count
-    description: Cantidad de cajeros automáticos.
+    description: Number of ATMs at the branch, integer from 2 to 8.
   - name: has_teller_windows
-    description: La sucursal tiene ventanillas de atención.
+    description: Whether the branch has teller windows. Always `true`; no information content.
   - name: teller_window_count
-    description: Cantidad de ventanillas de atención.
+    description: Number of teller windows, integer from 3 to 12.
   - name: latitude
-    description: Latitud de la sucursal.
+    description: >-
+      Latitude of the branch in decimal degrees (7 decimals), from -34.69 to 25.78. Not reliable: 167
+      of 350 branches have a latitude or longitude within one degree of zero.
     data_tests:
     - accepted_range:
         arguments:
           min_value: -90
           max_value: 90
   - name: longitude
-    description: Longitud de la sucursal.
+    description: Longitude of the branch in decimal degrees, from -103.45 to 0.10. Not reliable (see latitude).
     data_tests:
     - accepted_range:
         arguments:
           min_value: -180
           max_value: 180
   - name: branch_opening_date
-    description: Fecha de apertura de la sucursal.
+    description: Date the branch opened, from 1990-01-03 to 2023-05-11.
   - name: branch_status
-    description: Estado de la sucursal.
+    description: 'Operating status: `Active` 336, `Temporarily Closed` 14.'
     data_tests:
     - accepted_values:
         arguments:
@@ -509,25 +1044,81 @@ models:
           - Active
           - Temporarily Closed
 - name: stg_service_agents
-  description: Agentes de servicio. country_of_origin se conforma a 'México'. 129 hablan portugués.
+  description: >-
+    Customer-service agents (phone, digital, in-person and hybrid) with languages, accent, specialty,
+    shift and performance indicators.
+
+
+    **Grain:** One row per service agent.
+
+
+    **Primary key:** `agent_id`.
+
+
+    **Source:** Organizer-provided synthetic LATAM Bank dataset (v1.0.0, CSV files on S3), loaded as `bronze.service_agents`.
+    This silver model is a typed view over bronze: real data types, empty strings turned into NULL, and
+    'Mexico' conformed to 'México'.
+
+
+    **Coverage:** 1,200 agents hired between 2013-06-20 and 2026-03-17: México 600, Colombia 360, Argentina
+    240. Status: Active 1,090, Vacation 62, Leave 29, Inactive 19. 1,090 of them appear in call_center_interactions.
+
+
+    **How we use it:** Agent reference for interactions, complaints and surveys, and the only evidence
+    of Portuguese in the dataset: 129 of 1,200 agents (10.75%) speak it, which is why Portuguese support
+    has to be solved in the agent layer.
+  meta:
+    layer: silver
+    grain: one row per service agent
+    primary_key: agent_id
+    source_dataset: LATAM Bank synthetic dataset v1.0.0 (organizer-provided)
+    contains_pii: true
+    data_quality:
+    - >-
+      assigned_branch_id is NULL in 30.6% of agents (remote and digital agents) and 831 of its 833 distinct
+      values do not exist in branches (dbt warning).
+    - >-
+      129 of 1,200 agents speak Portuguese ('español, portugués' 68 and 'español, inglés, portugués' 61);
+      no customer, transcript or text in the dataset is in Portuguese.
+    - country_of_origin spells 'Mexico' without accent in the source; silver conforms it to 'México'.
+    - >-
+      specialty is NULL in 39.7%, avg_csat in 11.2% (134 agents), total_monthly_interactions in 9.25%
+      and phone in 5.75%.
+    - employee_code has 1,187 distinct values over 1,200 agents, so it is not unique; use agent_id.
   columns:
   - name: agent_id
-    description: Identificador del agente de servicio.
+    description: >-
+      Primary key of the agent. Format `AGT-` followed by 10 uppercase alphanumeric characters. Referenced
+      by interactions, transcripts, surveys and complaints.
     data_tests:
     - not_null
     - unique
   - name: employee_code
-    description: Código interno del empleado.
+    description: >-
+      HR employee code such as 'E23396'. 1,187 distinct values over 1,200 rows, so it is not unique; use
+      agent_id to identify an agent.
   - name: first_name
-    description: Nombre del cliente (ficticio).
+    description: Given name of the agent. {{ doc("pii_synthetic") }}
+    meta:
+      contains_pii: true
   - name: last_name
-    description: Apellido del cliente (ficticio).
+    description: Surnames of the agent in one string. {{ doc("pii_synthetic") }}
+    meta:
+      contains_pii: true
   - name: email
-    description: Correo electrónico (ficticio).
+    description: >-
+      Work email address (fictitious domains such as bancogmail.com). 1,188 distinct values. {{ doc("pii_synthetic")
+      }}
+    meta:
+      contains_pii: true
   - name: phone
-    description: Teléfono del agente.
+    description: Phone number in international format. NULL in 5.75% of agents. {{ doc("pii_synthetic")
+      }}
+    meta:
+      contains_pii: true
   - name: native_accent
-    description: Acento nativo del agente.
+    description: >-
+      Regional accent of the agent: `mexican` 600, `colombian` 360, `argentine` 240. It matches `country_of_origin`.
     data_tests:
     - accepted_values:
         arguments:
@@ -536,7 +1127,8 @@ models:
           - colombian
           - mexican
   - name: country_of_origin
-    description: País de origen.
+    description: '{{ doc("country_name") }} Country the agent comes from: México 600, Colombia 360, Argentina
+      240.'
     data_tests:
     - accepted_values:
         arguments:
@@ -545,7 +1137,9 @@ models:
           - Colombia
           - Argentina
   - name: assigned_branch_id
-    description: 'DEFECTO CONOCIDO: 831 de 833 con valor no existen en branches. La advertencia mide el defecto.'
+    description: >-
+      {{ doc("branch_id_fk") }} Branch the agent is assigned to. NULL in 30.6% (remote or digital agents).
+      Do not use for joins: 831 of the 833 distinct values do not exist in branches.
     data_tests:
     - relationships:
         arguments:
@@ -554,7 +1148,7 @@ models:
         config:
           severity: warn
   - name: agent_type
-    description: Tipo de agente.
+    description: 'Service modality: `Phone` 588, `Digital` 251, `In-Person` 230, `Hybrid` 131.'
     data_tests:
     - accepted_values:
         arguments:
@@ -564,7 +1158,7 @@ models:
           - In-Person
           - Phone
   - name: experience_level
-    description: Nivel de experiencia del agente.
+    description: 'Seniority: `Specialist` 761, `Senior` 286, `Mid-Senior` 135, `Junior` 18.'
     data_tests:
     - accepted_values:
         arguments:
@@ -574,17 +1168,26 @@ models:
           - Senior
           - Specialist
   - name: languages
-    description: Idiomas que atiende el agente.
+    description: >-
+      Languages the agent speaks, as a Spanish comma separated list: `español` 649, `español, inglés`
+      422, `español, portugués` 68, `español, inglés, portugués` 61. Portuguese speakers: 129 (10.75%).
   - name: specialty
-    description: Especialidad del agente.
+    description: >-
+      Area of expertise (Spanish labels): `Fraudes` fraud 105, `Cobranza` collections 97, `Soporte Técnico`
+      technical support 96, `Retención` retention 96, `Créditos` credit 87, `Inversiones` investments
+      83, `Ventas` sales 82, `Quejas y Reclamos` complaints and claims 78. NULL in 39.7%.
   - name: hire_date
-    description: Fecha de contratación del agente.
+    description: Date the agent was hired, from 2013-06-20 to 2026-03-17.
   - name: avg_csat
-    description: Satisfacción promedio (CSAT) del agente.
+    description: >-
+      Average customer-satisfaction (CSAT) score of the agent, from 3.50 to 5.00 (a 5-point scale is assumed
+      from the range; not documented). NULL in 11.2% (134 agents).
   - name: total_monthly_interactions
-    description: Total mensual de interacciones atendidas por el agente.
+    description: >-
+      Monthly number of interactions handled by the agent, integer from 100 to 800. NULL in 9.25%. Whether
+      it is an average or a snapshot month is not documented.
   - name: agent_status
-    description: Estado del agente.
+    description: 'Employment status: `Active` 1,090, `Vacation` 62, `Leave` 29, `Inactive` 19.'
     data_tests:
     - accepted_values:
         arguments:
@@ -594,7 +1197,7 @@ models:
           - Leave
           - Vacation
   - name: work_shift
-    description: Turno de trabajo del agente.
+    description: 'Shift: `Afternoon` 418, `Morning` 398, `Rotating` 203, `Night` 181.'
     data_tests:
     - accepted_values:
         arguments:
@@ -604,19 +1207,59 @@ models:
           - Night
           - Rotating
 - name: stg_marketing_campaigns
-  description: Campañas de marketing. Sin uso en atención al cliente; se modela para tener contrato y tests.
+  description: >-
+    Marketing campaigns of the bank (acquisition, retention, cross-sell, up-sell, reactivation) with type,
+    target, budget and expected conversion.
+
+
+    **Grain:** One row per marketing campaign.
+
+
+    **Primary key:** `campaign_id`.
+
+
+    **Source:** Organizer-provided synthetic LATAM Bank dataset (v1.0.0, CSV files on S3), loaded as `bronze.marketing_campaigns`.
+    This silver model is a typed view over bronze: real data types, empty strings turned into NULL, and
+    'Mexico' conformed to 'México'.
+
+
+    **Coverage:** 200 campaigns starting between 2023-07-01 and 2026-06-14 (end dates up to 2026-08-20).
+    Status: Completed 172, Paused 25, Active 3. 175 of them have sends in campaign_sends.
+
+
+    **How we use it:** Not used by the customer-service workflow; documented because it is one of the
+    13 organizer tables and is the dimension of campaign_sends.
+  meta:
+    layer: silver
+    grain: one row per marketing campaign
+    primary_key: campaign_id
+    source_dataset: LATAM Bank synthetic dataset v1.0.0 (organizer-provided)
+    data_quality:
+    - target_country spells 'Mexico' without accent in the source; silver conforms it to 'México'.
+    - >-
+      Null rates: target_country 55.5%, target_segment 39.5%, description 19.5%, budget 15.5%, promoted_product
+      11.0%, expected_conversion_rate 7.0%.
+    - budget carries no currency indicator.
+    - description mixes English and Spanish ('Campaña de acquisition para Tarjeta Crédito').
   columns:
   - name: campaign_id
-    description: Identificador de la campaña de marketing.
+    description: >-
+      Primary key of the campaign. Format `CMP-` followed by 12 uppercase alphanumeric characters (the
+      same prefix as complaint_id, which is a different, 20-character key). Referenced by campaign_sends.
     data_tests:
     - not_null
     - unique
   - name: campaign_name
-    description: Nombre de la campaña.
+    description: >-
+      Descriptive name that encodes the campaign, for example 'CMP_ACQ_CC_Jan2024_0001' (objective, product,
+      month and sequence). Unique.
   - name: description
-    description: Descripción de la campaña.
+    description: >-
+      Free-text summary such as 'Campaña de acquisition para Tarjeta Crédito' (37 distinct values, mixed
+      English and Spanish). NULL in 19.5%.
   - name: campaign_type
-    description: Tipo de campaña.
+    description: 'Channel mix of the campaign: `Email` 67, `SMS` 42, `WhatsApp` 37, `Push` 24, `Mix` 21,
+      `Voice` 9.'
     data_tests:
     - accepted_values:
         arguments:
@@ -628,7 +1271,8 @@ models:
           - Voice
           - WhatsApp
   - name: campaign_objective
-    description: Objetivo de la campaña.
+    description: 'Business goal: `Retention` 62, `Cross-sell` 51, `Acquisition` 38, `Reactivation` 25,
+      `Up-sell` 24.'
     data_tests:
     - accepted_values:
         arguments:
@@ -639,11 +1283,17 @@ models:
           - Retention
           - Up-sell
   - name: promoted_product
-    description: Producto promocionado.
+    description: >-
+      Product type promoted, using the product_type labels of products: `Tarjeta Crédito` 52, `Cuenta
+      Ahorro` 40, `Préstamo Personal` 28, `Inversión` 20, `Cuenta Corriente` 17, `Préstamo Hipotecario`
+      11, `Seguro` 10. NULL in 11.0%.
   - name: target_segment
-    description: Segmento de clientes objetivo.
+    description: >-
+      Customer segment targeted, using the customers.segment labels: `Plus` 32, `Premium` 32, `Basic`
+      30, `Student` 27. NULL in 39.5% (no segment restriction is assumed; not documented).
   - name: target_country
-    description: País objetivo.
+    description: '{{ doc("country_name") }} Country targeted: Colombia 33, México 28, Argentina 28. NULL
+      in 55.5%.'
     data_tests:
     - accepted_values:
         arguments:
@@ -652,13 +1302,15 @@ models:
           - Colombia
           - Argentina
   - name: start_date
-    description: Fecha de inicio.
+    description: First day of the campaign, from 2023-07-01 to 2026-06-14.
   - name: end_date
-    description: Fecha de fin.
+    description: >-
+      Last day of the campaign, from 2023-08-11 to 2026-08-20; some end dates are later than the end of
+      the snapshot.
   - name: budget
-    description: Presupuesto de la campaña.
+    description: Campaign budget, from 6,355.31 to 499,954.38; the currency is not stated. NULL in 15.5%.
   - name: campaign_status
-    description: Estado de la campaña.
+    description: 'Status: `Completed` 172, `Paused` 25, `Active` 3.'
     data_tests:
     - accepted_values:
         arguments:
@@ -667,9 +1319,44 @@ models:
           - Completed
           - Paused
   - name: expected_conversion_rate
-    description: Tasa de conversión esperada.
+    description: Expected conversion rate as a percentage number, from 0.55 to 14.69. NULL in 7.0%.
 - name: stg_daily_exchange_rates
-  description: Tipo de cambio diario. Incluye MXN aunque ningún producto ni transacción esté en MXN. La columna origen `date` es rate_date.
+  description: >-
+    Daily exchange rates between the four currencies of the dataset (USD, MXN, COP, ARS), used to convert
+    amounts to a common currency.
+
+
+    **Grain:** One row per currency pair and day.
+
+
+    **Primary key:** the composite key (`rate_date`, `source_currency`, `target_currency`).
+
+
+    **Source:** Organizer-provided synthetic LATAM Bank dataset (v1.0.0, CSV files on S3), loaded as `bronze.daily_exchange_rates`.
+    This silver model is a typed view over bronze: real data types, empty strings turned into NULL.
+
+
+    **Coverage:** 13,164 rows: 1,097 days (2023-06-17 to 2026-06-17) times 12 ordered currency pairs (3,291
+    rows per currency on each side).
+
+
+    **How we use it:** Normalising amounts across currencies: transactions.amount_usd gaps, products and
+    credit amounts, and any debt-to-income calculation. It is the only table with a complete MXN series.
+  meta:
+    layer: silver
+    grain: one row per currency pair and day
+    primary_key: the composite key (rate_date, source_currency, target_currency)
+    source_dataset: LATAM Bank synthetic dataset v1.0.0 (organizer-provided)
+    data_quality:
+    - >-
+      MXN exists here (all pairs, 1,097 rows each) while transactions and products contain no MXN, so
+      there is nothing in MXN to convert.
+    - >-
+      The source column is a random provider label per row (Bloomberg 3,303, Reuters 3,297, Internal 3,293,
+      Central Bank 3,271), not a currency and not a consistent series.
+    - >-
+      There are no same-currency pairs, and buy_rate <= exchange_rate <= sell_rate holds in all 13,164
+      rows.
   data_tests:
   - unique_combination:
       arguments:
@@ -679,9 +1366,13 @@ models:
         - target_currency
   columns:
   - name: rate_date
-    description: Fecha de la tasa de cambio.
+    description: >-
+      Day the rate applies to, from 2023-06-17 to 2026-06-17 (1,097 days). Part of the composite primary
+      key.
   - name: source_currency
-    description: Moneda de origen de la tasa.
+    description: >-
+      Currency being converted (ISO 4217): `COP`, `ARS`, `MXN` or `USD` (3,291 rows each). Part of the
+      composite primary key.
     data_tests:
     - accepted_values:
         arguments:
@@ -691,7 +1382,9 @@ models:
           - MXN
           - USD
   - name: target_currency
-    description: Moneda de destino de la tasa.
+    description: >-
+      Currency converted into (ISO 4217): `COP`, `ARS`, `MXN` or `USD` (3,291 rows each); never equal
+      to `source_currency`. Part of the composite primary key.
     data_tests:
     - accepted_values:
         arguments:
@@ -701,27 +1394,72 @@ models:
           - MXN
           - USD
   - name: exchange_rate
-    description: Tasa de cambio del día.
+    description: >-
+      Units of `target_currency` per one unit of `source_currency` (mid rate), 8 decimals. For example
+      1 USD = 4,037.97 COP on 2025-01-02. Always between `buy_rate` and `sell_rate`.
     data_tests:
     - accepted_range:
         arguments:
           min_value: 1.0e-06
   - name: buy_rate
-    description: Tasa de compra.
+    description: >-
+      Rate at which the bank buys the source currency, in target units per source unit; always at or below
+      `exchange_rate`. The buy and sell definitions are inferred from the ordering and not documented.
   - name: sell_rate
-    description: Tasa de venta.
+    description: >-
+      Rate at which the bank sells the source currency, in target units per source unit; always at or
+      above `exchange_rate`.
   - name: source
-    description: Fuente de la tasa de cambio.
+    description: >-
+      Label of the rate provider: `Bloomberg` 3,303, `Reuters` 3,297, `Internal` 3,293, `Central Bank`
+      3,271. Assigned per row at random; it is not a currency column.
 - name: stg_call_transcripts
-  description: 'Transcripciones. Texto plantilla, 100% español: no sirve para entrenar intención ni valida portugués.'
+  description: >-
+    Text transcripts of contact-center calls with speaker turns, detected language, accent, topics and
+    speech-to-text metadata.
+
+
+    **Grain:** One row per call transcript (at most one per interaction).
+
+
+    **Primary key:** `transcript_id`.
+
+
+    **Source:** Organizer-provided synthetic LATAM Bank dataset (v1.0.0, CSV files on S3), loaded as `bronze.call_transcripts`.
+    This silver model is a typed view over bronze: real data types, empty strings turned into NULL.
+
+
+    **Coverage:** 171,321 transcripts from 2023-06-17 to 2026-06-17, one source file per day, each linked
+    one to one to a call_center_interactions row (the 171,321 interactions with has_transcript = true)
+    by 101,951 customers and 1,090 agents.
+
+
+    **How we use it:** Context only. The text is templated, so it is not a basis for intent training;
+    the real structured signal sits in call_center_interactions.
+  meta:
+    layer: silver
+    grain: one row per call transcript (at most one per interaction)
+    primary_key: transcript_id
+    source_dataset: LATAM Bank synthetic dataset v1.0.0 (organizer-provided)
+    data_quality:
+    - detected_language is 'es' in all 171,321 rows; there is no Portuguese or other language.
+    - >-
+      detected_intents is 'consulta_general' in 95.0% of rows (162,864) and NULL in 4.9%; it has a single
+      distinct value.
+    - >-
+      The text is templated: customer_text and agent_text have 42 distinct values each over 171,321 rows
+      and full_text 546, and every full_text keeps unfilled placeholders (monto, moneda, limite) in braces.
+    - detected_keywords only combines the words banco, cuenta and servicio (12 distinct values).
+    - detected_accent is NULL in 36.8% of rows, more than the 29.8% of the parent interaction.
+    - customer_id and agent_id match the parent interaction in 100% of rows.
   columns:
   - name: transcript_id
-    description: Identificador único de la transcripción de llamada.
+    description: Primary key of the transcript. Format `TRS-` followed by 20 uppercase alphanumeric characters.
     data_tests:
     - not_null
     - unique
   - name: interaction_id
-    description: Identificador único de la interacción de call center.
+    description: '{{ doc("interaction_id_fk") }} One to one: each interaction has at most one transcript.'
     data_tests:
     - not_null
     - relationships:
@@ -729,9 +1467,9 @@ models:
           to: ref('stg_call_center_interactions')
           field: interaction_id
   - name: process_date
-    description: Fecha en que el banco procesó la transacción (nunca posterior a un día de la transacción).
+    description: '{{ doc("process_date_partition") }}'
   - name: customer_id
-    description: Identificador del cliente (clave en customers; referencia en el resto de tablas).
+    description: '{{ doc("customer_id_fk") }} Same customer as the parent interaction.'
     data_tests:
     - not_null
     - relationships:
@@ -739,7 +1477,7 @@ models:
           to: ref('stg_customers')
           field: customer_id
   - name: agent_id
-    description: Identificador del agente de servicio.
+    description: '{{ doc("agent_id_fk") }} Same agent as the parent interaction.'
     data_tests:
     - not_null
     - relationships:
@@ -747,13 +1485,17 @@ models:
           to: ref('stg_service_agents')
           field: agent_id
   - name: full_text
-    description: Texto completo de la conversación.
+    description: >-
+      Whole conversation as alternating 'Cliente:' and 'Agente:' turns separated by blank lines, in Spanish.
+      Templated: 546 distinct values over 171,321 rows, and every row contains unfilled placeholders such
+      as monto, moneda and limite in braces.
   - name: customer_text
-    description: Texto dicho por el cliente.
+    description: 'Customer side of the conversation only, in Spanish. Templated: 42 distinct values.'
   - name: agent_text
-    description: Texto dicho por el agente.
+    description: 'Agent side of the conversation only, in Spanish. Templated: 42 distinct values.'
   - name: detected_language
-    description: 'Hoy solo ''es''. Si aparece otro idioma la advertencia avisa: cambiaría lo que se reporta sobre cobertura de portugués.'
+    description: >-
+      Language detected in the call (ISO 639-1). Always `es` (171,321 of 171,321): no other language appears.
     data_tests:
     - accepted_values:
         arguments:
@@ -762,17 +1504,29 @@ models:
         config:
           severity: warn
   - name: detected_accent
-    description: Acento regional detectado a partir de la voz del cliente.
+    description: >-
+      Regional accent detected from the audio: `mexican` 54,152, `colombian` 32,284, `argentine` 21,802.
+      NULL in 36.8%.
   - name: accent_confidence
-    description: Confianza de la detección de acento.
+    description: Confidence of the accent detection as a fraction from 0.75 to 0.99 (8 decimals). NULL
+      in 10.0%.
   - name: detected_keywords
-    description: Palabras clave detectadas.
+    description: >-
+      Keywords detected, as a comma separated string. Only combinations of 'banco', 'cuenta' and 'servicio'
+      occur (12 distinct values). NULL in 5.1%.
   - name: mentioned_entities
-    description: Entidades mencionadas en la conversación.
+    description: >-
+      Counts of entities mentioned in the call, as a JSON string with the keys account_numbers, dates,
+      amounts and products (for example '{"account_numbers": 1, "dates": 0, "amounts": 1, "products":
+      "Cuenta Ahorro"}'). NULL in 10.0%; 54 distinct values. Stored as text, not as a JSON type.
   - name: detected_intents
-    description: Intenciones detectadas en la conversación.
+    description: >-
+      Intent detected in the call. Always `consulta_general` when present (162,864 rows, 95.0%); NULL
+      in 4.9%. Carries no discriminating information.
   - name: main_topics
-    description: Temas principales de la conversación.
+    description: >-
+      Main topic of the call, using the same labels as call_center_interactions.contact_reason: `Transaccional`
+      59,786, `Producto` 37,658, `Queja` 29,198, `Técnico` 25,691, `Comercial` 13,808, `Retención` 5,180.
     data_tests:
     - accepted_values:
         arguments:
@@ -784,7 +1538,9 @@ models:
           - Técnico
           - Transaccional
   - name: transcription_model
-    description: Modelo que generó la transcripción.
+    description: >-
+      Speech-to-text engine that produced the transcript: `AWS Transcribe` 43,117, `Whisper v3` 42,803,
+      `Google STT` 42,740, `Azure Speech` 42,661 (evenly spread).
     data_tests:
     - accepted_values:
         arguments:
@@ -794,23 +1550,61 @@ models:
           - Google STT
           - Whisper v3
   - name: audio_quality
-    description: Calidad del audio de la llamada.
+    description: 'Quality of the audio: `High` 114,371, `Medium` 40,350, `Low` 7,962. NULL in 5.0%.'
   - name: duration_seconds
-    description: Duración en segundos.
+    description: Duration of the call in seconds, from 30 to 1,151. NULL in 14.0%.
 - name: stg_satisfaction_surveys
-  description: Encuestas. main_score de 1 a 7 para CSAT, NPS y CES; nps_category nunca trae Promoter.
+  description: >-
+    Post-interaction satisfaction surveys (CSAT, NPS and CES) answered by customers, with up to three
+    question responses and an optional comment.
+
+
+    **Grain:** One row per survey (one per interaction).
+
+
+    **Primary key:** `survey_id`.
+
+
+    **Source:** Organizer-provided synthetic LATAM Bank dataset (v1.0.0, CSV files on S3), loaded as `bronze.satisfaction_surveys`.
+    This silver model is a typed view over bronze: real data types, empty strings turned into NULL.
+
+
+    **Coverage:** 212,759 surveys from 2023-06-17 09:29:20 to 2026-06-19 06:54:58, one source file per
+    day, each tied one to one to a call_center_interactions row (with the same customer and agent) by
+    113,640 customers. Types: CSAT 127,856, NPS 63,668, CES 21,235.
+
+
+    **How we use it:** Satisfaction context for the evaluation. The score has no relationship with escalation
+    (average 3.526 without escalation and 3.527 with it).
+  meta:
+    layer: silver
+    grain: one row per survey (one per interaction)
+    primary_key: survey_id
+    source_dataset: LATAM Bank synthetic dataset v1.0.0 (organizer-provided)
+    data_quality:
+    - >-
+      main_score does not use one scale per survey type: CSAT and CES surveys score 1 to 4 and NPS surveys
+      2 to 7, so it is not a standard 0 to 10 NPS.
+    - >-
+      nps_category never takes the value Promoter (Detractor 45,007, Passive 15,387) and is NULL in 3,274
+      of the 63,668 NPS surveys.
+    - question_1, question_2 and question_3 are NULL in 43.0%, 61.8% and 81.1% of rows.
+    - open_comments are 13 canned phrases, and comment_sentiment is NULL in 52.4% of rows.
+    - campaign_response_rate has no documented meaning on a survey (15.00 to 45.00, NULL in 15.1%).
   columns:
   - name: survey_id
-    description: Identificador único de la encuesta de satisfacción.
+    description: Primary key of the survey. Format `SRV-` followed by 20 uppercase alphanumeric characters.
     data_tests:
     - not_null
     - unique
   - name: survey_date
-    description: Fecha de la encuesta.
+    description: >-
+      Date and time the survey was answered or recorded, from 2023-06-17 09:29:20 to 2026-06-19 06:54:58;
+      never earlier than its interaction. {{ doc("ts_no_tz") }}
   - name: process_date
-    description: Fecha en que el banco procesó la transacción (nunca posterior a un día de la transacción).
+    description: '{{ doc("process_date_partition") }}'
   - name: interaction_id
-    description: Identificador único de la interacción de call center.
+    description: '{{ doc("interaction_id_fk") }} One to one: each interaction has at most one survey.'
     data_tests:
     - not_null
     - relationships:
@@ -818,7 +1612,7 @@ models:
           to: ref('stg_call_center_interactions')
           field: interaction_id
   - name: customer_id
-    description: Identificador del cliente (clave en customers; referencia en el resto de tablas).
+    description: '{{ doc("customer_id_fk") }} Same customer as the interaction.'
     data_tests:
     - not_null
     - relationships:
@@ -826,7 +1620,7 @@ models:
           to: ref('stg_customers')
           field: customer_id
   - name: agent_id
-    description: Identificador del agente de servicio.
+    description: '{{ doc("agent_id_fk") }} Same agent as the interaction.'
     data_tests:
     - not_null
     - relationships:
@@ -834,7 +1628,9 @@ models:
           to: ref('stg_service_agents')
           field: agent_id
   - name: survey_type
-    description: Tipo de encuesta.
+    description: >-
+      Survey instrument: `CSAT` customer satisfaction 127,856, `NPS` net promoter score 63,668, `CES`
+      customer effort score 21,235.
     data_tests:
     - accepted_values:
         arguments:
@@ -843,16 +1639,22 @@ models:
           - CSAT
           - NPS
   - name: send_channel
-    description: Canal del envío.
+    description: >-
+      Channel through which the survey was sent: `Email` 84,880, `SMS` 63,798, `App` 42,595, `IVR` 10,836,
+      `Web` 10,650.
   - name: main_score
-    description: Puntaje principal de la encuesta.
+    description: >-
+      Main score of the survey, integer from 1 to 7 (3 is the most frequent, 90,363 rows; 1 only 5,159).
+      The range depends on the type: CSAT and CES use 1 to 4, NPS uses 2 to 7. Not a 0 to 10 NPS scale.
     data_tests:
     - accepted_range:
         arguments:
           min_value: 1
           max_value: 7
   - name: nps_category
-    description: Categoría NPS (promotor, pasivo o detractor).
+    description: >-
+      NPS classification: `Detractor` 45,007 (scores 2 to 6) or `Passive` 15,387 (score 7); `Promoter`
+      never occurs. NULL for CSAT and CES surveys (as expected) and for 3,274 NPS surveys (71.6% overall).
     data_tests:
     - accepted_values:
         arguments:
@@ -861,21 +1663,33 @@ models:
           - Passive
           - Promoter
   - name: question_1_text
-    description: Texto de la pregunta 1.
+    description: >-
+      Text of the first question, in Spanish. Three variants: '¿Cómo calificaría la atención brindada?'
+      (how would you rate the service), '¿El agente resolvió su consulta satisfactoriamente?' (did the
+      agent resolve your query) and '¿Qué tan satisfecho está con el servicio recibido?' (how satisfied
+      are you). NULL in 43.0%.
   - name: question_1_response
-    description: Respuesta a la pregunta 1.
+    description: Answer to question 1 on a 1 to 5 scale, evenly distributed. NULL in 43.0%.
   - name: question_2_text
-    description: Texto de la pregunta 2.
+    description: >-
+      Text of the second question, always '¿El tiempo de espera fue aceptable?' (was the waiting time
+      acceptable) when present. NULL in 61.8%.
   - name: question_2_response
-    description: Respuesta a la pregunta 2.
+    description: Answer to question 2 on a 1 to 5 scale, evenly distributed. NULL in 61.7%.
   - name: question_3_text
-    description: Texto de la pregunta 3.
+    description: >-
+      Text of the third question, always '¿Volvería a contactarnos por este canal?' (would you contact
+      us again through this channel) when present. NULL in 81.1%.
   - name: question_3_response
-    description: Respuesta a la pregunta 3.
+    description: Answer to question 3 on a 1 to 5 scale, evenly distributed. NULL in 81.2%.
   - name: open_comments
-    description: Comentarios del cliente al abrir el reclamo.
+    description: >-
+      Free comment, in Spanish, one of 13 canned phrases (for example 'Tardaron mucho en atenderme.',
+      'Excelente atención, muy amable el agente.'). Not real free text. NULL in 52.4%.
   - name: comment_sentiment
-    description: Sentimiento del comentario del cliente.
+    description: >-
+      Sentiment of `open_comments`: `Negative` 67,529, `Neutral` 26,774, `Positive` 6,954. NULL in 52.4%
+      (no comment).
     data_tests:
     - accepted_values:
         arguments:
@@ -884,23 +1698,72 @@ models:
           - Neutral
           - Positive
   - name: response_time_hours
-    description: Horas transcurridas hasta que el cliente respondió la encuesta.
+    description: >-
+      Approximate hours between the interaction and the survey response, from 1.01 to 35.97 (correlation
+      0.89 with the measured difference between survey_date and interaction_date, whose average is 12.5
+      hours versus 18.5 here), so it is not an exact difference. The definition is not documented.
   - name: campaign_response_rate
-    description: Tasa de respuesta observada de la campaña.
+    description: >-
+      Meaning not confirmed in the dataset documentation. Observed: a value from 15.00 to 45.00 (8 decimals),
+      NULL in 15.1%, apparently a campaign-level response rate attached to the survey.
 - name: stg_campaign_sends
-  description: Envíos de campañas. Sin uso en atención al cliente; se modela para tener contrato y tests.
+  description: >-
+    Individual marketing messages sent to customers within a campaign, with delivery, open, click and
+    conversion tracking.
+
+
+    **Grain:** One row per message sent to one customer.
+
+
+    **Primary key:** `send_id`.
+
+
+    **Source:** Organizer-provided synthetic LATAM Bank dataset (v1.0.0, CSV files on S3), loaded as `bronze.campaign_sends`.
+    This silver model is a typed view over bronze: real data types, empty strings turned into NULL.
+
+
+    **Coverage:** 1,746,801 sends from 2023-07-01 06:00:42 to 2026-06-18 05:59:53 in 1,083 daily files
+    (14 days fewer than the other partitioned tables), covering all 150,000 customers and 175 of the 200
+    campaigns. Delivered 1,642,044 (94.0%), Failed 52,306, Bounced 34,900, Blocked 17,551.
+
+
+    **How we use it:** Not used by the customer-service workflow (it supports the marketing track). The
+    chain from sends to complaints within two days is 0% to 0.23%, so it carries no causal signal.
+  meta:
+    layer: silver
+    grain: one row per message sent to one customer
+    primary_key: send_id
+    source_dataset: LATAM Bank synthetic dataset v1.0.0 (organizer-provided)
+    data_quality:
+    - >-
+      1,083 daily files instead of 1,097: 14 days are missing and it is unknown whether that is intentional.
+    - >-
+      subject contains the literal text 'nan' in 38,142 rows ('¡Oferta especial en nan!'), a missing promoted
+      product leaked as text.
+    - >-
+      was_opened is NULL in 27.7% of rows (all 104,757 undelivered sends plus 379,472 delivered ones);
+      open_date, open_device and open_country are NULL in 72.1% to 74.9%.
+    - >-
+      send_cost is NULL in 15.0% and conversion_value carries no currency; failure_reason is populated
+      for 99,597 of the 104,757 undelivered sends.
+    - >-
+      open_date, click_date and conversion_date run up to 2026-06-26, past the end of the snapshot (2026-06-18).
   columns:
   - name: send_id
-    description: Identificador único del envío de campaña.
+    description: Primary key of the send. Format `SND-` followed by 20 uppercase alphanumeric characters.
     data_tests:
     - not_null
     - unique
   - name: send_date
-    description: Fecha y hora del envío.
+    description: >-
+      Date and time the message was sent, from 2023-07-01 06:00:42 to 2026-06-18 05:59:53. {{ doc("ts_no_tz")
+      }}
   - name: process_date
-    description: Fecha en que el banco procesó la transacción (nunca posterior a un día de la transacción).
+    description: '{{ doc("process_date_partition") }} Only 1,083 distinct dates (14 days have no file).'
   - name: campaign_id
-    description: Identificador de la campaña de marketing.
+    description: >-
+      Campaign the message belongs to. References marketing_campaigns.campaign_id; 175 of the 200 campaigns
+      have sends.
     data_tests:
     - not_null
     - relationships:
@@ -908,7 +1771,7 @@ models:
           to: ref('stg_marketing_campaigns')
           field: campaign_id
   - name: customer_id
-    description: Identificador del cliente (clave en customers; referencia en el resto de tablas).
+    description: '{{ doc("customer_id_fk") }} Recipient; all 150,000 customers received at least one message.'
     data_tests:
     - not_null
     - relationships:
@@ -916,7 +1779,8 @@ models:
           to: ref('stg_customers')
           field: customer_id
   - name: send_channel
-    description: Canal del envío.
+    description: 'Channel used: `Email` 620,195, `SMS` 432,283, `WhatsApp` 349,144, `Push` 290,650, `Voice`
+      54,529.'
     data_tests:
     - accepted_values:
         arguments:
@@ -927,11 +1791,15 @@ models:
           - Voice
           - WhatsApp
   - name: template_used
-    description: Plantilla de mensaje utilizada.
+    description: Message template identifier, 'template_{campaign_id}_{n}' (875 distinct values). NULL
+      in 10.0%.
   - name: subject
-    description: Asunto del mensaje enviado.
+    description: >-
+      Message subject, in Spanish, '¡Oferta especial en {product}!' (8 distinct values). Contains the
+      literal 'nan' as the product in 38,142 rows ('¡Oferta especial en nan!'), a missing value rendered
+      as text. NULL in 68.0%.
   - name: send_status
-    description: Estado del envío.
+    description: 'Delivery outcome: `Sent` 1,642,044, `Failed` 52,306, `Bounced` 34,900, `Blocked` 17,551.'
     data_tests:
     - accepted_values:
         arguments:
@@ -941,54 +1809,117 @@ models:
           - Failed
           - Sent
   - name: was_delivered
-    description: El mensaje se entregó.
+    description: >-
+      Whether the message was delivered: `true` 1,642,044, `false` 104,757. It is exactly `send_status
+      = 'Sent'`.
   - name: was_opened
-    description: El mensaje se abrió.
+    description: >-
+      Whether the recipient opened the message: `true` 487,309, `false` 775,263. NULL in 27.7%: for every
+      undelivered send and for 379,472 delivered ones, so NULL means unknown or not applicable, not 'not
+      opened'.
   - name: open_date
-    description: Fecha de apertura del mensaje.
+    description: Date and time of the first open. NULL in 72.1%. {{ doc("ts_no_tz") }}
   - name: was_clicked
-    description: El cliente hizo clic.
+    description: 'Whether the recipient clicked a link: `true` 97,793, `false` 1,649,008. Never NULL.'
   - name: click_date
-    description: Fecha del clic.
+    description: Date and time of the click. NULL in 94.4% (no click). {{ doc("ts_no_tz") }}
   - name: click_count
-    description: Cantidad de clics.
+    description: Number of clicks, integer from 1 to 5 (evenly spread). NULL in 94.4% (no click).
   - name: had_conversion
-    description: El envío generó una conversión.
+    description: 'Whether the send led to a conversion: `true` 9,799, `false` 1,737,002.'
   - name: conversion_date
-    description: Fecha de la conversión.
+    description: Date and time of the conversion. NULL in 99.4% (no conversion). {{ doc("ts_no_tz") }}
   - name: conversion_value
-    description: Valor de la conversión.
+    description: >-
+      Value of the conversion, from 100.88 to 4,999.75; the currency is not stated. NULL in 99.4% (no
+      conversion).
   - name: open_device
-    description: Dispositivo desde el que se abrió el reclamo.
+    description: >-
+      Device on which the message was opened: `Desktop` 146,494, `Tablet` 146,450, `Mobile` 145,433. NULL
+      in 74.9%.
   - name: open_country
-    description: País desde el que se abrió el reclamo.
+    description: >-
+      {{ doc("country_name") }} Country of the opening: México 219,090, Colombia 132,441, Argentina 86,992.
+      NULL in 74.9%.
   - name: failure_reason
-    description: Motivo del fallo del envío.
+    description: >-
+      Why an undelivered send failed: `SMTP error` 49,706 (Failed), `Invalid email address` 33,209 (Bounced),
+      `User blocked sender` 16,682 (Blocked). NULL for delivered sends and for 5,160 undelivered ones.
   - name: send_cost
-    description: Costo del envío.
+    description: Cost of the send, from 0.0001 to 0.30; the currency is not stated. NULL in 15.0%.
 - name: stg_digital_events
-  description: Eventos digitales. customer_id nulo en ~24% (sesiones anónimas, no es un error). ip_country se conforma a 'México'.
+  description: >-
+    Clickstream events of the bank's mobile apps and web (page views, clicks, logins, form submissions,
+    errors and purchases) grouped by session.
+
+
+    **Grain:** One row per digital event.
+
+
+    **Primary key:** `event_id`.
+
+
+    **Source:** Organizer-provided synthetic LATAM Bank dataset (v1.0.0, CSV files on S3), loaded as `bronze.digital_events`.
+    This silver model is a typed view over bronze: real data types, empty strings turned into NULL, and
+    'Mexico' conformed to 'México'.
+
+
+    **Coverage:** 15,620,994 events from 2023-06-17 06:02:03 to 2026-06-18 06:04:05 in 1,837,415 sessions,
+    one source file per day. Event types: PageView 5,972,564, Click 3,585,034, Login 2,434,770, Logout
+    2,433,612, FormSubmit 596,908, Error 358,723, Purchase 239,383. The organizer summary announces about
+    10 million events; 56% more were loaded.
+
+
+    **How we use it:** Context only (did the customer try to solve the issue in the app before calling).
+    The rate of an error event followed by a call-center contact is 0% to 2.2% (spec/DATA_FINDINGS.md),
+    so there is no causal chain to exploit.
+  meta:
+    layer: silver
+    grain: one row per digital event
+    primary_key: event_id
+    source_dataset: LATAM Bank synthetic dataset v1.0.0 (organizer-provided)
+    contains_pii: true
+    data_quality:
+    - >-
+      customer_id is NULL in 24.0% of events (3,745,446 events, 865,829 anonymous sessions); a session
+      never maps to more than one customer.
+    - ip_country has both 'Mexico' and 'México' in the source; silver conforms it to 'México'.
+    - >-
+      Null patterns follow the event type: event_value only for FormSubmit and Purchase, product_id only
+      for Click and PageView (9.2% of rows), duration_seconds only for PageView; referrer and utm_* are
+      NULL in about 94%.
+    - >-
+      browser is NULL on every app channel and app_version on every web channel; platform and ip_address
+      are NULL in 5.0% of rows.
+    - event_value carries no currency indicator.
   columns:
   - name: event_id
-    description: Identificador único del evento digital.
+    description: Primary key of the event. Format `EVT-` followed by 20 uppercase alphanumeric characters.
     data_tests:
     - not_null
     - unique
   - name: event_date
-    description: Fecha y hora del evento digital.
+    description: Date and time of the event, from 2023-06-17 06:02:03 to 2026-06-18 06:04:05. {{ doc("ts_no_tz")
+      }}
   - name: process_date
-    description: Fecha en que el banco procesó la transacción (nunca posterior a un día de la transacción).
+    description: '{{ doc("process_date_partition") }}'
   - name: customer_id
-    description: Identificador del cliente (clave en customers; referencia en el resto de tablas).
+    description: >-
+      Customer who generated the event, when the session was authenticated. References customers.customer_id.
+      NULL in 24.0% of events (anonymous sessions, 865,829 of 1,837,415).
     data_tests:
     - relationships:
         arguments:
           to: ref('stg_customers')
           field: customer_id
   - name: session_id
-    description: Identificador de la sesión digital en la que ocurrió el evento.
+    description: >-
+      Session the event belongs to. Format `SES-` followed by 32 characters. 1,837,415 distinct sessions;
+      a session has one customer, one IP address and one channel.
   - name: event_type
-    description: Tipo de evento digital.
+    description: >-
+      Kind of event: `PageView` 5,972,564, `Click` 3,585,034, `Login` 2,434,770, `Logout` 2,433,612, `FormSubmit`
+      596,908, `Error` 358,723, `Purchase` 239,383.
     data_tests:
     - accepted_values:
         arguments:
@@ -1001,7 +1932,9 @@ models:
           - PageView
           - Purchase
   - name: event_category
-    description: Categoría del evento digital.
+    description: >-
+      Functional area of the event: `Authentication` 4,868,382, `Navigation` 3,961,324, `Product` 3,786,314,
+      `Transaction` 3,004,974.
     data_tests:
     - accepted_values:
         arguments:
@@ -1011,7 +1944,9 @@ models:
           - Product
           - Transaction
   - name: channel
-    description: Canal digital del evento.
+    description: >-
+      Digital channel: `Android App` 5,476,164, `iOS App` 3,899,497, `Desktop Web` 3,128,851, `Mobile
+      Web` 3,116,482.
     data_tests:
     - accepted_values:
         arguments:
@@ -1021,34 +1956,61 @@ models:
           - iOS App
           - Mobile Web
   - name: platform
-    description: Plataforma (web, iOS, Android).
+    description: >-
+      Operating system of the device: `Android` 6,685,963, `iOS` 5,182,421, `Windows` 991,807, `Linux`
+      991,774, `MacOS` 988,502. NULL in 5.0%.
   - name: browser
-    description: Navegador utilizado.
+    description: >-
+      Web browser: `Safari` 1,728,968, `Chrome` 1,725,978, `Samsung Internet` 990,164, `Firefox` 744,247,
+      `Edge` 743,901. NULL on all app channels (62.0% of events).
   - name: app_version
-    description: Versión de la aplicación.
+    description: >-
+      Version of the mobile app, for example '3.8.1' (500 distinct values). NULL on web channels (43.0%
+      of events).
   - name: page_url
-    description: URL de la página visitada.
+    description: >-
+      Path of the page or screen, 12 distinct values such as /login, /logout, /home, /accounts, /transactions,
+      /payments, /transfer, /products/loans. NULL in 5.0%.
   - name: page_title
-    description: Título de la página visitada.
+    description: >-
+      Title of the page, in Spanish, for the same 12 pages as `page_url` (for example 'Iniciar Sesión'
+      for /login, 'Mis Movimientos' for /transactions). NULL in 5.0%.
   - name: action
-    description: Acción realizada en el evento digital.
+    description: >-
+      Action performed, 10 distinct values: `view_product` 3,407,643, `logout` 2,191,640, `login` 2,189,929,
+      `initiate_payment` 902,225, `initiate_transfer` 901,824, `view_transactions` 901,039, `view_accounts`
+      892,802, `view_products` 891,777, `view_help` 890,625, `view_home` 890,058. NULL in 10.0%.
   - name: element_id
-    description: Identificador del elemento de interfaz con el que se interactuó.
+    description: >-
+      Interface element involved, 12 distinct values such as login_form, logout_btn, payment_form, transfer_form.
+      NULL in 15.0%.
   - name: product_id
-    description: Identificador del producto bancario (clave en products).
+    description: >-
+      {{ doc("product_id_fk") }} Product involved in the event. Populated only for Click and PageView
+      events (9.2% of rows); NULL otherwise.
     data_tests:
     - relationships:
         arguments:
           to: ref('stg_products')
           field: product_id
   - name: event_value
-    description: Valor asociado al evento.
+    description: >-
+      Monetary value of the event, from 10.01 to 4,999.98; the currency is not stated. Populated only
+      for FormSubmit and Purchase events; NULL in 94.9%.
   - name: duration_seconds
-    description: Duración en segundos.
+    description: >-
+      Seconds the user stayed on the page, integer from 5 to 300. Populated only for PageView events;
+      NULL in 63.7%.
   - name: ip_address
-    description: Dirección IP del evento.
+    description: >-
+      IPv4 address of the client. One address per session (1,836,678 distinct values). NULL in 5.0%. {{
+      doc("pii_synthetic") }}
+    meta:
+      contains_pii: true
   - name: ip_country
-    description: País estimado por IP.
+    description: >-
+      {{ doc("country_name") }} Country resolved from the IP address: México 7,281,067, Colombia 4,806,882,
+      Argentina 3,533,045. Conformed from 'Mexico' and 'México'.
     data_tests:
     - accepted_values:
         arguments:
@@ -1057,14 +2019,25 @@ models:
           - Colombia
           - Argentina
   - name: ip_city
-    description: Ciudad estimada por IP.
+    description: >-
+      City resolved from the IP address, 16 distinct values (the same cities as customers.city). NULL
+      in 28.0%.
   - name: is_mobile
-    description: El evento ocurrió desde un dispositivo móvil.
+    description: >-
+      Whether the device is mobile (app channels plus Mobile Web): `true` 12,492,143, `false` 3,128,851
+      (Desktop Web).
   - name: referrer
-    description: Origen de la visita.
+    description: >-
+      Referring site: `https://www.instagram.com` 262,214, `https://email.marketing.com` 262,107, `https://www.google.com`
+      261,610, `https://www.facebook.com` 261,594. NULL in 93.3%.
   - name: utm_source
-    description: Parámetro UTM de origen.
+    description: >-
+      UTM traffic source: `email` 210,149, `direct` 209,721, `google` 209,669, `facebook` 209,506. NULL
+      in 94.6%.
   - name: utm_medium
-    description: Parámetro UTM de medio.
+    description: 'UTM medium: `organic` 210,210, `email` 209,778, `social` 209,627, `cpc` 209,519. NULL
+      in 94.6%.'
   - name: utm_campaign
-    description: Parámetro UTM de campaña.
+    description: >-
+      UTM campaign tag: `retention` 280,033, `spring_promo` 279,962, `new_users` 278,922. It does not
+      reference marketing_campaigns.campaign_id. NULL in 94.6%.
