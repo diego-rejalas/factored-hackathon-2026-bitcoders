@@ -102,6 +102,21 @@ Según `spec/DATA_FINDINGS.md`: las descripciones y resoluciones de reclamos son
 - **Tiempo de espera** (`wait_time_seconds`, promedio 120 s, desviación 59 s) desde tipo, canal, motivo, hora y día: **R² = 0,00**. Ninguna variable lo explica.
 - **Abandono** (`Closed` o `Inactive` contra `Active`, tasa 0,119) desde segmento, país, score crediticio, ingreso, número de productos, de reclamos y de llamadas: **AUC 0,503**. Sin señal.
 
+### 4.8 Modelo de mora de CreditGuard (propuesta de crédito, opción D)
+
+`spec/CREDIT_WORKFLOW_PROPOSAL.md` proponía un LightGBM de probabilidad de mora por cliente contra una línea base de score. Se repitió con partición por cliente:
+
+| Prueba | Resultado |
+|---|---|
+| Por producto (125.317 productos con límite de crédito, mora 14,3%) con todas las variables | AUC 0,504 |
+| Por producto, una sola variable (score, utilización, segmento, tasa, estado, tipo) | AUC 0,497 a 0,503 |
+| Por cliente (84.970 clientes, mora 19,8%), todas las variables | AUC 0,635 |
+| Por cliente, sin el número de productos | AUC 0,519 |
+| Por cliente, solo el número de productos | AUC 0,631 |
+| Línea base de la propuesta (score menor a 620 o utilización mayor a 80%) | AUC 0,504 |
+
+Mora por cliente según su número de productos: 14,0% (1), 27,1% (2), 37,3% (3), 45,3% (4), 53,6% (5). Coincide con una probabilidad independiente de 14,3% por producto: 1 menos 0,857 elevado a k da 14%, 27%, 37%, 46%, 54%. Es decir, **la señal es un artefacto de agregación**: el modelo cuenta productos. Una tabla de tasas por número de productos lo iguala, así que no es un componente que supere una línea base apropiada. Además queda fuera del workflow A y el reto no autoriza decisiones de crédito en vivo. Se documenta como resultado negativo.
+
 ## 5. Fuga y trampas (checklist para cualquier modelo)
 
 1. `is_fraud` y `fraud_score`: nunca como característica ni como componente que "detecte" fraude.
@@ -146,6 +161,8 @@ Principio: elegir componentes que tengan **etiquetas válidas por construcción*
 
 ### Descartado con evidencia (para las diapositivas)
 
+Modelo de mora de CreditGuard (sección 4.8): AUC 0,504 por producto; el 0,635 por cliente es solo el conteo de productos.
+
 Fraude, incumplimiento de SLA, reclamos reincidentes, demora de resolución, escalamiento de llamadas, tiempo de espera, abandono: AUC 0,49 a 0,50 (R² 0,00 en espera). `fraud_score`: fuga por construcción. Duplicados: no existen de forma natural. Decirlo con los números es parte del puntaje de rigor.
 
 ## 8. Jev (TypeSafe)
@@ -186,6 +203,7 @@ Los scripts esperan un archivo con líneas `export CLAVE=valor` indicado en la v
 | `target_scan.py` | secciones 4.3, 4.4 y 4.5: objetivos de reclamos, llamadas y encuestas |
 | `cc_drivers.py` | sección 4.4: variables que explican `was_resolved` y `requires_followup` |
 | `more_probes.py` | sección 4.7: CSAT (umbral 2), espera y abandono |
+| `credit_probe.py` | sección 4.8: modelo de mora de CreditGuard por producto y por cliente |
 
 Las cifras de `fraud_score` (sección 4.2) salen de consultas SQL directas sobre `silver.stg_transactions` (umbral 30, conteos por etiqueta).
 
