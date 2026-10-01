@@ -64,3 +64,9 @@ variable "guardrail_max_usd" {
   type        = string
   default     = "500"
 }
+
+variable "lakehouse_bucket_name" {
+  description = "Optional custom name for the GCS Lakehouse bucket. If empty, defaults to factored-lakehouse-<project_id>."
+  type        = string
+  default     = ""
+}

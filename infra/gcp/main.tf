@@ -33,6 +33,7 @@ resource "google_project_service" "services" {
     "artifactregistry.googleapis.com",
     "iam.googleapis.com",
     "serviceusage.googleapis.com",
+    "storage.googleapis.com",
   ])
   service            = each.key
   disable_on_destroy = false
@@ -345,12 +346,17 @@ resource "google_cloud_run_v2_job" "etl" {
           name  = "DUCKDB_THREADS"
           value = "4"
         }
+        env {
+          name  = "LAKE_STORAGE_URI"
+          value = "gs://${google_storage_bucket.lakehouse.name}"
+        }
       }
     }
   }
   depends_on = [
     google_project_service.services,
     google_secret_manager_secret_version.aws,
+    google_storage_bucket.lakehouse,
   ]
 }
 
@@ -379,6 +385,34 @@ resource "google_secret_manager_secret_version" "aws" {
 resource "google_service_account" "etl" {
   account_id   = "etl-job"
   display_name = "Cloud Run Job: fallback ETL"
+}
+
+# --- Cloud Storage (Data Lakehouse for Bronze & Silver Parquet) --------------
+
+resource "google_storage_bucket" "lakehouse" {
+  name                        = var.lakehouse_bucket_name != "" ? var.lakehouse_bucket_name : "factored-lakehouse-${var.project_id}"
+  location                    = var.region
+  storage_class               = "STANDARD"
+  uniform_bucket_level_access = true
+  force_destroy               = true
+
+  lifecycle_rule {
+    condition {
+      age = 30
+    }
+    action {
+      type          = "SetStorageClass"
+      storage_class = "NEARLINE"
+    }
+  }
+
+  depends_on = [google_project_service.services]
+}
+
+resource "google_storage_bucket_iam_member" "etl_lakehouse_admin" {
+  bucket = google_storage_bucket.lakehouse.name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.etl.email}"
 }
 
 # The Run services use the project's default compute service account, which
@@ -421,4 +455,9 @@ output "frontend_uri" {
 output "cloudsql_public_ip" {
   value     = google_sql_database_instance.postgres.public_ip_address
   sensitive = false
+}
+
+output "lakehouse_bucket" {
+  value       = google_storage_bucket.lakehouse.name
+  description = "GCS bucket storing Bronze and Silver Parquet datasets."
 }

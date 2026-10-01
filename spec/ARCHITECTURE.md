@@ -180,12 +180,14 @@ flowchart TB
         CRA[Cloud Run: agent<br/>LangGraph + Guardrail]
         JOB[Cloud Run Job: etl<br/>DuckDB + dbt-duckdb en RAM]
         SQL[(Cloud SQL Postgres<br/>data: gold.*, app.*, ops.etl_runs<br/>Hibernación Just-in-Time)]
+        GCS[(Cloud Storage: lakehouse<br/>gs://factored-lakehouse-*<br/>Bronze & Silver Parquet ZSTD)]
         SM[Secret Manager<br/>JWT, OpenRouter, S3]
         FE -->|AGENT_URL runtime| CRA
         CRA -->|HTTP tools| CR
         CR -->|SQL| SQL
         CRA -->|trace_log| SQL
         JOB -->|S3 a RAM bronze/silver| JOB
+        JOB -->|Preserva Parquet ZSTD| GCS
         JOB -->|Publica solo gold.*| SQL
         SM -.-> CR
         SM -.-> CRA
@@ -199,15 +201,18 @@ Mapa y decisiones:
 | Pieza Railway/Vercel (legacy) | En GCP (primario) | Código |
 |---|---|---|
 | Postgres `data` | Cloud SQL PostgreSQL 16 (solo `gold.*`, `app.*`, `ops.*`) | Modo Just-in-Time (`./manage_db.sh pause/resume`) |
+| Data Lakehouse | Cloud Storage `gs://factored-lakehouse-*` (Bronze & Silver Parquet) | Preservación analítica particionada a ~$0.03 USD/mes |
 | backend / agent | Cloud Run (mismos Dockerfiles) | sin cambios |
 | frontend (Vercel) | Cloud Run `frontend` (Next.js standalone); `AGENT_URL` en runtime | `output: standalone` + URL por prop |
-| pipeline (`etl/` job) | Cloud Run Job `etl`: DuckDB + `dbt-duckdb` en RAM | Procesamiento en RAM en 2.5 min; sin microservicio web `dbt`; esquemas crudos purgados |
-| `railway.ts` | Terraform (`infra/gcp/`) + `gcp-deploy.yml` | Equivalente declarativo con variable `db_activation_policy` |
+| pipeline (`etl/` job) | Cloud Run Job `etl`: DuckDB + `dbt-duckdb` en RAM | Procesa 23.5M filas en ~2.5 min; exporta Parquet al Lakehouse y publica solo `gold.*` |
+| `railway.ts` | Terraform (`infra/gcp/`) + `gcp-deploy.yml` | Equivalente declarativo con variable `db_activation_policy` y bucket `lakehouse` |
 | secretos (`preserve()`) | Secret Manager (JWT autogenerado; S3/LLM se copian) | Gestionado con Google Secret Manager |
 
 Decisiones clave de optimización:
 1. **DuckDB y dbt en RAM efímera:** Se eliminó el microservicio independiente `dbt` de Cloud Run. El Job `etl` procesa los 23.5M de filas crudas y ejecuta los 121 tests en la RAM del contenedor (`/tmp/latam.duckdb`) en ~2.5 minutos, publicando únicamente las tablas `gold.*` finales a Cloud SQL.
-2. **Hibernación Just-in-Time:** Cloud SQL soporta apagado de cómputo e IP mediante política `NEVER` cuando no está en uso, reduciendo el costo de operación en reposo a ~$0.05 USD/día y reactivándose en 60 segundos para demostraciones.
+2. **Preservación de Bronze y Silver en Data Lakehouse (GCS + Parquet):** Se preservan las capas Bronze y Silver en formato columnar Parquet comprimido (ZSTD) en Cloud Storage (`gs://${google_storage_bucket.lakehouse.name}/bronze/` y `/silver/`), con particionado tipo Hive por fecha para tablas de transacciones y eventos. Esto garantiza 100% de trazabilidad analítica sin sobrecargar el almacenamiento de Cloud SQL.
+3. **Hibernación Just-in-Time:** Cloud SQL soporta apagado de cómputo e IP mediante política `NEVER` cuando no está en uso, reduciendo el costo de operación en reposo a ~$0.05 USD/día y reactivándose en 60 segundos para demostraciones.
+4. **Evaluación de Viabilidad Empresarial y Modelado de Costos TCO:** Para un análisis exhaustivo sobre cómo esta arquitectura se comporta en una FinTech vs. un Banco Corporativo Tier-1, cuellos de botella de cómputo, límites de DuckDB y proyección granular de costos por fases, consultar [`spec/ENTERPRISE_ARCHITECTURE_EVALUATION.md`](ENTERPRISE_ARCHITECTURE_EVALUATION.md).
 
 
 ## Próximo paso
