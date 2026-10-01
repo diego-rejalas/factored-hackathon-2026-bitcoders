@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install --no-cache-dir \
     "duckdb>=1.1.0" \
     "dbt-duckdb>=1.8.0" \
+    "google-cloud-storage>=2.14.0" \
     psycopg2-binary
 
 COPY data/dbt/ /app/dbt/
