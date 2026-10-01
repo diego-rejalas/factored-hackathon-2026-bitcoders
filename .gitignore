@@ -16,4 +16,7 @@ data/dbt/.user.yml
 # Local tooling & testing artifacts
 .kilo/
 .pytest_cache/
+team_credentials.txt
+team_credentials.md
+*credentials*
 
