@@ -1,10 +1,14 @@
-# Decisión de workflow — pendiente de voto del equipo
+# Decisión de workflow — Opción A confirmada
 
 Consolida el estado de la elección de workflow después de perfilar las 13 tablas
 completas (no solo la muestra inicial). Ver `DATA_FINDINGS.md` para el detalle
 de calidad de datos y `spec/evidence/` para la auditoría estática de Codex.
-Este documento es la base para que el equipo vote y quede registrada la
-justificación.
+
+**Estado: confirmada por el equipo (2026-09-30).** Se implementó el slice
+vertical completo en `feat/app-layer` (`backend/` + `agent/` + `frontend/`).
+La decisión de producto sobre el umbral de escalamiento quedó en **$500 USD
+efectivo** (`GUARDRAIL_MAX_USD`), y el alcance del guardrail es el que se
+detalla abajo. La evaluación con casos held-out queda para un branch posterior.
 
 ## Las 4 opciones originales (para votar)
 
@@ -93,15 +97,20 @@ sin joins) — se vuelven el modelo real de negocio (join disputas +
 transacciones + verificación de titularidad) recién cuando se confirme
 Opción A.
 
-## Pendiente de decidir por el equipo
+## Decisiones registradas (2026-09-30)
 
-1. **Confirmar Opción A** (o votar en contra con justificación — la evidencia
-   de arriba respalda A, pero la decisión final es del equipo).
-2. **Monto umbral** para forzar escalamiento por disputa (no hay dato que lo
-   sugiera solo, es una decisión de producto).
-3. **Alcance del guardrail determinista**: qué intents puede resolver el
-   agente sin humano (Declined/Reversed simple) vs cuáles siempre escalan
-   (fraude, montos altos, ambigüedad no resuelta).
-4. Una vez confirmado: escribir los modelos gold reales para disputas,
-   arrancar `backend/` (tool layer) y `agent/` (PydanticAI + guardrail +
-   TypeSafe, ver `ARCHITECTURE.md`).
+1. **Opción A confirmada** — disputas de transacciones.
+2. **Umbral de escalamiento: $500 USD efectivo** — decisión de producto (no hay
+   dato que lo sugiera solo). Vive en `GUARDRAIL_MAX_USD` (env del servicio
+   `agent`), nunca hardcodeada en el prompt.
+3. **Alcance del guardrail (implementado en `agent/app/guardrail.py`):**
+   auto-resuelve SOLO una transacción `Declined`/`Reversed` del propio cliente,
+   única candidata sin ambigüedad y con monto efectivo < $500; aclara (máx 2
+   rondas) con 0 o >1 candidatas; escala SIEMPRE fraude/robo/"no fui yo"
+   (es/pt), montos ≥ umbral, ambigüedad no resuelta e intents fuera de
+   alcance. Sin mover dinero.
+4. **Implementado:** `backend/` (tool layer con enforcement de titularidad),
+   `agent/` (LangGraph + guardrail + TypeSafe opcional, ver los README de cada
+   carpeta). Los joins de negocio (disputas + transacciones) viven en las
+   queries del backend sobre las 5 gold actuales; los modelos gold siguen
+   pass-through — modelarlos queda para el branch de evaluación.

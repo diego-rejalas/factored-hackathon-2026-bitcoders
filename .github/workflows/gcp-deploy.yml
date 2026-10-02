@@ -1,0 +1,107 @@
+name: GCP deploy (primario desde la migración)
+
+# Railway queda como legacy (no aplicar .railway/railway.ts). Este workflow
+# construye y despliega el stack completo en GCP. Requiere en el repo:
+#   secrets: GCP_SA_KEY  — JSON key de una service account con Editor del proyecto
+#   vars:    GCP_PROJECT_ID, GCP_REGION (default us-central1), GCP_STATE_BUCKET
+#
+# - push (main / feat/app-layer): build + push de imágenes + terraform plan
+# - workflow_dispatch: plan o apply (+ ejecutar el job ETL opcional)
+
+on:
+  push:
+    branches: [main, feat/app-layer]
+    paths: ["backend/**", "agent/**", "frontend/**", "data/dbt/**", "infra/gcp/**", "data/dags/**", ".github/workflows/gcp-deploy.yml"]
+  workflow_dispatch:
+    inputs:
+      terraform_action:
+        description: "Terraform action"
+        type: choice
+        default: plan
+        options: [plan, apply]
+      run_etl:
+        description: "Run the ETL job after applying (loads S3 -> bronze -> gold)"
+        type: boolean
+        default: false
+
+env:
+  HAS_GCP: ${{ secrets.GCP_SA_KEY != '' }}
+  REGION: ${{ vars.GCP_REGION || 'us-central1' }}
+  REPO: ${{ vars.GCP_REGION || 'us-central1' }}-docker.pkg.dev
+  TAG: ${{ github.sha }}
+
+jobs:
+  deploy:
+    name: Build images + Terraform
+    runs-on: ubuntu-latest
+    if: env.HAS_GCP == 'true'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
+
+      - name: Build and push images (same Dockerfiles as the services use locally)
+        run: |
+          BASE="${REPO}/${{ vars.GCP_PROJECT_ID }}/factored-hackathon"
+          docker build . -f backend/Dockerfile         -t "$BASE/backend:$TAG"
+          docker build . -f agent/Dockerfile           -t "$BASE/agent:$TAG"
+          docker build . -f infra/gcp/etl/Dockerfile   -t "$BASE/etl:$TAG"
+          docker build . -f frontend/Dockerfile        -t "$BASE/frontend:$TAG"
+          for img in backend agent etl frontend; do docker push "$BASE/$img:$TAG"; done
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+
+      - name: Terraform fmt
+        working-directory: infra/gcp
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init
+        working-directory: infra/gcp
+        run: terraform init -backend-config="bucket=${{ vars.GCP_STATE_BUCKET }}" -input=false
+
+      - name: Terraform plan
+        working-directory: infra/gcp
+        run: terraform plan -input=false -var "image_tag=$TAG" -var "project_id=${{ vars.GCP_PROJECT_ID }}"
+
+      - name: Terraform apply
+        if: github.event_name == 'workflow_dispatch' && inputs.terraform_action == 'apply'
+        working-directory: infra/gcp
+        run: terraform apply -auto-approve -input=false -var "image_tag=$TAG" -var "project_id=${{ vars.GCP_PROJECT_ID }}"
+
+      - name: URLs of the stack
+        if: github.event_name == 'workflow_dispatch' && inputs.terraform_action == 'apply'
+        working-directory: infra/gcp
+        run: |
+          echo "frontend: $(terraform output -raw frontend_uri)"
+          echo "agent:    $(terraform output -raw agent_uri)"
+          echo "backend:  $(terraform output -raw backend_uri)"
+          echo "sql ip:   $(terraform output -raw cloudsql_public_ip)"
+
+      - name: Run the ETL job (S3 -> bronze -> gold in Cloud SQL)
+        if: github.event_name == 'workflow_dispatch' && inputs.run_etl && inputs.terraform_action == 'apply'
+        run: |
+          gcloud run jobs execute etl --region "$REGION" --wait
+          gcloud run jobs executions list --job etl --region "$REGION" --limit 1
+
+      - name: Health checks
+        if: github.event_name == 'workflow_dispatch' && inputs.terraform_action == 'apply'
+        run: |
+          AGENT=$(cd infra/gcp && terraform output -raw agent_uri)
+          BACKEND=$(cd infra/gcp && terraform output -raw backend_uri)
+          FRONTEND=$(cd infra/gcp && terraform output -raw frontend_uri)
+          curl -fsS "$AGENT/health"    | grep -q '"ok"'
+          curl -fsS "$BACKEND/health"  | grep -q '"ok"'
+          curl -fsS -o /dev/null "$FRONTEND"
+          echo "stack healthy"

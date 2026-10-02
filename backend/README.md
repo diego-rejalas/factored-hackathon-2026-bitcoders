@@ -1,30 +1,48 @@
 # backend/ — mock banking service (tool layer)
 
-Vertical 3 de `../spec/ARCHITECTURE.md`. Servicio FastAPI separado en Railway. Es el "service/tool layer" que el reto exige para enforced de permisos: la política vive acá, no en el prompt del LLM. El agente (PydanticAI) lo consume como herramientas tipadas contra los modelos de `app/schemas.py`.
+Vertical 3 de `../spec/ARCHITECTURE.md`. Servicio FastAPI separado en Railway. Es el "service/tool layer" que el reto exige para enforced de permisos — la política vive acá, no en el prompt del LLM. **Implementado** (workflow Opción A: disputas de transacciones, ver `../spec/WORKFLOW_DECISION.md`).
 
-## Estado: cascarón
+## Contrato (OpenAPI en `/docs`)
 
-Solo prueba el cableado: servicio arriba, base de datos alcanzable, salida del pipeline visible.
+FastAPI expone el esquema completo en `/openapi.json` y la UI interactiva en `/docs`. Resumen:
 
-| Endpoint | Qué hace |
-|---|---|
-| `GET /health` | el servicio está vivo |
-| `GET /health/db` | puede conectarse a Postgres (503 si no) |
-| `GET /meta/data` | conteos de las tablas `gold.*` y última corrida exitosa del pipeline (`ops.etl_runs`); solo agregados |
-| `GET /docs` | OpenAPI generado por FastAPI (el contrato) |
+| Endpoint | Auth | Qué hace |
+|---|---|---|
+| `POST /session` | — | Login de prueba: valida `customer_id` + `document_number` contra `gold.customers` y emite JWT HS256 (exp ~2h, `SESSION_TTL_MINUTES`). Sesión sandbox, no hay IdP real detrás. |
+| `GET /health` | — | Liveness para el healthcheck de Railway. |
+| `GET /me` | Bearer | Perfil mínimo (nombre, país). Jamás expone income/credit_score/document_number. |
+| `GET /me/transactions?status=&merchant=&days=&limit=` | Bearer | Movimientos propios; siempre filtra por el `customer_id` del token (el query no acepta customer_id). `amount_usd_effective` = `coalesce(amount_usd, amount si currency='USD')` — 57% de `amount_usd` es nulo en filas USD (ver `../spec/DATA_FINDINGS.md`). `days` ancla al borde del snapshot (última transacción del dataset), no a `now()`. |
+| `GET /me/transactions/{id}` | Bearer | Detalle con verificación de titularidad → 404 si es ajena. |
+| `POST /disputes` | Bearer | Crea caso `open` en `app.disputes`; valida titularidad de la transacción primero → 404 si es ajena. Evidencia: snapshot de la transacción. |
+| `GET /disputes/{case_id}` | Bearer | Estado + evidencia + eventos (lo usa el nodo `verify` del agent). 404 si el caso no es del token. |
+| `POST /disputes/{case_id}/escalate` | Bearer | Marca `escalated` y guarda el handoff estructurado en la evidencia + evento append-only. |
 
-**No hay ningún endpoint que devuelva datos de clientes.** Eso llega junto con la autenticación por sesión de prueba (un `customer_id` nunca prueba identidad) y la verificación de titularidad transacción-producto.
+Garantías:
+- **Identidad:** siempre deriva del JWT validado (`get_current_customer`); el LLM/chat no puede proponer `customer_id`.
+- **`gold.*` es read-only** para este servicio; las tablas operacionales (`app.disputes`, `app.dispute_events`) se crean en startup con `CREATE TABLE IF NOT EXISTS` (documentado como limitación, no es una migración real).
+- **`is_fraud`/`fraud_score` no existen en `gold.transactions`** y no aparecen en ningún SELECT (invariante del pipeline).
+- Sin mover dinero: las disputas solo explican, documentan y escalan.
 
-## Base de datos
+## Estructura
 
-Se conecta con un rol de **solo lectura** (`backend_ro`: `SELECT` sobre `gold` y `ops`) y cada sesión arranca con `default_transaction_read_only=on` y un `statement_timeout` de 15 s: aunque un endpoint tuviera un bug, no puede escribir ni colgar la base. Variables: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` (ver `.railway/railway.ts`; la contraseña no está en el repo).
+- `app/main.py` — app FastAPI, lifespan (pool + DDL), `/health`.
+- `app/auth.py` — `POST /session`, emisión/validación JWT HS256, dependencia `get_current_customer`.
+- `app/db.py` — `BankStore` (asyncpg, SQL explícito, sin ORM).
+- `app/routes/customers.py`, `app/routes/disputes.py` — endpoints deterministas.
+- `tests/` — suite DB-less (store fake en memoria).
 
-## Desarrollo
+## Ejecutar y probar
 
 ```bash
-pip install -r requirements-dev.txt
-python -m pytest            # desde backend/
-uvicorn app.main:app --reload
+cp .env.example .env            # PG_* apuntando al Postgres de Railway (database `data`) + SESSION_JWT_SECRET
+set -a; . ./.env; set +a
+uvicorn app.main:app --reload   # desde esta carpeta; http://localhost:8000/docs
 ```
 
-Despliegue gestionado en `../.railway/railway.ts` (no `railway.toml`, deprecado).
+Tests (no requieren Postgres):
+
+```bash
+python -m pytest                # desde backend/, con pytest + httpx instalados
+```
+
+Despliegue: `../.railway/railway.ts` (servicio `backend`, Dockerfile propio, watchPatterns `backend/**`, healthcheck `/health`).

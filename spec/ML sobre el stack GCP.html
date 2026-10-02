@@ -1,0 +1,414 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>ML sobre el stack GCP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: columna de lectura; cada diagrama con scroll horizontal propio en móvil */
+:root {
+  --bg: #f4f5f3; --surface: #ffffff; --fg: #1c2320; --muted: #5b6761; --line: #c5cdc8;
+  --lane: #eaedea; --lane-2: #f0f2ef; --accent: #0f7a5c; --accent-soft: #ddefe7;
+  --font-body: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121715; --surface: #1a201d; --fg: #e3e8e5; --muted: #97a49d; --line: #36403b;
+    --lane: #171d1a; --lane-2: #1c2320; --accent: #4cc79c; --accent-soft: #1c372d; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121715; --surface: #1a201d; --fg: #e3e8e5; --muted: #97a49d; --line: #36403b;
+  --lane: #171d1a; --lane-2: #1c2320; --accent: #4cc79c; --accent-soft: #1c372d; color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.55; }
+.wrap { max-width: 1320px; margin: 0 auto; padding-inline: 16px; padding-block: 40px 64px; display: grid; gap: 40px; }
+.prose { max-width: 72ch; display: grid; gap: 8px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: clamp(26px, 4vw, 36px); line-height: 1.15; margin: 0; text-wrap: balance; }
+h2 { font-size: 20px; margin: 0; text-wrap: balance; }
+p { margin: 0; }
+.lead, .cap { color: var(--muted); }
+code { font-family: var(--font-mono); font-size: .86em; background: var(--lane); padding: 1px 5px; border-radius: 4px; }
+section { display: grid; gap: 14px; min-width: 0; }
+.figure { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 12px; min-width: 0; }
+.scroll { overflow-x: auto; }
+.scroll svg { display: block; width: 100%; min-width: 1000px; height: auto; }
+.legend { display: flex; flex-wrap: wrap; gap: 20px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.sw { width: 22px; height: 14px; border-radius: 3px; border: 1.5px solid var(--line); background: var(--surface); }
+.sw.new { border: 1.5px dashed var(--accent); background: var(--accent-soft); }
+
+svg text { font-family: var(--font-body); fill: var(--fg); }
+svg .mono { font-family: var(--font-mono); font-size: 11px; fill: var(--muted); }
+svg .mono.strong { fill: var(--fg); }
+svg .ttl { font-weight: 600; font-size: 14px; }
+svg .ttl.small { font-size: 13px; }
+svg .gttl { font-weight: 700; font-size: 15px; }
+svg .stt { font-family: var(--font-mono); font-size: 12px; font-weight: 500; fill: var(--fg); }
+svg .phase { font-family: var(--font-mono); font-size: 13px; font-weight: 500; fill: var(--fg); }
+svg .edge-label { font-family: var(--font-mono); font-size: 11px; fill: var(--fg); }
+svg .edge-label.acc { fill: var(--accent); }
+svg .group { fill: var(--lane); stroke: var(--line); stroke-width: 1; }
+svg .group.new { fill: var(--accent-soft); stroke: var(--accent); stroke-dasharray: 5 4; }
+svg .step, svg .item, svg .box { fill: var(--surface); stroke: var(--line); stroke-width: 1.3; }
+svg .step.new, svg .item.new, svg .box.new { stroke: var(--accent); stroke-dasharray: 5 4; }
+svg .box.new { fill: var(--accent-soft); }
+svg .band { fill: var(--lane); }
+svg .band.alt { fill: var(--lane-2); }
+svg .life { stroke: var(--line); stroke-width: 1.2; stroke-dasharray: 3 4; }
+svg .lbg { fill: var(--surface); opacity: .92; }
+svg .edge { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+svg .edge.acc { stroke: var(--accent); stroke-width: 1.8; }
+svg .edge.dash { stroke-dasharray: 5 4; }
+svg .star { fill: var(--accent); font-weight: 700; }
+svg .ah { fill: var(--muted); }
+svg .ah.acc { fill: var(--accent); }
+.star-i { color: var(--accent); font-weight: 700; }
+
+.tbl { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; min-width: 860px; font-size: 14px; }
+th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+tr:last-child td { border-bottom: 0; }
+
+.paths { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.path { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.path .q { font-family: var(--font-mono); font-size: 12px; color: var(--accent); letter-spacing: .03em; }
+.path ul, .cols ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 32px; }
+.note { border-top: 1px solid var(--line); padding-top: 16px; color: var(--muted); font-size: 14px; max-width: 85ch; }
+</style>
+<div class="wrap">
+  <header class="prose">
+    <div class="eyebrow">factored-hackathon-2026 · propuesta</div>
+    <h1>Cómo llegan los modelos de ML a la app</h1>
+    <p class="lead">Se reutiliza lo que ya está desplegado en GCP. Se agregan un job de entrenamiento, una tabla de scores y un modelo cargado en memoria dentro del agente. No se suma ningún servicio de serving.</p>
+  </header>
+
+  <section>
+    <div class="prose">
+      <h2>1. Offline: datos, entrenamiento y scoring</h2>
+      <p class="cap">Qué hace cada paso de los dos jobs y qué lee o escribe en GCS y Cloud SQL. El job <code>train</code> corre después de un <code>etl</code> exitoso y guarda en el manifiesto el <code>run_id</code> de esa corrida.</p>
+    </div>
+    <div class="figure"><div class="scroll"><svg viewBox="0 0 1240 596" role="img" aria-label="Pipeline offline: pasos del job etl y del job train y qué escribe o lee cada paso en GCS y Cloud SQL."><defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+<marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah acc" d="M0,0 L10,5 L0,10 z"/></marker>
+</defs><rect class="group" x="240" y="60" width="270" height="446" rx="10"/><text class="gttl" x="256" y="86">Job etl</text><text class="mono" x="494" y="86" text-anchor="end">Cloud Run Job</text>
+<rect class="step" x="256" y="108" width="238" height="50" rx="6"/><text class="stt" x="268" y="129">1 extract_load_bronze</text><text class="mono" x="268" y="147">S3 CSV → DuckDB en RAM</text>
+<rect class="step" x="256" y="174" width="238" height="50" rx="6"/><text class="stt" x="268" y="195">2 persist_bronze_parquet</text><text class="mono" x="268" y="213">bronze → Parquet ZSTD</text>
+<path class="edge" d="M375.0,158 L375.0,172" marker-end="url(#a)"/>
+<rect class="step" x="256" y="240" width="238" height="50" rx="6"/><text class="stt" x="268" y="261">3 dbt build</text><text class="mono" x="268" y="279">silver + gold + 121 tests</text>
+<path class="edge" d="M375.0,224 L375.0,238" marker-end="url(#a)"/>
+<rect class="step" x="256" y="306" width="238" height="50" rx="6"/><text class="stt" x="268" y="327">4 persist_silver_parquet</text><text class="mono" x="268" y="345">silver → Parquet (Hive)</text>
+<path class="edge" d="M375.0,290 L375.0,304" marker-end="url(#a)"/>
+<rect class="step" x="256" y="372" width="238" height="50" rx="6"/><text class="stt" x="268" y="393">5 publish_gold</text><text class="mono" x="268" y="411">swap atómico si no hay errores</text>
+<path class="edge" d="M375.0,356 L375.0,370" marker-end="url(#a)"/>
+<rect class="step" x="256" y="438" width="238" height="50" rx="6"/><text class="stt" x="268" y="459">6 record_run</text><text class="mono" x="268" y="477">fila en ops.etl_runs</text>
+<path class="edge" d="M375.0,422 L375.0,436" marker-end="url(#a)"/>
+<rect class="group new" x="970" y="60" width="260" height="512" rx="10"/><text class="gttl" x="986" y="86">Job train <tspan class="star">★</tspan></text><text class="mono" x="1214" y="86" text-anchor="end">Cloud Run Job</text>
+<rect class="step new" x="986" y="108" width="228" height="50" rx="6"/><text class="stt" x="998" y="129">1 leer silver/</text><text class="mono" x="998" y="147">DuckDB sobre Parquet en GCS</text>
+<rect class="step new" x="986" y="174" width="228" height="50" rx="6"/><text class="stt" x="998" y="195">2 armar features</text><text class="mono" x="998" y="213">corte temporal, sin fraud_score</text>
+<path class="edge acc" d="M1100.0,158 L1100.0,172" marker-end="url(#aa)"/>
+<rect class="step new" x="986" y="240" width="228" height="50" rx="6"/><text class="stt" x="998" y="261">3 entrenar</text><text class="mono" x="998" y="279">sklearn / LightGBM</text>
+<path class="edge acc" d="M1100.0,224 L1100.0,238" marker-end="url(#aa)"/>
+<rect class="step new" x="986" y="306" width="228" height="50" rx="6"/><text class="stt" x="998" y="327">4 evaluar held-out</text><text class="mono" x="998" y="345">contra el baseline</text>
+<path class="edge acc" d="M1100.0,290 L1100.0,304" marker-end="url(#aa)"/>
+<rect class="step new" x="986" y="372" width="228" height="50" rx="6"/><text class="stt" x="998" y="393">5 guardar artefacto</text><text class="mono" x="998" y="411">model + metrics + manifest</text>
+<path class="edge acc" d="M1100.0,356 L1100.0,370" marker-end="url(#aa)"/>
+<rect class="step new" x="986" y="438" width="228" height="50" rx="6"/><text class="stt" x="998" y="459">6 scoring por lote</text><text class="mono" x="998" y="477">todas las transacciones</text>
+<path class="edge acc" d="M1100.0,422 L1100.0,436" marker-end="url(#aa)"/>
+<rect class="step new" x="986" y="504" width="228" height="50" rx="6"/><text class="stt" x="998" y="525">7 registrar versión</text><text class="mono" x="998" y="543">fila en ops.model_registry</text>
+<path class="edge acc" d="M1100.0,488 L1100.0,502" marker-end="url(#aa)"/>
+<rect class="box" x="20" y="108" width="170" height="50" rx="6"/>
+<text class="stt" x="32" y="129">S3 · dataset</text>
+<text class="mono" x="32" y="147">CSV read-only</text>
+<path class="edge" d="M190,133.0 L254,133.0" marker-end="url(#a)"/>
+<rect class="group" x="640" y="60" width="260" height="188" rx="10"/><text class="gttl" x="656" y="86">GCS lakehouse</text><text class="mono" x="884" y="86" text-anchor="end">Parquet</text>
+<rect class="item" x="654" y="104" width="232" height="36" rx="5"/><text class="mono strong" x="666" y="127">bronze/</text>
+<rect class="item" x="654" y="150" width="232" height="36" rx="5"/><text class="mono strong" x="666" y="173">silver/</text>
+<rect class="item new" x="654" y="196" width="232" height="36" rx="5"/><text class="mono strong" x="666" y="219">models/&lt;modelo&gt;/&lt;versión&gt;/ <tspan class="star">★</tspan></text>
+<rect class="group" x="640" y="282" width="260" height="234" rx="10"/><text class="gttl" x="656" y="308">Cloud SQL</text><text class="mono" x="884" y="308" text-anchor="end">Postgres 16</text>
+<rect class="item" x="654" y="326" width="232" height="36" rx="5"/><text class="mono strong" x="666" y="349">gold.* (5 tablas)</text>
+<rect class="item new" x="654" y="372" width="232" height="36" rx="5"/><text class="mono strong" x="666" y="395">gold.transaction_risk_scores <tspan class="star">★</tspan></text>
+<rect class="item" x="654" y="418" width="232" height="36" rx="5"/><text class="mono strong" x="666" y="441">ops.etl_runs</text>
+<rect class="item new" x="654" y="464" width="232" height="36" rx="5"/><text class="mono strong" x="666" y="487">ops.model_registry <tspan class="star">★</tspan></text>
+<path class="edge" d="M494,199.0 L540,199.0 L540,122.0 L652,122.0" marker-end="url(#a)"/>
+<path class="edge" d="M494,331.0 L562,331.0 L562,168.0 L652,168.0" marker-end="url(#a)"/>
+<path class="edge" d="M494,397.0 L584,397.0 L584,344.0 L652,344.0" marker-end="url(#a)"/>
+<path class="edge" d="M494,463.0 L606,463.0 L606,436.0 L652,436.0" marker-end="url(#a)"/>
+<path class="edge acc" d="M886,168.0 L910,168.0 L910,133.0 L984,133.0" marker-end="url(#aa)"/>
+<path class="edge acc" d="M986,397.0 L970,397.0 L970,214.0 L888,214.0" marker-end="url(#aa)"/>
+<path class="edge acc" d="M986,463.0 L930,463.0 L930,390.0 L888,390.0" marker-end="url(#aa)"/>
+<path class="edge acc" d="M986,529.0 L950,529.0 L950,482.0 L888,482.0" marker-end="url(#aa)"/></svg></div><div class="legend">
+<span><i class="sw"></i>Ya desplegado</span>
+<span><i class="sw new"></i>Nuevo (★)</span>
+<span><svg width="30" height="10" aria-hidden="true"><path d="M0,5 H30" stroke="var(--muted)" stroke-width="1.5"/></svg>Llamada o escritura</span>
+<span><svg width="30" height="10" aria-hidden="true"><path d="M0,5 H30" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 4"/></svg>Respuesta</span>
+<span><svg width="30" height="10" aria-hidden="true"><path d="M0,5 H30" stroke="var(--accent)" stroke-width="1.8"/></svg>Camino del ML</span>
+</div></div>
+  </section>
+
+  <section>
+    <div class="prose">
+      <h2>2. Online: un mensaje de chat, de punta a punta</h2>
+      <p class="cap">Cada franja es un nodo del grafo de LangGraph. El navegador llama al agente directo; el servicio <code>frontend</code> solo sirve la página. <code>intents.classify</code> prueba en orden TypeSafe (si hay API key), el modelo local, el LLM y <code>baseline_classify</code>.</p>
+    </div>
+    <div class="figure"><div class="scroll"><svg viewBox="0 0 1376 1470" role="img" aria-label="Secuencia de un mensaje de chat: arranque, sesión y los nodos understand, decide, act, verify, escalate y respond, con las llamadas entre módulos y servicios."><defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+<marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah acc" d="M0,0 L10,5 L0,10 z"/></marker>
+</defs><rect class="band" x="8" y="80" width="1360" height="126" rx="6"/>
+<text class="phase" x="1186" y="102">arranque</text>
+<text class="mono" x="1186" y="119">una vez por contenedor</text>
+<rect class="band alt" x="8" y="210" width="1360" height="186" rx="6"/>
+<text class="phase" x="1186" y="232">sesión</text>
+<text class="mono" x="1186" y="249">POST /session</text>
+<rect class="band" x="8" y="400" width="1360" height="216" rx="6"/>
+<text class="phase" x="1186" y="422">understand</text>
+<text class="mono" x="1186" y="439">clasificar el mensaje</text>
+<rect class="band alt" x="8" y="620" width="1360" height="216" rx="6"/>
+<text class="phase" x="1186" y="642">decide</text>
+<text class="mono" x="1186" y="659">candidatos y reglas</text>
+<rect class="band" x="8" y="840" width="1360" height="126" rx="6"/>
+<text class="phase" x="1186" y="862">act</text>
+<text class="mono" x="1186" y="879">abrir la disputa</text>
+<rect class="band alt" x="8" y="970" width="1360" height="156" rx="6"/>
+<text class="phase" x="1186" y="992">verify</text>
+<text class="mono" x="1186" y="1009">releer el estado</text>
+<rect class="band" x="8" y="1130" width="1360" height="126" rx="6"/>
+<text class="phase" x="1186" y="1152">escalate</text>
+<text class="mono" x="1186" y="1169">solo si la regla lo pide</text>
+<rect class="band alt" x="8" y="1260" width="1360" height="186" rx="6"/>
+<text class="phase" x="1186" y="1282">respond</text>
+<text class="mono" x="1186" y="1299">respuesta y auditoría</text>
+<line class="life" x1="76" y1="64" x2="76" y2="1460"/>
+<rect class="box" x="30.0" y="18" width="92" height="46" rx="6"/>
+<text class="ttl small" x="76" y="38" text-anchor="middle">Navegador</text>
+<text class="mono" x="76" y="54" text-anchor="middle">Chat.tsx</text>
+<line class="life" x1="180" y1="64" x2="180" y2="1460"/>
+<rect class="box" x="134.0" y="18" width="92" height="46" rx="6"/>
+<text class="ttl small" x="180" y="38" text-anchor="middle">agent API</text>
+<text class="mono" x="180" y="54" text-anchor="middle">main.py</text>
+<line class="life" x1="284" y1="64" x2="284" y2="1460"/>
+<rect class="box" x="238.0" y="18" width="92" height="46" rx="6"/>
+<text class="ttl small" x="284" y="38" text-anchor="middle">LangGraph</text>
+<text class="mono" x="284" y="54" text-anchor="middle">graph.py</text>
+<line class="life" x1="388" y1="64" x2="388" y2="1460"/>
+<rect class="box" x="342.0" y="18" width="92" height="46" rx="6"/>
+<text class="ttl small" x="388" y="38" text-anchor="middle">intents</text>
+<text class="mono" x="388" y="54" text-anchor="middle">intents.py</text>
+<line class="life" x1="492" y1="64" x2="492" y2="1460"/>
+<rect class="box new" x="446.0" y="18" width="92" height="46" rx="6"/>
+<text class="ttl small" x="492" y="38" text-anchor="middle">modelo <tspan class="star">★</tspan></text>
+<text class="mono" x="492" y="54" text-anchor="middle">en memoria</text>
+<line class="life" x1="596" y1="64" x2="596" y2="1460"/>
+<rect class="box" x="550.0" y="18" width="92" height="46" rx="6"/>
+<text class="ttl small" x="596" y="38" text-anchor="middle">tools</text>
+<text class="mono" x="596" y="54" text-anchor="middle">tools.py</text>
+<line class="life" x1="700" y1="64" x2="700" y2="1460"/>
+<rect class="box" x="654.0" y="18" width="92" height="46" rx="6"/>
+<text class="ttl small" x="700" y="38" text-anchor="middle">guardrail</text>
+<text class="mono" x="700" y="54" text-anchor="middle">guardrail.py</text>
+<line class="life" x1="804" y1="64" x2="804" y2="1460"/>
+<rect class="box" x="758.0" y="18" width="92" height="46" rx="6"/>
+<text class="ttl small" x="804" y="38" text-anchor="middle">backend</text>
+<text class="mono" x="804" y="54" text-anchor="middle">FastAPI</text>
+<line class="life" x1="908" y1="64" x2="908" y2="1460"/>
+<rect class="box" x="862.0" y="18" width="92" height="46" rx="6"/>
+<text class="ttl small" x="908" y="38" text-anchor="middle">OpenRouter</text>
+<text class="mono" x="908" y="54" text-anchor="middle">LLM</text>
+<line class="life" x1="1012" y1="64" x2="1012" y2="1460"/>
+<rect class="box" x="966.0" y="18" width="92" height="46" rx="6"/>
+<text class="ttl small" x="1012" y="38" text-anchor="middle">Cloud SQL</text>
+<text class="mono" x="1012" y="54" text-anchor="middle">Postgres</text>
+<line class="life" x1="1116" y1="64" x2="1116" y2="1460"/>
+<rect class="box" x="1070.0" y="18" width="92" height="46" rx="6"/>
+<text class="ttl small" x="1116" y="38" text-anchor="middle">GCS</text>
+<text class="mono" x="1116" y="54" text-anchor="middle">models/</text>
+<path class="edge acc" d="M180,132 L1113,132" marker-end="url(#aa)"/>
+<rect class="lbg" x="535.8" y="113" width="224.4" height="15" rx="3"/>
+<text class="edge-label acc" x="648.0" y="124" text-anchor="middle">GET model.joblib v=MODEL_VERSION</text>
+<path class="edge acc dash" d="M1116,162 L183,162" marker-end="url(#aa)"/>
+<rect class="lbg" x="576.0" y="143" width="144.0" height="15" rx="3"/>
+<text class="edge-label acc" x="648.0" y="154" text-anchor="middle">artefacto + manifest</text>
+<path class="edge acc" d="M180,192 L489,192" marker-end="url(#aa)"/>
+<rect class="lbg" x="277.4" y="173" width="117.2" height="15" rx="3"/>
+<text class="edge-label acc" x="336.0" y="184" text-anchor="middle">carga en memoria</text>
+<path class="edge" d="M76,262 L177,262" marker-end="url(#a)"/>
+<rect class="lbg" x="96.2" y="243" width="63.6" height="15" rx="3"/>
+<text class="edge-label" x="128.0" y="254" text-anchor="middle">/session</text>
+<path class="edge" d="M180,292 L593,292" marker-end="url(#a)"/>
+<rect class="lbg" x="346.15" y="273" width="83.7" height="15" rx="3"/>
+<text class="edge-label" x="388.0" y="284" text-anchor="middle">tools.login</text>
+<path class="edge" d="M596,322 L801,322" marker-end="url(#a)"/>
+<rect class="lbg" x="651.45" y="303" width="97.10000000000001" height="15" rx="3"/>
+<text class="edge-label" x="700.0" y="314" text-anchor="middle">POST /session</text>
+<path class="edge" d="M804,352 L1009,352" marker-end="url(#a)"/>
+<rect class="lbg" x="832.65" y="333" width="150.70000000000002" height="15" rx="3"/>
+<text class="edge-label" x="908.0" y="344" text-anchor="middle">SELECT gold.customers</text>
+<path class="edge dash" d="M804,382 L79,382" marker-end="url(#a)"/>
+<rect class="lbg" x="391.45" y="363" width="97.10000000000001" height="15" rx="3"/>
+<text class="edge-label" x="440.0" y="374" text-anchor="middle">JWT de sesión</text>
+<path class="edge" d="M76,452 L177,452" marker-end="url(#a)"/>
+<rect class="lbg" x="89.5" y="433" width="77.0" height="15" rx="3"/>
+<text class="edge-label" x="128.0" y="444" text-anchor="middle">POST /chat</text>
+<path class="edge" d="M180,482 L281,482" marker-end="url(#a)"/>
+<rect class="lbg" x="203.55" y="463" width="56.9" height="15" rx="3"/>
+<text class="edge-label" x="232.0" y="474" text-anchor="middle">ainvoke</text>
+<path class="edge" d="M284,512 L385,512" marker-end="url(#a)"/>
+<rect class="lbg" x="304.2" y="493" width="63.6" height="15" rx="3"/>
+<text class="edge-label" x="336.0" y="504" text-anchor="middle">classify</text>
+<path class="edge acc" d="M388,542 L489,542" marker-end="url(#aa)"/>
+<rect class="lbg" x="394.8" y="523" width="90.4" height="15" rx="3"/>
+<text class="edge-label acc" x="440.0" y="534" text-anchor="middle">predict(msg)</text>
+<path class="edge acc dash" d="M492,572 L391,572" marker-end="url(#aa)"/>
+<rect class="lbg" x="404.85" y="553" width="70.30000000000001" height="15" rx="3"/>
+<text class="edge-label acc" x="440.0" y="564" text-anchor="middle">intent, p</text>
+<path class="edge dash" d="M388,602 L287,602" marker-end="url(#a)"/>
+<rect class="lbg" x="310.9" y="583" width="50.2" height="15" rx="3"/>
+<text class="edge-label" x="336.0" y="594" text-anchor="middle">intent</text>
+<path class="edge" d="M284,672 L593,672" marker-end="url(#a)"/>
+<rect class="lbg" x="378.05" y="653" width="123.9" height="15" rx="3"/>
+<text class="edge-label" x="440.0" y="664" text-anchor="middle">list_transactions</text>
+<path class="edge" d="M596,702 L801,702" marker-end="url(#a)"/>
+<rect class="lbg" x="628.0" y="683" width="144.0" height="15" rx="3"/>
+<text class="edge-label" x="700.0" y="694" text-anchor="middle">GET /me/transactions</text>
+<path class="edge acc" d="M804,732 L1009,732" marker-end="url(#aa)"/>
+<rect class="lbg" x="825.95" y="713" width="164.1" height="15" rx="3"/>
+<text class="edge-label acc" x="908.0" y="724" text-anchor="middle">transactions + scores <tspan class="star">★</tspan></text>
+<path class="edge acc dash" d="M804,762 L287,762" marker-end="url(#aa)"/>
+<rect class="lbg" x="448.55" y="743" width="190.9" height="15" rx="3"/>
+<text class="edge-label acc" x="544.0" y="754" text-anchor="middle">candidatos con risk_score <tspan class="star">★</tspan></text>
+<path class="edge acc" d="M284,792 L697,792" marker-end="url(#aa)"/>
+<rect class="lbg" x="403.25" y="773" width="177.5" height="15" rx="3"/>
+<text class="edge-label acc" x="492.0" y="784" text-anchor="middle">fraude · USD 500 · risk <tspan class="star">★</tspan></text>
+<path class="edge dash" d="M700,822 L287,822" marker-end="url(#a)"/>
+<rect class="lbg" x="406.6" y="803" width="170.8" height="15" rx="3"/>
+<text class="edge-label" x="492.0" y="814" text-anchor="middle">act | escalate | respond</text>
+<path class="edge" d="M284,892 L593,892" marker-end="url(#a)"/>
+<rect class="lbg" x="388.1" y="873" width="103.8" height="15" rx="3"/>
+<text class="edge-label" x="440.0" y="884" text-anchor="middle">create_dispute</text>
+<path class="edge" d="M596,922 L801,922" marker-end="url(#a)"/>
+<rect class="lbg" x="648.1" y="903" width="103.8" height="15" rx="3"/>
+<text class="edge-label" x="700.0" y="914" text-anchor="middle">POST /disputes</text>
+<path class="edge" d="M804,952 L1009,952" marker-end="url(#a)"/>
+<rect class="lbg" x="839.35" y="933" width="137.3" height="15" rx="3"/>
+<text class="edge-label" x="908.0" y="944" text-anchor="middle">INSERT app.disputes</text>
+<path class="edge" d="M284,1022 L593,1022" marker-end="url(#a)"/>
+<rect class="lbg" x="398.15" y="1003" width="83.7" height="15" rx="3"/>
+<text class="edge-label" x="440.0" y="1014" text-anchor="middle">get_dispute</text>
+<path class="edge" d="M596,1052 L801,1052" marker-end="url(#a)"/>
+<rect class="lbg" x="634.7" y="1033" width="130.60000000000002" height="15" rx="3"/>
+<text class="edge-label" x="700.0" y="1044" text-anchor="middle">GET /disputes/{id}</text>
+<path class="edge" d="M804,1082 L1009,1082" marker-end="url(#a)"/>
+<rect class="lbg" x="839.35" y="1063" width="137.3" height="15" rx="3"/>
+<text class="edge-label" x="908.0" y="1074" text-anchor="middle">SELECT app.disputes</text>
+<path class="edge dash" d="M804,1112 L287,1112" marker-end="url(#a)"/>
+<rect class="lbg" x="488.75" y="1093" width="110.5" height="15" rx="3"/>
+<text class="edge-label" x="544.0" y="1104" text-anchor="middle">estado del caso</text>
+<path class="edge" d="M284,1182 L593,1182" marker-end="url(#a)"/>
+<rect class="lbg" x="381.4" y="1163" width="117.2" height="15" rx="3"/>
+<text class="edge-label" x="440.0" y="1174" text-anchor="middle">escalate_dispute</text>
+<path class="edge" d="M596,1212 L801,1212" marker-end="url(#a)"/>
+<rect class="lbg" x="644.75" y="1193" width="110.5" height="15" rx="3"/>
+<text class="edge-label" x="700.0" y="1204" text-anchor="middle">POST …/escalate</text>
+<path class="edge" d="M804,1242 L1009,1242" marker-end="url(#a)"/>
+<rect class="lbg" x="842.7" y="1223" width="130.60000000000002" height="15" rx="3"/>
+<text class="edge-label" x="908.0" y="1234" text-anchor="middle">app.dispute_events</text>
+<path class="edge" d="M284,1312 L905,1312" marker-end="url(#a)"/>
+<rect class="lbg" x="530.7" y="1293" width="130.60000000000002" height="15" rx="3"/>
+<text class="edge-label" x="596.0" y="1304" text-anchor="middle">redacción opcional</text>
+<path class="edge dash" d="M908,1342 L287,1342" marker-end="url(#a)"/>
+<rect class="lbg" x="574.25" y="1323" width="43.5" height="15" rx="3"/>
+<text class="edge-label" x="596.0" y="1334" text-anchor="middle">texto</text>
+<path class="edge acc" d="M284,1372 L1009,1372" marker-end="url(#aa)"/>
+<rect class="lbg" x="532.45" y="1353" width="231.1" height="15" rx="3"/>
+<text class="edge-label acc" x="648.0" y="1364" text-anchor="middle">INSERT agent.trace_log (por nodo)</text>
+<path class="edge dash" d="M284,1402 L183,1402" marker-end="url(#a)"/>
+<rect class="lbg" x="186.8" y="1383" width="90.4" height="15" rx="3"/>
+<text class="edge-label" x="232.0" y="1394" text-anchor="middle">estado final</text>
+<path class="edge dash" d="M180,1432 L79,1432" marker-end="url(#a)"/>
+<rect class="lbg" x="106.25" y="1413" width="43.5" height="15" rx="3"/>
+<text class="edge-label" x="128.0" y="1424" text-anchor="middle">reply</text></svg></div><div class="legend">
+<span><i class="sw"></i>Ya desplegado</span>
+<span><i class="sw new"></i>Nuevo (★)</span>
+<span><svg width="30" height="10" aria-hidden="true"><path d="M0,5 H30" stroke="var(--muted)" stroke-width="1.5"/></svg>Llamada o escritura</span>
+<span><svg width="30" height="10" aria-hidden="true"><path d="M0,5 H30" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 4"/></svg>Respuesta</span>
+<span><svg width="30" height="10" aria-hidden="true"><path d="M0,5 H30" stroke="var(--accent)" stroke-width="1.8"/></svg>Camino del ML</span>
+</div></div>
+  </section>
+
+  <section>
+    <div class="prose">
+      <h2>3. Todas las conexiones</h2>
+      <p class="cap">Origen, destino, cómo se comunican y en qué archivo vive cada conexión hoy.</p>
+    </div>
+    <div class="tbl"><table>
+      <thead><tr><th>Origen</th><th>Destino</th><th>Cómo</th><th>Qué viaja</th><th>Dónde</th></tr></thead>
+      <tbody><tr><td>S3</td><td>Job etl</td><td>read_csv (DuckDB httpfs)</td><td><code>CSV crudos</code></td><td><code>infra/gcp/etl/run_pipeline.py</code></td></tr>
+<tr><td>Job etl</td><td>GCS lakehouse</td><td>COPY … FORMAT PARQUET</td><td><code>bronze/ y silver/</code></td><td><code>run_pipeline.py</code></td></tr>
+<tr><td>Job etl</td><td>Cloud SQL</td><td>Postgres, swap en una transacción</td><td><code>gold.*, ops.etl_runs</code></td><td><code>run_pipeline.py</code></td></tr>
+<tr><td>GCS lakehouse</td><td>Job train <span class=star-i>★</span></td><td>DuckDB read_parquet</td><td><code>silver/</code></td><td>nuevo</td></tr>
+<tr><td>Job train <span class=star-i>★</span></td><td>GCS lakehouse</td><td>escritura de objetos</td><td><code>models/&lt;modelo&gt;/&lt;versión&gt;/</code></td><td>nuevo</td></tr>
+<tr><td>Job train <span class=star-i>★</span></td><td>Cloud SQL</td><td>Postgres</td><td><code>gold.transaction_risk_scores, ops.model_registry</code></td><td>nuevo</td></tr>
+<tr><td>GCS lakehouse</td><td>agent</td><td>lectura al arrancar</td><td><code>model.joblib + manifest</code></td><td>nuevo</td></tr>
+<tr><td>Cloud Run frontend</td><td>Navegador</td><td>HTTPS</td><td><code>página Next.js + AGENT_URL</code></td><td><code>frontend/app/page.tsx</code></td></tr>
+<tr><td>Navegador</td><td>agent</td><td>HTTPS, fetch del cliente</td><td><code>POST /session, POST /chat</code></td><td><code>frontend/components/Chat.tsx</code></td></tr>
+<tr><td>agent</td><td>backend</td><td>HTTP + JWT de sesión</td><td><code>/session, /me/transactions, /disputes</code></td><td><code>agent/app/tools.py</code></td></tr>
+<tr><td>agent</td><td>TypeSafe</td><td>HTTPS, opcional</td><td><code>clasificación de intent</code></td><td><code>agent/app/intents.py</code></td></tr>
+<tr><td>agent</td><td>OpenRouter</td><td>HTTPS</td><td><code>classify_intent, redacción</code></td><td><code>agent/app/llm.py</code></td></tr>
+<tr><td>agent</td><td>Cloud SQL</td><td>asyncpg</td><td><code>agent.trace_log</code></td><td><code>agent/app/tracing.py</code></td></tr>
+<tr><td>backend</td><td>Cloud SQL</td><td>asyncpg</td><td><code>gold.*, app.disputes, app.dispute_events</code></td><td><code>backend/app/db.py</code></td></tr>
+<tr><td>Secret Manager</td><td>backend, agent, etl</td><td>variables de entorno</td><td><code>JWT, OpenRouter, TypeSafe, S3</code></td><td><code>infra/gcp/main.tf</code></td></tr></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>Dónde se sirve cada modelo</h2>
+    <div class="paths">
+      <div class="path">
+        <div class="q">¿EL SCORE DEPENDE DEL MENSAJE? NO</div>
+        <strong>Por lotes, en una tabla gold</strong>
+        <ul>
+          <li>Lo calcula el paso 6 del job <code>train</code>. <code>gold.transactions</code> es un snapshot estático.</li>
+          <li>El backend lo devuelve junto a la transacción en <code>GET /me/transactions</code>.</li>
+          <li>La regla de umbral va en <code>guardrail.py</code>, al lado de la de USD 500: es código, no prompt.</li>
+        </ul>
+        <p class="cap">Ejemplo: riesgo de una transacción o de una disputa.</p>
+      </div>
+      <div class="path">
+        <div class="q">¿EL SCORE DEPENDE DEL MENSAJE? SÍ</div>
+        <strong>En memoria, dentro del agente</strong>
+        <ul>
+          <li>Se baja de GCS al arrancar, en la versión fijada por <code>MODEL_VERSION</code>.</li>
+          <li>Entra en <code>intents.classify</code>, antes del LLM.</li>
+          <li><code>baseline_classify</code> ya es el baseline para la evaluación held-out.</li>
+        </ul>
+        <p class="cap">Ejemplo: clasificador de intents.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="cols">
+    <section>
+      <h2>Reglas de datos</h2>
+      <ul>
+        <li><code>is_fraud</code> se usa solo como label. <code>fraud_score</code> nunca es feature.</li>
+        <li>Las features salen de los datos tal como estaban al momento del evento.</li>
+        <li>El manifiesto guarda el <code>run_id</code> del ETL que produjo los datos.</li>
+        <li>Cada evento de <code>agent.trace_log</code> lleva el <code>model_version</code> usado.</li>
+      </ul>
+    </section>
+    <section>
+      <h2>Qué se evita y cuándo cambiarlo</h2>
+      <ul>
+        <li>Vertex AI Endpoints: otro servicio con su IAM y cobro por nodo, para modelos de pocos MB.</li>
+        <li>MLflow o Vertex Model Registry: alcanza con GCS y <code>ops.model_registry</code>.</li>
+        <li>Un servicio <code>ml-serving</code> se justifica solo con dependencias pesadas (torch, embeddings) o un ritmo de deploy propio.</li>
+      </ul>
+    </section>
+  </div>
+
+  <p class="note">Supuesto sin verificar: <code>backend</code> y <code>agent</code> no declaran <code>resources</code> en <code>infra/gcp/main.tf</code>, así que corren con el default de Cloud Run (1 CPU y 512 MiB, de memoria). Alcanza para sklearn o LightGBM, no para torch.</p>
+</div>
+
+</body></html>
