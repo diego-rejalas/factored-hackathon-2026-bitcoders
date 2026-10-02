@@ -94,3 +94,27 @@ def test_affirmations_are_recognized(text):
 @pytest.mark.parametrize("text", ["no", "no fue esa", "cobro de 45 en otro lugar", "", "me cobraron algo que no reconozco ayer"])
 def test_non_affirmations_are_rejected(text):
     assert not guardrail.is_affirmation(text)
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("la transferencia de 4189.18 dólares", 4189.18),
+        ("un cobro de 1200", 1200.0),
+        ("pagué 6783.64", 6783.64),
+        ("fueron 4,189.18", 4189.18),
+        ("fueron 4.189,18", 4189.18),
+        ("de 999999 pesos", 999999.0),
+        ("cobro de 45.50", 45.50),
+        ("cobro de 120", 120.0),
+    ],
+)
+def test_amounts_are_not_truncated(text, expected):
+    assert guardrail.extract_entities(text)["amount"] == expected
+
+
+def test_dates_and_days_are_not_amounts():
+    assert "amount" not in guardrail.extract_entities("fue el 2026-05-11")
+    assert "amount" not in guardrail.extract_entities("fue el 11/05/2026")
+    assert "amount" not in guardrail.extract_entities("fue hace 3 días")
+    assert guardrail.extract_entities("fue el 2026-05-11 por 4189.18")["amount"] == 4189.18

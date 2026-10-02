@@ -166,7 +166,7 @@ def build_graph(tools, tracer, llm=None):
         candidate = state["candidate"]
         status = candidate.get("transaction_status", "")
         summary = (
-            f"Cliente reporta cobro de {candidate.get('merchant_name')} que no reconoce; "
+            f"Cliente reporta cobro de {replies.describe(candidate)} que no reconoce; "
             f"la transacción {candidate['transaction_id']} figura como {status}."
         )
         case = await tools.create_dispute(
@@ -184,7 +184,7 @@ def build_graph(tools, tracer, llm=None):
             return {"route": "escalate", "reason": "verify_failed", "outcome": "escalated", "case": fresh}
         candidate = state.get("candidate") or {}
         facts = [
-            f"transacción {candidate.get('transaction_id')} ({candidate.get('merchant_name')}) estado {candidate.get('transaction_status')}",
+            f"transacción {candidate.get('transaction_id')} ({replies.describe(candidate)}) estado {candidate.get('transaction_status')}",
             f"monto efectivo {guardrail.effective_usd(candidate):.2f} USD",
             f"caso {fresh['case_id']} verificado en estado {fresh['status']}",
         ]
