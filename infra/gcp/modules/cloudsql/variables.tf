@@ -89,3 +89,9 @@ variable "private_network_id" {
   type        = string
   default     = ""
 }
+
+variable "extra_databases" {
+  description = "Additional databases on the same instance, as { database = owner user }. Each gets its own generated password. Used for Airflow's metadata, kept apart from the business data."
+  type        = map(string)
+  default     = {}
+}

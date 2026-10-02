@@ -7,20 +7,47 @@ resource "random_password" "session_jwt" {
   special = false
 }
 
+# Airflow. The Fernet key must be 32 url-safe base64 bytes: 43 characters without padding, plus "=".
+resource "random_id" "airflow_fernet" {
+  count       = var.enable_airflow ? 1 : 0
+  byte_length = 32
+}
+
+resource "random_password" "airflow_jwt" {
+  count   = var.enable_airflow ? 1 : 0
+  length  = 64
+  special = false
+}
+
+resource "random_password" "airflow_admin" {
+  count   = var.enable_airflow ? 1 : 0
+  length  = 24
+  special = false
+}
+
 locals {
   # Static names so for_each never depends on a sensitive value.
-  secret_names = toset([
+  airflow_secret_names = var.enable_airflow ? ["airflow-db-password", "airflow-fernet-key", "airflow-api-jwt-secret", "airflow-admin-password"] : []
+
+  secret_names = toset(concat([
     "session-jwt",
     "db-password",
     "openrouter-api-key",
     "typesafe-api-key",
     "latam-bank-aws-id",
     "latam-bank-aws-secret",
-  ])
+  ], local.airflow_secret_names))
 
   manual_secret_names = toset(["latam-bank-aws-id", "latam-bank-aws-secret"])
 
-  secret_values = {
+  airflow_secret_values = var.enable_airflow ? {
+    "airflow-db-password"    = var.airflow_db_password
+    "airflow-fernet-key"     = "${random_id.airflow_fernet[0].b64_url}="
+    "airflow-api-jwt-secret" = random_password.airflow_jwt[0].result
+    "airflow-admin-password" = random_password.airflow_admin[0].result
+  } : {}
+
+  secret_values = merge(local.airflow_secret_values, {
     "session-jwt"        = random_password.session_jwt.result
     "db-password"        = var.db_password
     "openrouter-api-key" = coalesce(var.openrouter_api_key, "NOT_SET")
@@ -29,7 +56,7 @@ locals {
     # (never through Terraform variables or git); the ETL fails fast while they are NOT_SET.
     "latam-bank-aws-id"     = "NOT_SET"
     "latam-bank-aws-secret" = "NOT_SET"
-  }
+  })
 }
 
 resource "google_secret_manager_secret" "this" {

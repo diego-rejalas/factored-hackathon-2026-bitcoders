@@ -50,3 +50,22 @@ resource "google_sql_user" "app" {
   instance = google_sql_database_instance.postgres.name
   password = random_password.db.result
 }
+
+resource "random_password" "extra" {
+  for_each = var.extra_databases
+  length   = 32
+  special  = false
+}
+
+resource "google_sql_database" "extra" {
+  for_each = var.extra_databases
+  name     = each.key
+  instance = google_sql_database_instance.postgres.name
+}
+
+resource "google_sql_user" "extra" {
+  for_each = var.extra_databases
+  name     = each.value
+  instance = google_sql_database_instance.postgres.name
+  password = random_password.extra[each.key].result
+}

@@ -26,3 +26,15 @@ variable "labels" {
   type    = map(string)
   default = {}
 }
+
+variable "enable_airflow" {
+  description = "Create the secrets Airflow needs (metadata database password, Fernet key, API JWT secret, admin password)."
+  type        = bool
+  default     = false
+}
+
+variable "airflow_db_password" {
+  type      = string
+  default   = ""
+  sensitive = true
+}
