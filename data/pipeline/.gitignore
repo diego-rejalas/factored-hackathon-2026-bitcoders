@@ -1,0 +1,5 @@
+
+# Python build and test artifacts
+*.egg-info/
+__pycache__/
+.pytest_cache/

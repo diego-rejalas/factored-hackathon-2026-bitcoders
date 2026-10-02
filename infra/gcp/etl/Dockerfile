@@ -1,22 +1,17 @@
-# ETL job image for the GCP hybrid ultra-lightweight stack.
-# DuckDB reads S3 -> builds silver/gold & tests with dbt-duckdb in RAM -> publishes ONLY gold to Cloud SQL.
+# ETL job image (Cloud Run Job): runs every pipeline stage in order, in one process.
+# The same stages (data/pipeline, package latam_pipeline) run as separate tasks in Airflow
+# (infra/airflow-gcp); this job is the single-container way to run them, and the fallback.
+# Build context is the repository root:  docker build . -f infra/gcp/etl/Dockerfile
 FROM python:3.12-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    git \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+# Same versions as the Airflow image (see spec/AIRFLOW_GCP.md).
+RUN pip install --no-cache-dir "dbt-duckdb==1.11.0" "duckdb==1.5.6"
 
-RUN pip install --no-cache-dir \
-    "duckdb>=1.1.0" \
-    "dbt-duckdb>=1.8.0" \
-    "google-cloud-storage>=2.14.0" \
-    psycopg2-binary
+COPY data/pipeline /app/pipeline
+RUN pip install --no-cache-dir /app/pipeline
 
 COPY data/dbt/ /app/dbt/
-COPY infra/gcp/etl/run_pipeline.py /app/run_pipeline.py
 
-CMD ["python", "run_pipeline.py"]
+CMD ["python", "-m", "latam_pipeline", "all"]

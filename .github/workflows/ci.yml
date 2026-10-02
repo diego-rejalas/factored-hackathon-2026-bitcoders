@@ -3,10 +3,10 @@ name: CI
 on:
   pull_request:
     branches: [main]
-    paths: ["infra/airflow/**", "infra/dbt/**", "data/dags/**", "data/dbt/**", "backend/**", "agent/**", "frontend/**", ".github/workflows/ci.yml"]
+    paths: ["infra/airflow/**", "infra/airflow-gcp/**", "infra/gcp/etl/**", "infra/dbt/**", "data/dags/**", "data/dbt/**", "data/pipeline/**", "backend/**", "agent/**", "frontend/**", ".github/workflows/ci.yml"]
   push:
     branches: [main]
-    paths: ["infra/airflow/**", "infra/dbt/**", "data/dags/**", "data/dbt/**", "backend/**", "agent/**", "frontend/**", ".github/workflows/ci.yml"]
+    paths: ["infra/airflow/**", "infra/airflow-gcp/**", "infra/gcp/etl/**", "infra/dbt/**", "data/dags/**", "data/dbt/**", "data/pipeline/**", "backend/**", "agent/**", "frontend/**", ".github/workflows/ci.yml"]
 
 jobs:
   airflow:
@@ -17,7 +17,43 @@ jobs:
       - name: Build image (sanity check only, not pushed anywhere)
         run: docker build . -f infra/airflow/Dockerfile -t airflow-ci-check
       - name: The DAG must import without errors
-        run: docker run --rm --entrypoint python airflow-ci-check -c "from airflow.models import DagBag; bag = DagBag('/opt/airflow/dags', include_examples=False); print(list(bag.dags)); assert not bag.import_errors, bag.import_errors"
+        run: docker run --rm -e AIRFLOW__CORE__LOAD_EXAMPLES=False -e PYTHONPATH=/opt/airflow/dags --entrypoint python airflow-ci-check -c "from airflow.models import DagBag; bag = DagBag('/opt/airflow/dags'); print(list(bag.dags)); assert not bag.import_errors, bag.import_errors"
+
+  pipeline:
+    name: Pipeline stages (tests against a real Postgres) and the GCP Airflow image
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: pw
+          POSTGRES_DB: data
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d data"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Unit and Postgres integration tests of data/pipeline
+        working-directory: data/pipeline
+        env:
+          PG_TEST_HOST: 127.0.0.1
+          PG_TEST_PORT: "5432"
+        run: |
+          uv venv
+          uv pip install -e ".[test]" psycopg2-binary
+          .venv/bin/python -m pytest -q
+      - name: Build the GCP Airflow image (sanity check only, not pushed anywhere)
+        run: docker build . -f infra/airflow-gcp/Dockerfile -t airflow-gcp-ci-check
+      - name: The DAG must import without errors, with the real Airflow
+        run: >
+          docker run --rm -e AIRFLOW__CORE__LOAD_EXAMPLES=False -e PYTHONPATH=/opt/airflow/dags --entrypoint python airflow-gcp-ci-check -c
+          "from airflow.models import DagBag; bag = DagBag('/opt/airflow/dags');
+          print(bag.import_errors or 'no import errors'); print(sorted(bag.dags));
+          assert not bag.import_errors and 'latam_bank_gcp' in bag.dags"
+      - name: Build the ETL job image
+        run: docker build . -f infra/gcp/etl/Dockerfile -t etl-ci-check
 
   dbt:
     name: Build the dbt image and parse the project
@@ -30,7 +66,7 @@ jobs:
         run: >
           docker run --rm -w /app/dbt
           -e DBT_PG_HOST=x -e DBT_PG_PORT=5432 -e DBT_PG_USER=x -e DBT_PG_PASSWORD=x -e DBT_PG_DATABASE=x
-          dbt-ci-check dbt parse --profiles-dir . --project-dir .
+          dbt-ci-check dbt parse --target postgres --profiles-dir . --project-dir .
 
   backend:
     name: Build the backend image and run its tests
