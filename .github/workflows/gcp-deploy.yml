@@ -92,7 +92,8 @@ jobs:
         run: terraform fmt -check -recursive
 
       - name: Terraform init
-        run: terraform init -backend-config="bucket=${{ vars.GCP_STATE_BUCKET }}" -input=false
+        # The read-only account cannot write the state lock either, so a plan that will not be applied skips it.
+        run: terraform init -backend-config="bucket=${{ vars.GCP_STATE_BUCKET }}" -input=false -lock=${{ env.APPLY == 'true' }}
 
       - name: Terraform validate
         run: terraform validate
