@@ -36,6 +36,8 @@ GUARDRAIL_LIMITATIONS = {
     "ambiguity_unresolved": "no single candidate after the clarification rounds",
     "out_of_scope": "intent outside the transaction-dispute workflow",
     "verify_failed": "could not re-verify the case after acting",
+    "amount_unknown": "effective USD amount is unknown (no conversion), so the threshold cannot be checked",
+    "posted_charge_disputed": "the disputed charge is Approved or Pending: money may have moved, so a person decides",
 }
 
 
@@ -62,6 +64,19 @@ def effective_usd(transaction: dict) -> float:
         return float(value) if value is not None else 0.0
     except (TypeError, ValueError):
         return 0.0
+
+
+def amount_known(transaction: dict) -> bool:
+    """False when the USD amount is missing or not a number. An unknown amount is never
+    treated as zero: the threshold cannot be checked, so the case escalates."""
+    value = transaction.get("amount_usd_effective")
+    if value is None:
+        return False
+    try:
+        float(value)
+    except (TypeError, ValueError):
+        return False
+    return True
 
 
 def exceeds_threshold(transaction: dict) -> bool:
@@ -167,3 +182,35 @@ def guardrail_intent(message: str, intent: str) -> str:
     if mentions_fraud(message):
         return "fraud_report"
     return intent
+
+
+NEGATIONS = {"no", "nao", "nunca", "ni", "tampoco", "nope", "jamas", "nem"}
+
+AFFIRMATIONS = {
+    "si", "sip", "esa", "ese", "esa es", "ese es", "correcto", "exacto", "asi es", "claro",
+    "sim", "isso", "essa", "essa mesma", "e essa", "certo", "isso mesmo",
+}
+
+
+def is_corroborated(transaction: dict, message: str, entities: dict) -> bool:
+    """True when the customer's own words identify this transaction: its merchant is named or
+    the amount they mention matches. A time window alone does not identify a transaction, and a
+    vague report must never be closed against whatever single candidate happens to exist."""
+    msg = normalize(message)
+    merchant = transaction.get("merchant_name")
+    if merchant and normalize(merchant) in msg:
+        return True
+    amount = entities.get("amount")
+    return bool(amount) and matches_amount(transaction, amount)
+
+
+def is_affirmation(message: str) -> bool:
+    """A short yes: used to confirm the one candidate the agent just proposed."""
+    words = normalize(message).replace(",", " ").replace(".", " ").replace("!", " ").split()
+    if not words or len(words) > 5:
+        return False
+    # Any negation wins: "no fue esa" must never confirm a transaction.
+    if any(w in NEGATIONS for w in words):
+        return False
+    text = " ".join(words)
+    return text in AFFIRMATIONS or any(w in AFFIRMATIONS for w in words)

@@ -69,3 +69,28 @@ def test_narrow_candidates_keeps_all_when_no_signal():
 def test_guardrail_intent_override_on_fraud():
     assert guardrail.guardrail_intent("no fui yo", "dispute") == "fraud_report"
     assert guardrail.guardrail_intent("hola", "greeting") == "greeting"
+
+
+def test_unknown_amount_is_not_known_and_never_zero():
+    tx = _tx("TXN-X", "CUS-1", "M", "Declined", 100.0)
+    tx["amount_usd_effective"] = None
+    assert guardrail.amount_known(tx) is False
+    assert guardrail.amount_known(_tx("TXN-Y", "CUS-1", "M", "Declined", 0)) is True
+
+
+def test_corroboration_needs_merchant_or_amount_not_just_a_window():
+    tx = _tx("TXN-1", "C", "Tienda Don Pepe", "Declined", 45.50)
+    assert guardrail.is_corroborated(tx, "cobro en Tienda Don Pepe", {})
+    assert guardrail.is_corroborated(tx, "me cobraron 45.50", {"amount": 45.50})
+    assert not guardrail.is_corroborated(tx, "hace 3 días me cobraron algo", {"days": 3})
+    assert not guardrail.is_corroborated(tx, "me cobraron algo", {})
+
+
+@pytest.mark.parametrize("text", ["sí", "Si, esa", "esa es", "sim", "isso mesmo", "Correcto!"])
+def test_affirmations_are_recognized(text):
+    assert guardrail.is_affirmation(text)
+
+
+@pytest.mark.parametrize("text", ["no", "no fue esa", "cobro de 45 en otro lugar", "", "me cobraron algo que no reconozco ayer"])
+def test_non_affirmations_are_rejected(text):
+    assert not guardrail.is_affirmation(text)
