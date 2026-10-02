@@ -15,8 +15,12 @@ infra/gcp/
 │   ├── secrets/            Secret Manager: JWT, contraseña de la base, claves de LLM y de S3
 │   ├── lakehouse/          bucket de GCS para el Parquet de bronze y silver
 │   ├── cloud_run_service/  un servicio de Cloud Run con su propia cuenta de servicio
+│   ├── edge/               Application Load Balancer global + Cloud Armor delante del frontend y el agente
+│   ├── airflow_vm/         la VM de Airflow
 │   └── etl_job/            el Cloud Run Job del ETL
-├── scripts/                setup-backend.sh · manage_db.sh · grant_access.sh · smoke.py
+├── bootstrap/              federación de identidad de GitHub (se aplica a mano, una vez)
+├── sql/                    roles.sql: permisos de los roles de base de cada servicio
+├── scripts/                setup-backend.sh · manage_db.sh · db_roles.sh · airflow_vm.sh · e2e.py
 ├── docs/                   TEAM_ONBOARDING.md
 └── etl/                    Dockerfile y run_pipeline.py de la imagen del job
 ```
@@ -104,6 +108,13 @@ AGENT_URL=$(terraform output -raw agent_uri) python infra/gcp/scripts/e2e.py
 
 Los clientes son filas del dataset sintético del organizador; las expectativas suponen el umbral por defecto de USD 500.
 
+## Entrada y permisos (prod)
+
+- **Entrada:** `https://<ip>.sslip.io` (variable `edge_domain` para un dominio propio). Un Application Load Balancer con certificado gestionado y Cloud Armor (límite por IP y reglas de inyección SQL, XSS y Log4j) envía `/` al frontend y `/agent/*` al agente: el navegador llama al agente en el mismo origen. Con `edge_lockdown` el frontend y el agente solo aceptan tráfico del balanceador. Se enciende en dos fases: `enable_edge` crea el balanceador, y cuando su certificado está `ACTIVE` (15 a 60 minutos) `edge_lockdown` cierra el acceso directo. Las reglas de Cloud Armor tardan unos 3 minutos en propagarse.
+- **Backend cerrado:** solo la cuenta de servicio del agente es `run.invoker`; el agente manda un ID token en `X-Serverless-Authorization`. Sin credenciales responde 403.
+- **Un rol de base por servicio:** `backend_app` (lee `gold`, es dueño de `app`) y `agent_app` (dueño de `agent`, sin acceso a `gold`). Orden de despliegue: `apply` (crea los usuarios) → `scripts/db_roles.sh` (aplica `sql/roles.sql` desde la VM) → `apply` con `service_db_users=true`. El pipeline otorga `SELECT` en `gold` al backend después de cada publicación (`GOLD_READER_ROLES`).
+- **Despliegue desde GitHub sin llave guardada:** `bootstrap/` crea el pool de Workload Identity y dos cuentas de servicio (plan de solo lectura; despliegue solo desde `main`).
+
 ## Seguridad
 
 Los hallazgos de Checkov y Trivy, lo que se corrigió, lo que se acepta y cómo se repite están en `spec/SECURITY_SCANS.md`. Resumen de lo que aplica a esta carpeta: SSL obligatorio y registro en Cloud SQL, base sin IP pública en los tres ambientes, registro de flujo en la subred, y el plan de cada despliegue se escanea con Checkov antes de aplicarse.
@@ -124,9 +135,7 @@ Cloud Run a 0 instancias cuesta casi nada; Cloud SQL es el único costo permanen
 **No verificado:** ningún `apply` contra GCP. En particular la ruta privada de qa y prod (Private Service Access, Direct VPC egress de Cloud Run, y que el ETL de DuckDB conecte a la IP privada) está sin probar, y el modo `connector` también. `dev` es el ambiente que reproduce lo que ya funcionaba.
 
 Pendiente de endurecer (no cambió con esta reestructura):
-- Backend y agente siguen abiertos a todos (`allUsers`): el agente llama al backend sin token de identidad. Cerrar el backend exige que el agente envíe un ID token.
-- La base sigue con usuario `app` único (propietario). Falta separar un rol de solo lectura para `gold` y otro acotado a `app.*` y `agent.trace_log`.
-- `ssl_mode=ENCRYPTED_ONLY`, presupuesto con alerta y monitoreo.
+- Presupuesto con alerta y monitoreo.
 - **Acceso humano a una base privada:** desde un portátil no se llega a una instancia sin IP pública (ni con `cloud-sql-proxy`, que debe estar dentro de la VPC). El camino previsto es entrar por IAP a la VM de Airflow (el firewall de `modules/network` ya permite el rango de IAP para instancias con la etiqueta `iap`) y conectar desde ahí. Mientras no exista esa VM, `dev` (IP pública) es el ambiente para consultas manuales.
 - **Airflow y dbt como servicio no están en este Terraform** (el pipeline es el Cloud Run Job con `dbt-duckdb`). Llevarlos a GCP es el siguiente paso, y encaja como un módulo nuevo `airflow` (VM de Compute Engine) en los tres ambientes.
 
