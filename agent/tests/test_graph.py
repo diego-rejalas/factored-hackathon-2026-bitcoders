@@ -37,11 +37,14 @@ def test_normal_dispute_auto_resolves_with_verification(graph, tools):
     result = _run(graph, "Me hicieron un cobro que no reconozco de 45.50 en Tienda Don Pepe")
 
     assert result["outcome"] == "resolved"
-    assert result["case"]["status"] == "open"
+    # the policy resolved it, and the case says so (it used to stay "open" in the customer's list)
+    assert result["case"]["status"] == "auto_resolved"
     assert result.get("handoff") is None
-    # verify must re-consult the case after create_dispute (does not trust the LLM)
+    # verify must re-consult the case after create_dispute (does not trust the LLM), and again after
+    # recording the resolution (it does not trust its own write either)
     methods = [c[0] for c in tools.calls]
-    assert methods.index("create_dispute") < methods.index("get_dispute")
+    assert methods.index("create_dispute") < methods.index("get_dispute") < methods.index("resolve_dispute")
+    assert methods[methods.index("resolve_dispute") + 1] == "get_dispute"
     assert str(result["case"]["case_id"]) in result["reply"]
     assert "rechazada" in result["reply"]
     assert result["facts"]
@@ -129,7 +132,7 @@ def test_case_status_reports_existing_case(graph, tools):
     status = _run(graph, "¿Qué pasó con mi caso?", conversation=conversation)
     assert status["outcome"] == "resolved"
     assert str(case_id) in status["reply"]
-    assert "open" in status["reply"]
+    assert "auto_resolved" in status["reply"]
 
 
 def test_portuguese_message_gets_portuguese_reply(graph, tools):
@@ -251,3 +254,17 @@ def test_replies_never_print_none_for_a_missing_merchant(graph, tools):
     resolved = _run(graph, "No reconozco el cobro de 55")
     assert resolved["outcome"] == "resolved"
     assert "None" not in resolved["reply"]
+
+
+def test_a_backend_without_resolve_still_answers_the_customer(graph, tools, monkeypatch):
+    """An older backend answers 404 to /resolve: the case stays open and the customer gets the same answer."""
+    from app.tools import ToolError
+
+    async def no_resolve(token, case_id, resolution):
+        raise ToolError(404, "Not Found")
+
+    monkeypatch.setattr(tools, "resolve_dispute", no_resolve)
+    result = _run(graph, "Me hicieron un cobro que no reconozco de 45.50 en Tienda Don Pepe")
+    assert result["outcome"] == "resolved"
+    assert result["case"]["status"] == "open"
+    assert str(result["case"]["case_id"]) in result["reply"]

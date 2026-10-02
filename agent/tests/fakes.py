@@ -127,6 +127,19 @@ class FakeBankTools:
             raise ToolError(404, "Dispute not found")
         return dict(case)
 
+    async def resolve_dispute(self, token, case_id, resolution):
+        customer = self._own(token)
+        self.calls.append(("resolve_dispute", {"case_id": case_id}))
+        case = self.disputes.get(case_id)
+        if case is None or case["customer_id"] != customer:
+            from app.tools import ToolError
+
+            raise ToolError(404, "Dispute not found")
+        if case["status"] == "open":
+            case["status"] = "auto_resolved"
+            case["evidence"] = {**case["evidence"], "resolution": resolution}
+        return dict(case)
+
     async def escalate_dispute(self, token, case_id, handoff):
         customer = self._own(token)
         self.calls.append(("escalate_dispute", {"case_id": case_id}))
