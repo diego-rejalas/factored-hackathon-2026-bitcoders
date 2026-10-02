@@ -150,3 +150,76 @@ def test_agent_never_touches_other_customers_data(graph, tools):
     # TXN-B1 belongs to CUS-B; CUS-A's token must never see it
     assert result["outcome"] == "clarify"
     assert tools.calls_of("create_dispute") == []
+
+
+# --- regressions found in the PR #1 review --------------------------------------------------
+
+
+def _only(tools, *txs):
+    tools.transactions = list(txs)
+
+
+def test_vague_report_is_not_closed_against_an_unrelated_declined_charge(graph, tools):
+    """A vague report must not be closed against an old declined charge while the real
+    unrecognized charge is an approved one."""
+    _only(
+        tools,
+        _tx("TXN-2", CUS_A, "Farmacia Central", "Declined", 120.00, date="2026-06-09T10:00:00"),
+        _tx("TXN-9", CUS_A, "Casino Royal", "Approved", 980.00, date="2026-06-12T23:10:00"),
+    )
+    result = _run(graph, "Me hicieron un cobro que no reconozco")
+
+    assert result["outcome"] == "clarify"
+    assert tools.calls_of("create_dispute") == []
+
+
+def test_single_unidentified_candidate_is_proposed_not_assumed(graph, tools):
+    _only(tools, _tx("TXN-2", CUS_A, "Farmacia Central", "Declined", 120.00))
+    conversation = "conv-propose"
+
+    first = _run(graph, "Me hicieron un cobro que no reconozco", conversation=conversation)
+    assert first["outcome"] == "clarify"
+    assert first["reason"] == "unconfirmed_candidate"
+    assert "Farmacia Central" in first["reply"]
+    assert tools.calls_of("create_dispute") == []
+
+    second = _run(graph, "sí, esa", conversation=conversation)
+    assert second["outcome"] == "resolved"
+    assert second["case"]["transaction_id"] == "TXN-2"
+
+
+def test_a_yes_without_a_proposal_does_not_resolve_anything(graph, tools):
+    _only(tools, _tx("TXN-2", CUS_A, "Farmacia Central", "Declined", 120.00))
+    result = _run(graph, "sí")
+    assert tools.calls_of("create_dispute") == []
+    assert result["outcome"] != "resolved"
+
+
+def test_unknown_usd_amount_escalates_instead_of_counting_as_zero(graph, tools):
+    big = _tx("TXN-5", CUS_A, "Electro Mundo", "Declined", 9_500_000.00)
+    big["currency"] = "COP"
+    big["amount_usd_effective"] = None
+    _only(tools, big)
+
+    result = _run(graph, "Me cobraron lo de Electro Mundo y no lo reconozco")
+
+    assert result["outcome"] == "escalated"
+    assert result["handoff"]["reason"] == "amount_unknown"
+    assert tools.calls_of("create_dispute") == []
+
+
+def test_unrecognized_approved_charge_escalates_as_possible_fraud(graph, tools):
+    _only(tools, _tx("TXN-7", CUS_A, "Casino Royal", "Approved", 980.00, date="2026-06-12T23:10:00"))
+
+    result = _run(graph, "No reconozco el cobro de 980 en Casino Royal")
+
+    assert result["outcome"] == "escalated"
+    assert result["handoff"]["reason"] == "posted_charge_disputed"
+    assert tools.calls_of("create_dispute") == []
+
+
+def test_pending_charge_also_escalates(graph, tools):
+    _only(tools, _tx("TXN-8", CUS_A, "Tienda Norte", "Pending", 50.00))
+    result = _run(graph, "No reconozco el cobro de 50 en Tienda Norte")
+    assert result["outcome"] == "escalated"
+    assert result["handoff"]["reason"] == "posted_charge_disputed"

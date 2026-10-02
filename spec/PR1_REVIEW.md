@@ -4,7 +4,9 @@ El PR se fusionó en `main` como base (commit `8c338ee`). Esta es la lista de lo
 
 Alcance acordado: el `frontend/` y el `backend/` del PR se mantienen tal cual (son para la prueba de su autor); lo que sigue sobre ellos es información para decidir, no cambios hechos.
 
-## 1. Fallos de lógica del agente (reproducidos)
+## 1. Fallos de lógica del agente (reproducidos y **corregidos** el 2026-10-02)
+
+Los tres escenarios de la tabla ya se comportan como "qué debería pasar" y tienen pruebas de regresión en `agent/tests/`. Cambios: el agente ahora busca transacciones en todos los estados; una transacción `Approved` o `Pending` que el cliente no reconoce escala siempre (`posted_charge_disputed`); un monto sin conversión a USD escala (`amount_unknown`) en lugar de contar como cero; y un reclamo que no identifica la transacción (ni comercio ni monto) no se cierra: el agente propone la candidata y pide confirmación, y solo un "sí" sin negaciones la confirma.
 
 | # | Escenario | Qué pasa | Qué debería pasar |
 |---|---|---|---|

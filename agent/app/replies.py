@@ -60,14 +60,28 @@ def clarify_reply(language: str, candidates: list) -> str:
     )
 
 
+def confirm_reply(language: str, tx: dict) -> str:
+    """One candidate exists but the customer did not identify it: ask, never assume."""
+    what = f"{tx.get('merchant_name') or tx.get('transaction_type')} {_fmt_amount(tx)} del {_fmt_date(tx)}"
+    if language == "pt":
+        return (
+            f"Encontrei uma transação que pode ser a que você menciona: {what}. "
+            "É essa? Se não for, me diga o comércio, o valor aproximado ou a data."
+        )
+    return (
+        f"Encontré una transacción que podría ser la que mencionas: {what}. "
+        "¿Es esa? Si no es, dime el comercio, el monto aproximado o la fecha."
+    )
+
+
 def clarify_empty_reply(language: str) -> str:
     if language == "pt":
         return (
-            "Não encontrei uma transação recusada ou revertida com esses dados. "
+            "Não encontrei uma transação com esses dados. "
             "Você pode me dizer o comércio, o valor aproximado ou a data aproximada?"
         )
     return (
-        "No encontré una transacción rechazada o revertida con esos datos. "
+        "No encontré una transacción con esos datos. "
         "¿Me puedes decir el comercio, el monto aproximado o la fecha aproximada?"
     )
 

@@ -34,6 +34,7 @@ class AgentState(TypedDict, total=False):
     reply: str
     handoff: dict | None
     clarify_rounds: int
+    proposed_id: str | None
     error: str | None
 
 
@@ -51,6 +52,10 @@ def build_graph(tools, tracer, llm=None):
         message = state["message"]
         language = "pt" if any(w in message.lower() for w in ("não", "você", "obrigado", "obrigada", "bom dia", "boa tarde", "boa noite", "não reconheço", "cobrança", "estorno")) else "es"
         intent = await intents.classify(message, llm)
+        # A short "yes" answers the candidate proposed in the previous turn: it is part of the
+        # dispute, whatever the classifier makes of two words.
+        if state.get("proposed_id") and guardrail.is_affirmation(message):
+            intent = "dispute"
         await tracer.log(
             state["run_id"], state["conversation_id"], "understand",
             intent=intent, params={"language": language}, latency_ms=_elapsed(start),
@@ -58,11 +63,13 @@ def build_graph(tools, tracer, llm=None):
         return {"language": language, "intent": intent, "entities": guardrail.extract_entities(message)}
 
     async def fetch_candidates(state: AgentState, entities: dict) -> list:
+        """Every status, not only Declined/Reversed: a charge that was approved is exactly the
+        one a customer disputes as unrecognized, and it must never be invisible to the agent."""
         token = state["session_token"]
         days = entities.get("days")
-        declined = await tools.list_transactions(token, status="Declined", days=days, limit=50)
-        reversed_tx = await tools.list_transactions(token, status="Reversed", days=days, limit=50)
-        merged = declined + reversed_tx
+        merged: list = []
+        for status in ("Declined", "Reversed", "Approved", "Pending"):
+            merged += await tools.list_transactions(token, status=status, days=days, limit=50)
         merged.sort(key=lambda tx: str(tx.get("transaction_date") or ""), reverse=True)
         return merged
 
@@ -97,11 +104,16 @@ def build_graph(tools, tracer, llm=None):
             await tracer.log(state["run_id"], state["conversation_id"], "decide", intent=intent, result_status="escalate", params={"reason": "ambiguity_unresolved"}, latency_ms=_elapsed(start))
             return {"intent": intent, "route": "escalate", "reason": "ambiguity_unresolved", "outcome": "escalated"}
 
-        try:
-            candidates = await fetch_candidates(state, state.get("entities") or {})
-        except ToolError:
-            raise
-        pool = guardrail.narrow_candidates(candidates, message, state.get("entities") or {})
+        entities = state.get("entities") or {}
+        candidates = await fetch_candidates(state, entities)
+
+        # A short "yes" confirms the one candidate proposed in the previous turn.
+        proposed = state.get("proposed_id")
+        affirmed = bool(proposed) and guardrail.is_affirmation(message)
+        if affirmed:
+            pool = [tx for tx in candidates if tx.get("transaction_id") == proposed]
+        else:
+            pool = guardrail.narrow_candidates(candidates, message, entities)
 
         if len(pool) != 1:
             await tracer.log(state["run_id"], state["conversation_id"], "decide", intent=intent, result_status="clarify", params={"candidates": len(pool)}, latency_ms=_elapsed(start))
@@ -111,16 +123,43 @@ def build_graph(tools, tracer, llm=None):
                 "outcome": "clarify",
                 "reason": "no_case_yet" if len(pool) == 0 else "multiple_candidates",
                 "candidates": pool,
+                "proposed_id": None,
                 "clarify_rounds": state.get("clarify_rounds", 0) + 1,
             }
 
         candidate = pool[0]
+
+        # A charge that went through (Approved) or is still open (Pending): money may have moved,
+        # and the customer says they do not recognize it. Never resolved by the agent.
+        if candidate.get("transaction_status") not in ("Declined", "Reversed"):
+            await tracer.log(state["run_id"], state["conversation_id"], "decide", intent=intent, tool="check_status", result_status="escalate", params={"reason": "posted_charge_disputed", "status": candidate.get("transaction_status")}, latency_ms=_elapsed(start))
+            return {"intent": intent, "route": "escalate", "reason": "posted_charge_disputed", "outcome": "escalated", "candidate": candidate, "proposed_id": None}
+
+        # The customer's own words must identify the transaction. A vague report is never closed
+        # against whatever single candidate exists: the agent proposes it and asks.
+        if not (affirmed or guardrail.is_corroborated(candidate, message, entities)):
+            await tracer.log(state["run_id"], state["conversation_id"], "decide", intent=intent, result_status="clarify", params={"reason": "unconfirmed_candidate"}, latency_ms=_elapsed(start))
+            return {
+                "intent": intent,
+                "route": "respond",
+                "outcome": "clarify",
+                "reason": "unconfirmed_candidate",
+                "candidates": pool,
+                "proposed_id": candidate["transaction_id"],
+                "clarify_rounds": state.get("clarify_rounds", 0) + 1,
+            }
+
+        # Unknown USD amount is never treated as zero.
+        if not guardrail.amount_known(candidate):
+            await tracer.log(state["run_id"], state["conversation_id"], "decide", intent=intent, tool="check_amount", result_status="escalate", params={"reason": "amount_unknown"}, latency_ms=_elapsed(start))
+            return {"intent": intent, "route": "escalate", "reason": "amount_unknown", "outcome": "escalated", "candidate": candidate, "proposed_id": None}
+
         if guardrail.exceeds_threshold(candidate):
             await tracer.log(state["run_id"], state["conversation_id"], "decide", intent=intent, tool="check_amount", result_status="escalate", params={"reason": "amount_threshold", "amount_usd": guardrail.effective_usd(candidate)}, latency_ms=_elapsed(start))
-            return {"intent": intent, "route": "escalate", "reason": "amount_threshold", "outcome": "escalated", "candidate": candidate}
+            return {"intent": intent, "route": "escalate", "reason": "amount_threshold", "outcome": "escalated", "candidate": candidate, "proposed_id": None}
 
         await tracer.log(state["run_id"], state["conversation_id"], "decide", intent=intent, result_status="act", params={"transaction_id": candidate["transaction_id"]}, latency_ms=_elapsed(start))
-        return {"intent": intent, "route": "act", "candidate": candidate, "candidates": pool}
+        return {"intent": intent, "route": "act", "candidate": candidate, "candidates": pool, "proposed_id": None}
 
     async def act(state: AgentState) -> dict:
         start = time.monotonic()
@@ -200,11 +239,12 @@ def build_graph(tools, tracer, llm=None):
         if state.get("handoff"):
             reply = replies.escalated_reply(language, state["handoff"])
         elif route == "respond" and outcome == "clarify":
-            reply = (
-                replies.clarify_reply(language, state.get("candidates") or [])
-                if state.get("reason") == "multiple_candidates"
-                else replies.clarify_empty_reply(language)
-            )
+            if state.get("reason") == "unconfirmed_candidate":
+                reply = replies.confirm_reply(language, (state.get("candidates") or [{}])[0])
+            elif state.get("reason") == "multiple_candidates":
+                reply = replies.clarify_reply(language, state.get("candidates") or [])
+            else:
+                reply = replies.clarify_empty_reply(language)
         elif state.get("reason") == "no_case_yet" and outcome == "clarify":
             reply = replies.clarify_empty_reply(language)
         elif state.get("intent") == "greeting":
