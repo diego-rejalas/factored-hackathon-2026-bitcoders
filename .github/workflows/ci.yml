@@ -106,14 +106,25 @@ jobs:
   backend:
     name: Build the backend image and run its tests
     runs-on: ubuntu-latest
+    # The SQL (migrations, paging, summary, lockout) is tested against a real PostgreSQL: the in-memory fake the
+    # route tests use runs none of it, and it hid two bugs that only the real database showed.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
-      - name: Build image (tests ship inside, DB access is mocked)
+      - name: Build image (tests ship inside)
         run: docker build . -f backend/Dockerfile -t backend-ci-check
-      - name: pytest inside the image
+      - name: pytest inside the image, against the PostgreSQL service
         run: >
-          docker run --rm -w /app
+          docker run --rm --network host -w /app
           -e SESSION_JWT_SECRET=ci-secret -e SESSION_TTL_MINUTES=120
+          -e PG_TEST_HOST=localhost -e PG_TEST_PORT=5432 -e PG_TEST_USER=postgres -e PG_TEST_PASSWORD=ci
           backend-ci-check sh -c "pip install --no-cache-dir pytest httpx && python -m pytest -q"
 
   agent:

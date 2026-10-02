@@ -225,3 +225,15 @@ variable "service_db_users" {
   type        = bool
   default     = true
 }
+
+variable "demo_accounts_enabled" {
+  description = "The backend creates the demonstration accounts at startup and lists them on the sign-in page. The data is synthetic; turn off for anything that is not a demo."
+  type        = bool
+  default     = true
+}
+
+variable "demo_password" {
+  description = "Shared password of the demonstration accounts. Public by design: the sign-in page shows it."
+  type        = string
+  default     = "Demo-Bancario-2026"
+}
