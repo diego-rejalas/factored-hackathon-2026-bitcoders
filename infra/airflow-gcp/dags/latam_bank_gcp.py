@@ -67,8 +67,22 @@ with DAG(
     def publish_gold(pipeline_run_id: str, _exported: dict) -> dict:
         return stages.publish_gold(Settings.from_env(), pipeline_run_id)
 
+    @task(retries=0)
+    def dbt_docs(pipeline_run_id: str, _published: dict) -> dict:
+        """The lineage graph and documentation as one static page, stored with the lakehouse.
+
+        Best-effort: the data is already published, so a failure is returned (and shown in ops.etl_runs)
+        instead of failing a run whose data is good.
+        """
+        try:
+            return stages.dbt_docs(Settings.from_env(), pipeline_run_id)
+        except Exception as exc:  # noqa: BLE001
+            message = stages.scrub(f"{type(exc).__name__}: {exc}")[:400]
+            stages.log(f"documentation failed (the run is not affected): {message}")
+            return {"error": message}
+
     @task(trigger_rule=TriggerRule.ALL_DONE, retries=0)
-    def record_run(pipeline_run_id: str, rows=None, dbt=None, published=None) -> None:
+    def record_run(pipeline_run_id: str, rows=None, dbt=None, published=None, docs=None) -> None:
         """Runs whether the pipeline succeeded or not, so ops.etl_runs also shows the failures.
 
         A task cannot query Airflow's metadata database (Airflow 3), so success is read from what
@@ -79,7 +93,13 @@ with DAG(
         # If the very first task failed there is no pipeline run id: fall back to Airflow's own.
         pipeline_run_id = pipeline_run_id or context["run_id"]
         status = "success" if published else "failed"
-        detail = {"airflow_run_id": pipeline_run_id, "bronze_rows": rows, "dbt": dbt, "published_rows": published}
+        detail = {
+            "airflow_run_id": pipeline_run_id,
+            "bronze_rows": rows,
+            "dbt": dbt,
+            "published_rows": published,
+            "docs": docs,
+        }
         if status == "failed":
             detail["note"] = "an upstream task failed; see the task logs in the Airflow UI"
         stages.record_run(pipeline_run_id, context["dag_run"].start_date, status, detail)
@@ -94,4 +114,5 @@ with DAG(
     dbt_result = dbt_build(exported_bronze)
     exported_silver = export_silver(dbt_result)
     published = publish_gold(started, exported_silver)
-    record_run(started, rows, dbt_result, published)
+    docs = dbt_docs(started, published)
+    record_run(started, rows, dbt_result, published, docs)

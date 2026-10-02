@@ -109,8 +109,11 @@ def extract_bronze(settings: Settings, tables: list | None = None) -> dict[str, 
 # --------------------------------------------------------------------------- lakehouse (Parquet)
 
 
-def upload_dir_to_gcs(local_dir: Path, gcs_uri: str) -> int:
-    """Upload every file under local_dir to gcs_uri with the native Cloud Storage SDK."""
+def upload_dir_to_gcs(local_dir: Path, gcs_uri: str, cleanup: bool = True) -> int:
+    """Upload every file under local_dir to gcs_uri with the native Cloud Storage SDK.
+
+    The local copy is deleted afterwards (the Parquet export is large); pass cleanup=False to keep it.
+    """
     from google.cloud import storage
     from google.cloud.storage import transfer_manager
 
@@ -138,8 +141,9 @@ def upload_dir_to_gcs(local_dir: Path, gcs_uri: str) -> int:
         raise_exception=True,
     )
     log(f"successfully uploaded {len(filenames)} files to gs://{bucket_name}/{prefix}")
-    # Free the local disk once the copy is in the bucket.
-    shutil.rmtree(local_dir, ignore_errors=True)
+    if cleanup:
+        # Free the local disk once the copy is in the bucket.
+        shutil.rmtree(local_dir, ignore_errors=True)
     return len(filenames)
 
 
@@ -249,6 +253,74 @@ def dbt_build(settings: Settings) -> dict[str, int]:
     if code != 0:
         raise RuntimeError(f"dbt build failed with summary: {summary}. Nothing was published.")
     return summary
+
+
+# Files of `dbt docs generate --static` worth keeping: the single-page site, and the artifacts it was built from
+# (the graph, the column catalog and the result of each test).
+DOCS_FILES = ("static_index.html", "manifest.json", "catalog.json", "run_results.json")
+
+
+def dbt_docs(settings: Settings, run_id: str) -> dict:
+    """Generate dbt's documentation and lineage graph as one static page and store it with the lakehouse.
+
+    Written to <lake>/docs/runs/<run id>/ (history) and <lake>/docs/latest/ (the one to open). Reads the
+    DuckDB file, so it runs after the stages that write to it.
+    """
+    work = Path(settings.work_dir)
+    target = work / "dbt_docs"
+    shutil.rmtree(target, ignore_errors=True)
+    log("generating the dbt documentation...")
+    cmd = [
+        settings.dbt_bin, "docs", "generate", "--static", "--no-use-colors",
+        "--project-dir", settings.dbt_dir, "--profiles-dir", settings.dbt_dir,
+        "--target-path", str(target), "--log-path", str(work / "dbt_logs"),
+    ]
+    if settings.dbt_target:
+        cmd += ["--target", settings.dbt_target]
+    env = {
+        **os.environ,
+        "DUCKDB_PATH": settings.db_path,
+        "DUCKDB_THREADS": str(settings.threads),
+        "DUCKDB_MEMORY_LIMIT": settings.memory_limit,
+    }
+    proc = subprocess.run(cmd, env=env, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(f"dbt docs generate failed: {scrub(proc.stdout[-600:] + proc.stderr[-600:])}")
+
+    # The test results come from the build, not from docs generate.
+    build_results = work / "dbt_target" / "run_results.json"
+    if build_results.exists():
+        shutil.copy(build_results, target / "run_results.json")
+
+    publish = work / "dbt_docs_publish"
+    shutil.rmtree(publish, ignore_errors=True)
+    publish.mkdir(parents=True)
+    kept = []
+    for name in DOCS_FILES:
+        if (target / name).exists():
+            shutil.copy(target / name, publish / name)
+            kept.append(name)
+    if "static_index.html" not in kept:
+        raise RuntimeError("dbt docs generate produced no static_index.html (dbt 1.7 or later is needed)")
+
+    short = short_id(run_id)
+    result = {"files": kept, "run": short}
+    if not settings.lake_uri:
+        log("lake storage URI not set; keeping the documentation only on the local disk")
+        result["location"] = str(publish)
+        return result
+
+    for sub in (f"docs/runs/{short}", "docs/latest"):
+        destination = f"{settings.lake_uri}/{sub}"
+        if settings.lake_uri.startswith("gs://"):
+            upload_dir_to_gcs(publish, destination, cleanup=False)
+        else:
+            shutil.rmtree(destination, ignore_errors=True)
+            shutil.copytree(publish, destination)
+    shutil.rmtree(publish, ignore_errors=True)
+    result["location"] = f"{settings.lake_uri}/docs/latest/static_index.html"
+    log(f"documentation stored at {result['location']}")
+    return result
 
 
 # --------------------------------------------------------------------------- 3. publish

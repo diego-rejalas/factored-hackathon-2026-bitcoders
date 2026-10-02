@@ -1,0 +1,17 @@
+version: 2
+
+# Who reads gold. dbt shows these as the last nodes of the lineage graph. Only what the code really reads:
+# the backend queries gold.customers (login) and gold.transactions (movements, dispute checks).
+exposures:
+  - name: backend_api
+    label: Backend API (FastAPI)
+    type: application
+    maturity: high
+    description: >
+      Read-only API that the dispute agent calls as its tool layer. It authenticates a customer against
+      gold.customers and reads their movements from gold.transactions. It never reads fraud ground truth.
+    owner:
+      name: Backend
+    depends_on:
+      - ref('customers')
+      - ref('transactions')

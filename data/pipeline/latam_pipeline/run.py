@@ -1,7 +1,7 @@
 """Command line: run the whole pipeline in order (what the Cloud Run job does) or one stage.
 
     python -m latam_pipeline all
-    python -m latam_pipeline extract | export-bronze | dbt | export-silver | publish
+    python -m latam_pipeline extract | export-bronze | dbt | export-silver | publish | docs
 """
 import sys
 import uuid
@@ -25,6 +25,13 @@ def run_all(settings: Settings) -> int:
             detail["lakehouse_silver"] = stages.export_silver(settings)
         detail["published_rows"] = stages.publish_gold(settings, run_id)
         status = "success"
+        # Documentation is a by-product: the data is already published, so a failure here is reported
+        # in the run's detail and does not turn the run into a failed one.
+        try:
+            detail["docs"] = stages.dbt_docs(settings, run_id)
+        except Exception as exc:  # noqa: BLE001
+            detail["docs"] = {"error": stages.scrub(f"{type(exc).__name__}: {exc}")[:400]}
+            stages.log(f"documentation failed (the run is not affected): {detail['docs']['error']}")
     except Exception as exc:  # noqa: BLE001
         detail["error"] = stages.scrub(f"{type(exc).__name__}: {exc}")[:800]
         stages.log(f"FAILED: {detail['error']}")
@@ -46,6 +53,7 @@ def main(argv: list | None = None) -> int:
         "dbt": lambda: stages.dbt_build(settings),
         "export-silver": lambda: stages.export_silver(settings),
         "publish": lambda: stages.publish_gold(settings, uuid.uuid4().hex),
+        "docs": lambda: stages.dbt_docs(settings, uuid.uuid4().hex),
     }
     if command not in single:
         print(f"unknown command {command!r}; use all or one of: {', '.join(single)}", file=sys.stderr)
