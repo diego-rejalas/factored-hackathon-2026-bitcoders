@@ -21,8 +21,13 @@ $$;
 
 REVOKE cloudsqlsuperuser FROM backend_app;
 REVOKE cloudsqlsuperuser FROM agent_app;
-ALTER ROLE backend_app NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
-ALTER ROLE agent_app NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+ALTER ROLE backend_app NOCREATEDB NOCREATEROLE;
+ALTER ROLE agent_app NOCREATEDB NOCREATEROLE;
+
+-- PostgreSQL 16 and later let a role hand a schema to another only if it can SET ROLE to it. The owner (app)
+-- administers both roles, so it gets membership in them; the services do not get any in each other.
+GRANT backend_app TO app;
+GRANT agent_app TO app;
 
 -- The services run "create schema if not exists" at startup, and PostgreSQL checks the CREATE privilege on
 -- the database before it looks at whether the schema exists. They can create schemas, not touch each other's.
