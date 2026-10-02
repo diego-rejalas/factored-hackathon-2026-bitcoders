@@ -59,7 +59,7 @@ Las diferencias salen de variables (`db_tier`, `use_cloud_sql_connector`, `db_de
    ```bash
    PROJECT_ID=<PROJECT_ID> ./infra/gcp/scripts/setup-backend.sh
    ```
-3. Para el despliegue por CI: secreto de repositorio `GCP_SA_KEY` y variables `GCP_PROJECT_ID`, `GCP_STATE_BUCKET` (y opcionalmente `GCP_REGION`). Ver `.github/workflows/gcp-deploy.yml`.
+3. Para el despliegue por CI (sin llave guardada, con Workload Identity Federation): aplicar una vez `infra/gcp/bootstrap` (a mano, con una cuenta administradora) y copiar sus tres salidas a variables del repositorio: `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_PLAN_SA` y `GCP_DEPLOY_SA`, junto con `GCP_PROJECT_ID` y `GCP_STATE_BUCKET` (y opcionalmente `GCP_REGION`). Ver `.github/workflows/gcp-deploy.yml`.
 
 ## Desplegar un ambiente a mano
 
@@ -128,7 +128,6 @@ Pendiente de endurecer (no cambió con esta reestructura):
 - La base sigue con usuario `app` único (propietario). Falta separar un rol de solo lectura para `gold` y otro acotado a `app.*` y `agent.trace_log`.
 - `ssl_mode=ENCRYPTED_ONLY`, presupuesto con alerta y monitoreo.
 - **Acceso humano a una base privada:** desde un portátil no se llega a una instancia sin IP pública (ni con `cloud-sql-proxy`, que debe estar dentro de la VPC). El camino previsto es entrar por IAP a la VM de Airflow (el firewall de `modules/network` ya permite el rango de IAP para instancias con la etiqueta `iap`) y conectar desde ahí. Mientras no exista esa VM, `dev` (IP pública) es el ambiente para consultas manuales.
-- El CI usa una llave JSON de larga vida; mejor Workload Identity Federation.
 - **Airflow y dbt como servicio no están en este Terraform** (el pipeline es el Cloud Run Job con `dbt-duckdb`). Llevarlos a GCP es el siguiente paso, y encaja como un módulo nuevo `airflow` (VM de Compute Engine) en los tres ambientes.
 
 ## Migración desde el stack anterior
