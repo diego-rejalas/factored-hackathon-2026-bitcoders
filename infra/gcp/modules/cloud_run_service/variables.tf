@@ -39,6 +39,24 @@ variable "cloudsql_connection_name" {
   default     = ""
 }
 
+variable "enable_vpc" {
+  description = "Attach the workload to the VPC with Direct VPC egress (only private ranges go through it)."
+  type        = bool
+  default     = false
+}
+
+variable "vpc_network" {
+  description = "VPC name. Only used when enable_vpc is true."
+  type        = string
+  default     = ""
+}
+
+variable "vpc_subnetwork" {
+  description = "Subnetwork name. Only used when enable_vpc is true."
+  type        = string
+  default     = ""
+}
+
 variable "allow_unauthenticated" {
   description = "Grant roles/run.invoker to allUsers. Private services need callers that send an ID token."
   type        = bool

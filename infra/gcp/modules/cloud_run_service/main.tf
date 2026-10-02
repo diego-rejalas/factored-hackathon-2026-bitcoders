@@ -34,6 +34,17 @@ resource "google_cloud_run_v2_service" "this" {
       max_instance_count = var.max_instances
     }
 
+    dynamic "vpc_access" {
+      for_each = var.enable_vpc ? [1] : []
+      content {
+        egress = "PRIVATE_RANGES_ONLY"
+        network_interfaces {
+          network    = var.vpc_network
+          subnetwork = var.vpc_subnetwork
+        }
+      }
+    }
+
     dynamic "volumes" {
       for_each = var.enable_cloudsql ? [1] : []
       content {

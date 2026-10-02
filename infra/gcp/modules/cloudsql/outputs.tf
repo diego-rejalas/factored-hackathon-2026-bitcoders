@@ -23,3 +23,7 @@ output "password" {
   value     = random_password.db.result
   sensitive = true
 }
+
+output "private_ip" {
+  value = google_sql_database_instance.postgres.private_ip_address
+}

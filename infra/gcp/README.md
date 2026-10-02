@@ -10,6 +10,7 @@ infra/gcp/
 │   └── prod/
 ├── modules/
 │   ├── foundation/         APIs del proyecto + Artifact Registry
+│   ├── network/            VPC, subred, Private Service Access, firewall de IAP y NAT opcional
 │   ├── cloudsql/           Cloud SQL Postgres 16 (base `data`, usuario `app`)
 │   ├── secrets/            Secret Manager: JWT, contraseña de la base, claves de LLM y de S3
 │   ├── lakehouse/          bucket de GCS para el Parquet de bronze y silver
@@ -24,12 +25,13 @@ infra/gcp/
 
 ## Qué despliega cada ambiente
 
-`foundation` → `cloudsql`, `secrets`, `lakehouse` → servicios `backend`, `agent`, `frontend` y el job `etl`. Un `plan` sin credenciales reales da **dev 47 recursos, qa 50, prod 50** (qa y prod suman los permisos del conector de Cloud SQL).
+`foundation` → `network` → `cloudsql`, `secrets`, `lakehouse` → servicios `backend`, `agent`, `frontend` y el job `etl`. Un `plan` real contra el proyecto da **54 recursos en cada ambiente** (7 son la red y dos APIs).
 
 | | dev | qa | prod |
 |---|---|---|---|
 | Cloud SQL | `db-f1-micro`, 20 GB | `db-g1-small`, 20 GB | `db-custom-2-7680`, 50 GB, recuperación a un instante |
-| Acceso a la base | IP pública abierta (`0.0.0.0/0`), como el stack original | **Conector de Cloud SQL**, sin lista de redes | **Conector de Cloud SQL**, sin lista de redes |
+| Conectividad a la base (`db_connectivity`) | `public_ip`: IP pública abierta (`0.0.0.0/0`), como el stack original | `private_ip`: sin IP pública, por la VPC | `private_ip`: sin IP pública, por la VPC |
+| Rangos de red | `10.10.0.0/24` y `10.10.1.0/24` | `10.20.0.0/24` y `10.20.1.0/24` | `10.30.0.0/24` y `10.30.1.0/24` |
 | Protección contra borrado (base y Cloud Run) | no | no | **sí** |
 | Instancias mínimas (backend, agent) | 0 | 0 | 1 |
 | Bucket del lago | se puede destruir con datos | se puede destruir con datos | **no** |
@@ -40,7 +42,9 @@ Las diferencias salen de variables (`db_tier`, `use_cloud_sql_connector`, `db_de
 
 - **Cada servicio tiene su propia cuenta de servicio** y puede leer solo los secretos que se le asignan. Antes los tres usaban la cuenta de cómputo por defecto, con acceso a todos los secretos del proyecto.
 - **La contraseña de la base va en Secret Manager** y se monta como variable de entorno. Antes se escribía en claro en la definición de cada servicio.
-- **Conector de Cloud SQL** (qa y prod): los servicios llegan a la base por un socket de Unix, sin abrir la IP pública a internet. Las apps leen `PG_HOST` como host de libpq o asyncpg, y ambos aceptan un directorio de socket, así que no hay cambios de código.
+- **Red propia por ambiente** (`modules/network`): una VPC, una subred de aplicación con Private Google Access, y Private Service Access para que Cloud SQL tenga IP privada. En qa y prod la base **no tiene dirección pública**.
+- **Tres modos de llegar a la base** (`db_connectivity`): `public_ip` (lo del stack original), `connector` (Cloud SQL connector por socket, sin lista de redes; las apps leen `PG_HOST` como host de libpq o asyncpg y ambos aceptan un directorio de socket) y `private_ip`. Se cambia con una variable.
+- **Cloud Run usa Direct VPC egress** con `PRIVATE_RANGES_ONLY`: solo el tráfico hacia rangos privados pasa por la VPC; el resto sale a internet normal, así que **no hace falta Cloud NAT** para el ETL (S3) ni para el agente (OpenRouter).
 - **Estado separado por ambiente** (`factored/<ambiente>`) y bloqueo de GCS por defecto.
 - Las llaves de S3 del organizador se cargan a mano como una versión nueva del secreto; un `apply` posterior no la revierte.
 - Bucket del lago con versionado y acceso público prohibido.
@@ -101,13 +105,14 @@ Cloud Run a 0 instancias cuesta casi nada; Cloud SQL es el único costo permanen
 
 ## Estado de esta estructura y qué falta
 
-**Verificado:** `terraform fmt`, `init` y `validate` pasan en los tres ambientes, y un `plan` sin credenciales (token falso, sin refrescar) los planifica sin errores.
-**No verificado:** ningún `apply` contra GCP. En particular el conector de Cloud SQL de qa y prod (la ruta de socket `/cloudsql/<conexión>` en `PG_HOST`, y los permisos `roles/cloudsql.client`) está sin probar: `dev` es el ambiente que reproduce lo que ya funcionaba.
+**Verificado:** `terraform fmt`, `init` y `validate` pasan en los tres ambientes, y un `plan` real contra `bitcoders-factored-hackathon` los planifica sin errores ni choques con el stack anterior.
+**No verificado:** ningún `apply` contra GCP. En particular la ruta privada de qa y prod (Private Service Access, Direct VPC egress de Cloud Run, y que el ETL de DuckDB conecte a la IP privada) está sin probar, y el modo `connector` también. `dev` es el ambiente que reproduce lo que ya funcionaba.
 
 Pendiente de endurecer (no cambió con esta reestructura):
 - Backend y agente siguen abiertos a todos (`allUsers`): el agente llama al backend sin token de identidad. Cerrar el backend exige que el agente envíe un ID token.
 - La base sigue con usuario `app` único (propietario). Falta separar un rol de solo lectura para `gold` y otro acotado a `app.*` y `agent.trace_log`.
-- `ssl_mode=ENCRYPTED_ONLY`, IP privada con Direct VPC egress, presupuesto con alerta y monitoreo.
+- `ssl_mode=ENCRYPTED_ONLY`, presupuesto con alerta y monitoreo.
+- **Acceso humano a una base privada:** desde un portátil no se llega a una instancia sin IP pública (ni con `cloud-sql-proxy`, que debe estar dentro de la VPC). El camino previsto es entrar por IAP a la VM de Airflow (el firewall de `modules/network` ya permite el rango de IAP para instancias con la etiqueta `iap`) y conectar desde ahí. Mientras no exista esa VM, `dev` (IP pública) es el ambiente para consultas manuales.
 - El CI usa una llave JSON de larga vida; mejor Workload Identity Federation.
 - **Airflow y dbt como servicio no están en este Terraform** (el pipeline es el Cloud Run Job con `dbt-duckdb`). Llevarlos a GCP es el siguiente paso, y encaja como un módulo nuevo `airflow` (VM de Compute Engine) en los tres ambientes.
 

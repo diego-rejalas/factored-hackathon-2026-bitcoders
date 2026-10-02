@@ -65,3 +65,21 @@ variable "labels" {
   type    = map(string)
   default = {}
 }
+
+variable "enable_public_ip" {
+  description = "Give the instance a public IPv4. Set false together with private_ip."
+  type        = bool
+  default     = true
+}
+
+variable "private_ip" {
+  description = "Attach the instance to private_network over Private Service Access."
+  type        = bool
+  default     = false
+}
+
+variable "private_network_id" {
+  description = "VPC id for the private IP. Only used when private_ip is true."
+  type        = string
+  default     = ""
+}

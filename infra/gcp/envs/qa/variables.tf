@@ -48,17 +48,42 @@ variable "db_point_in_time_recovery" {
   default = false
 }
 
-variable "use_cloud_sql_connector" {
+variable "db_connectivity" {
   description = <<-EOT
-    true: Cloud Run and the ETL job reach Cloud SQL through the connector (no network allow-list).
-    false: they connect over the public IP, which needs db_authorized_networks.
+    How Cloud Run and the ETL job reach Cloud SQL:
+    public_ip  = public IPv4 with db_authorized_networks (what the first stack did)
+    connector  = Cloud SQL connector, no network allow-list
+    private_ip = private IP over the VPC (Direct VPC egress); the database has no public address
   EOT
+  type        = string
+  default     = "private_ip"
+
+  validation {
+    condition     = contains(["public_ip", "connector", "private_ip"], var.db_connectivity)
+    error_message = "db_connectivity must be public_ip, connector or private_ip."
+  }
+}
+
+variable "subnet_cidr" {
+  description = "Application subnet: Cloud Run Direct VPC egress and, later, the Airflow VM. At least a /26."
+  type        = string
+  default     = "10.20.0.0/24"
+}
+
+variable "private_service_cidr" {
+  description = "Range reserved for Private Service Access (Cloud SQL private IP)."
+  type        = string
+  default     = "10.20.1.0/24"
+}
+
+variable "enable_nat" {
+  description = "Cloud Router and Cloud NAT for instances without an external IP (needed once the Airflow VM exists)."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "db_authorized_networks" {
-  description = "CIDR ranges allowed over the public IP. Empty when use_cloud_sql_connector is true."
+  description = "CIDR ranges allowed over the public IP. Only used when db_connectivity is public_ip."
   type = list(object({
     name = string
     cidr = string
