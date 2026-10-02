@@ -45,7 +45,7 @@ Las diferencias salen de variables (`db_tier`, `use_cloud_sql_connector`, `db_de
 - **Red propia por ambiente** (`modules/network`): una VPC, una subred de aplicación con Private Google Access, y Private Service Access para que Cloud SQL tenga IP privada. En qa y prod la base **no tiene dirección pública**.
 - **Tres modos de llegar a la base** (`db_connectivity`): `public_ip` (lo del stack original), `connector` (Cloud SQL connector por socket, sin lista de redes; las apps leen `PG_HOST` como host de libpq o asyncpg y ambos aceptan un directorio de socket) y `private_ip`. Se cambia con una variable.
 - **Cloud Run usa Direct VPC egress** con `PRIVATE_RANGES_ONLY`: solo el tráfico hacia rangos privados pasa por la VPC; el resto sale a internet normal, así que **no hace falta Cloud NAT** para el ETL (S3) ni para el agente (OpenRouter).
-- **Estado separado por ambiente** (`factored/<ambiente>`) y bloqueo de GCS por defecto.
+- **Estado separado por ambiente** (`env/<ambiente>`, en `bitcoders-factored-hackathon-tfstate`) y bloqueo de GCS por defecto.
 - Las llaves de S3 del organizador se cargan a mano como una versión nueva del secreto; un `apply` posterior no la revierte.
 - Bucket del lago con versionado y acceso público prohibido.
 - Se quitó el permiso `run.invoker` de la cuenta del ETL sobre su propio job: no cumplía ninguna función.
@@ -65,7 +65,7 @@ Las diferencias salen de variables (`db_tier`, `use_cloud_sql_connector`, `db_de
 ```bash
 cd infra/gcp/envs/dev                      # o qa, prod
 cp terraform.tfvars.example terraform.tfvars   # editar project_id y, si quieres, las claves
-terraform init -backend-config="bucket=<PROJECT_ID>-tfstate"
+terraform init        # el bucket y el prefijo ya están en backend.tf
 
 # 1. APIs y registro de imágenes
 terraform apply -target=module.foundation

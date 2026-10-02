@@ -4,7 +4,8 @@
 #
 #   PROJECT_ID=my-project ./infra/gcp/scripts/setup-backend.sh
 #
-# Each environment keeps its own state under the prefix factored/<env> (see envs/<env>/backend.tf).
+# Each environment keeps its own state under the prefix env/<env> (see envs/<env>/backend.tf,
+# which also names this bucket: change it there if you use a different BUCKET).
 # The state holds generated secrets (database password, JWT key): keep the bucket private.
 
 set -euo pipefail
@@ -33,4 +34,4 @@ gcloud storage buckets update "gs://${BUCKET}" --project="${PROJECT_ID}" \
 echo
 echo "Ready. Then, for each environment:"
 echo "  cd infra/gcp/envs/dev"
-echo "  terraform init -backend-config=\"bucket=${BUCKET}\""
+echo "  terraform init"
