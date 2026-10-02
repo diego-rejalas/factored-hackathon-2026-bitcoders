@@ -27,3 +27,9 @@ output "password" {
 output "private_ip" {
   value = google_sql_database_instance.postgres.private_ip_address
 }
+
+output "extra_passwords" {
+  description = "Password of each extra database's user, by database name."
+  value       = { for name, password in random_password.extra : name => password.result }
+  sensitive   = true
+}
