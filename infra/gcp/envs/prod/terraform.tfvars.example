@@ -1,0 +1,6 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+project_id = "my-gcp-project-prod"
+
+# Optional: without keys the agent runs on deterministic replies.
+# openrouter_api_key = ""
+# typesafe_api_key   = ""

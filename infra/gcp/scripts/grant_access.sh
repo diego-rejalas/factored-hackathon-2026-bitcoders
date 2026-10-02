@@ -4,9 +4,9 @@
 # Bitcoders - Factored AI & Data Hackathon 2026
 #
 # Uso:
-#   ./infra/gcp/grant_access.sh correo1@gmail.com correo2@gmail.com
+#   ./infra/gcp/scripts/grant_access.sh correo1@gmail.com correo2@gmail.com
 # O interactivo:
-#   ./infra/gcp/grant_access.sh
+#   ./infra/gcp/scripts/grant_access.sh
 # ==============================================================================
 
 set -euo pipefail
@@ -19,8 +19,11 @@ RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 PROJECT="${GCP_PROJECT_ID:-bitcoders-factored-hackathon}"
-INSTANCE="factored-hackathon"
-REGION="us-central1"
+# Environment of the stack (dev, qa or prod). INSTANCE and REGION can be overridden, for example
+# INSTANCE=factored-hackathon REGION=us-central1 for the stack deployed before the environment split.
+ENVIRONMENT="${ENVIRONMENT:-dev}"
+INSTANCE="${INSTANCE:-factored-${ENVIRONMENT}}"
+REGION="${REGION:-us-east4}"
 CREDENTIALS_FILE="team_credentials.txt"
 
 echo -e "${BLUE}================================================================${NC}"
@@ -131,4 +134,4 @@ echo -e "${GREEN}===============================================================
 echo -e "Las credenciales y detalles individuales se guardaron en:"
 echo -e "👉 ${YELLOW}${CREDENTIALS_FILE}${NC} (Este archivo está en .gitignore para seguridad)."
 echo -e "\nPuedes compartir con tu equipo la guía de conexión en:"
-echo -e "👉 ${BLUE}infra/gcp/TEAM_ONBOARDING.md${NC}\n"
+echo -e "👉 ${BLUE}infra/gcp/docs/TEAM_ONBOARDING.md${NC}\n"
