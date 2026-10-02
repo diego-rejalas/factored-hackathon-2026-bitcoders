@@ -124,13 +124,17 @@ def extract_entities(message: str) -> dict:
     return entities
 
 
-def matches_amount(transaction: dict, amount: float) -> bool:
+def matches_amount(transaction: dict, amount: float, exact: bool = False) -> bool:
+    """Approximate by default (1% tolerance, the customer rarely remembers cents); exact=True
+    requires the amount to the cent."""
+
     def close(value):
         try:
             value = float(value)
         except (TypeError, ValueError):
             return False
-        return abs(value - amount) <= max(0.01 * value, 0.01)
+        tolerance = 0.005 if exact else max(0.01 * value, 0.01)
+        return abs(value - amount) <= tolerance
 
     return close(transaction.get("amount_usd_effective")) or close(transaction.get("amount"))
 
@@ -152,6 +156,13 @@ def narrow_candidates(candidates: list, message: str, entities: dict) -> list:
     amount_hits = (
         [tx for tx in candidates if matches_amount(tx, amount)] if amount else None
     )
+
+    # An amount given to the cent beats a merely approximate one: 6783.64 must not be ambiguous
+    # with a 6736.04 that happens to fall inside the 1% window.
+    if amount_hits:
+        exact_hits = [tx for tx in amount_hits if matches_amount(tx, amount, exact=True)]
+        if exact_hits:
+            amount_hits = exact_hits
 
     if amount_hits is not None:
         pool = merchant_hits or candidates

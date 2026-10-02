@@ -118,3 +118,14 @@ def test_dates_and_days_are_not_amounts():
     assert "amount" not in guardrail.extract_entities("fue el 11/05/2026")
     assert "amount" not in guardrail.extract_entities("fue hace 3 días")
     assert guardrail.extract_entities("fue el 2026-05-11 por 4189.18")["amount"] == 4189.18
+
+
+def test_an_exact_amount_beats_an_approximate_one():
+    near = _tx("TXN-1", "C", None, "Approved", 6736.04, date="2023-10-30T10:00:00")
+    exact = _tx("TXN-2", "C", None, "Approved", 6783.64, date="2026-05-09T10:00:00")
+    assert guardrail.narrow_candidates([near, exact], "cobro de 6783.64", {"amount": 6783.64}) == [exact]
+
+
+def test_an_approximate_amount_still_matches_when_nothing_is_exact():
+    a = _tx("TXN-1", "C", None, "Declined", 120.00)
+    assert guardrail.narrow_candidates([a], "cobro de unos 119", {"amount": 119.0}) == [a]
