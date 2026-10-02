@@ -31,6 +31,9 @@ resource "google_compute_managed_ssl_certificate" "this" {
   }
 }
 
+# Rules are evaluated by priority and the first match ends the evaluation. The WAF rules come first on purpose:
+# the rate limit matches every request and its "conform" action is allow, so anything placed after it would
+# never run.
 resource "google_compute_security_policy" "this" {
   name        = "${var.name}-edge-policy"
   project     = var.project_id
@@ -38,7 +41,7 @@ resource "google_compute_security_policy" "this" {
 
   rule {
     action   = "throttle"
-    priority = 900
+    priority = 1000
     match {
       versioned_expr = "SRC_IPS_V1"
       config {
@@ -59,7 +62,7 @@ resource "google_compute_security_policy" "this" {
 
   rule {
     action   = "deny(403)"
-    priority = 1000
+    priority = 100
     match {
       expr {
         expression = "evaluatePreconfiguredWaf('sqli-v33-stable', {'sensitivity': 1})"
@@ -70,7 +73,7 @@ resource "google_compute_security_policy" "this" {
 
   rule {
     action   = "deny(403)"
-    priority = 1001
+    priority = 101
     match {
       expr {
         expression = "evaluatePreconfiguredWaf('xss-v33-stable', {'sensitivity': 1})"
@@ -81,7 +84,7 @@ resource "google_compute_security_policy" "this" {
 
   rule {
     action   = "deny(403)"
-    priority = 1002
+    priority = 102
     match {
       expr {
         expression = "evaluatePreconfiguredWaf('cve-canary')"
