@@ -21,6 +21,12 @@ variable "image_tag" {
   default     = "latest"
 }
 
+variable "db_version" {
+  description = "PostgreSQL version of Cloud SQL. 18 was verified locally with asyncpg, psycopg2 and the DuckDB postgres extension."
+  type        = string
+  default     = "POSTGRES_18"
+}
+
 variable "db_tier" {
   description = "Cloud SQL machine tier."
   type        = string

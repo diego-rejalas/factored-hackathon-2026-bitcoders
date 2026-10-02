@@ -7,6 +7,12 @@ variable "region" {
   type = string
 }
 
+variable "database_version" {
+  description = "Cloud SQL engine version, for example POSTGRES_18. Raising it later is an in-place major upgrade with downtime."
+  type        = string
+  default     = "POSTGRES_18"
+}
+
 variable "tier" {
   description = "Machine tier, for example db-f1-micro or db-custom-2-7680."
   type        = string

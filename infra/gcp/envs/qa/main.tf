@@ -66,6 +66,7 @@ module "cloudsql" {
 
   name                   = local.prefix
   region                 = var.region
+  database_version       = var.db_version
   tier                   = var.db_tier
   disk_size_gb           = var.db_disk_gb
   availability_type      = var.db_availability_type
