@@ -1,0 +1,67 @@
+digraph lineage {
+  rankdir=LR; compound=true; splines=true; nodesep=0.18; ranksep=1.3; pad=0.4;
+  labelloc=t; fontsize=20; fontname="Helvetica-Bold";
+  label="Linaje de datos: S3 → bronze → silver → gold → consumidores";
+  node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=11, margin="0.14,0.07"];
+  edge [color="#5F6368", arrowsize=0.7];
+  subgraph cluster_source { label="Bronze: archivos de S3 cargados en DuckDB"; style="rounded,filled"; fillcolor="#FEF7E0"; color="#F9AB00"; fontname="Helvetica-Bold"; fontsize=13;
+    "source.latam_bank.bronze.branches" [label="branches", fillcolor="white", color="#F9AB00", ];
+    "source.latam_bank.bronze.call_center_interactions" [label="call_center_interactions", fillcolor="white", color="#F9AB00", ];
+    "source.latam_bank.bronze.call_transcripts" [label="call_transcripts", fillcolor="white", color="#F9AB00", ];
+    "source.latam_bank.bronze.campaign_sends" [label="campaign_sends", fillcolor="white", color="#F9AB00", ];
+    "source.latam_bank.bronze.complaints" [label="complaints", fillcolor="white", color="#F9AB00", ];
+    "source.latam_bank.bronze.customers" [label="customers", fillcolor="white", color="#F9AB00", ];
+    "source.latam_bank.bronze.daily_exchange_rates" [label="daily_exchange_rates", fillcolor="white", color="#F9AB00", ];
+    "source.latam_bank.bronze.digital_events" [label="digital_events", fillcolor="white", color="#F9AB00", ];
+    "source.latam_bank.bronze.marketing_campaigns" [label="marketing_campaigns", fillcolor="white", color="#F9AB00", ];
+    "source.latam_bank.bronze.products" [label="products", fillcolor="white", color="#F9AB00", ];
+    "source.latam_bank.bronze.satisfaction_surveys" [label="satisfaction_surveys", fillcolor="white", color="#F9AB00", ];
+    "source.latam_bank.bronze.service_agents" [label="service_agents", fillcolor="white", color="#F9AB00", ];
+    "source.latam_bank.bronze.transactions" [label="transactions", fillcolor="white", color="#F9AB00", ];
+  }
+  subgraph cluster_silver { label="Silver: vistas limpias (dbt)"; style="rounded,filled"; fillcolor="#E8F0FE"; color="#4285F4"; fontname="Helvetica-Bold"; fontsize=13;
+    "model.latam_bank.stg_branches" [label="stg_branches\n22 columnas · 13 pruebas", fillcolor="white", color="#4285F4", ];
+    "model.latam_bank.stg_call_center_interactions" [label="stg_call_center_interactions\n21 columnas · 14 pruebas", fillcolor="white", color="#4285F4", ];
+    "model.latam_bank.stg_call_transcripts" [label="stg_call_transcripts\n18 columnas · 13 pruebas", fillcolor="white", color="#4285F4", ];
+    "model.latam_bank.stg_campaign_sends" [label="stg_campaign_sends\n22 columnas · 10 pruebas", fillcolor="white", color="#4285F4", ];
+    "model.latam_bank.stg_complaints" [label="stg_complaints\n27 columnas · 15 pruebas", fillcolor="white", color="#4285F4", ];
+    "model.latam_bank.stg_customers" [label="stg_customers\n27 columnas · 20 pruebas", fillcolor="white", color="#4285F4", ];
+    "model.latam_bank.stg_daily_exchange_rates" [label="stg_daily_exchange_rates\n7 columnas · 5 pruebas", fillcolor="white", color="#4285F4", ];
+    "model.latam_bank.stg_digital_events" [label="stg_digital_events\n26 columnas · 11 pruebas", fillcolor="white", color="#4285F4", ];
+    "model.latam_bank.stg_marketing_campaigns" [label="stg_marketing_campaigns\n13 columnas · 9 pruebas", fillcolor="white", color="#4285F4", ];
+    "model.latam_bank.stg_products" [label="stg_products\n17 columnas · 16 pruebas", fillcolor="white", color="#4285F4", ];
+    "model.latam_bank.stg_satisfaction_surveys" [label="stg_satisfaction_surveys\n20 columnas · 13 pruebas", fillcolor="white", color="#4285F4", ];
+    "model.latam_bank.stg_service_agents" [label="stg_service_agents\n18 columnas · 15 pruebas", fillcolor="white", color="#4285F4", ];
+    "model.latam_bank.stg_transactions" [label="stg_transactions\n22 columnas · 18 pruebas", fillcolor="white", color="#4285F4", ];
+  }
+  subgraph cluster_gold { label="Gold: tablas publicadas en Cloud SQL"; style="rounded,filled"; fillcolor="#E6F4EA"; color="#34A853"; fontname="Helvetica-Bold"; fontsize=13;
+    "model.latam_bank.call_center_interactions" [label="call_center_interactions\n21 columnas · 2 pruebas", fillcolor="white", color="#34A853", penwidth=2.2, ];
+    "model.latam_bank.complaints" [label="complaints\n27 columnas · 2 pruebas", fillcolor="white", color="#34A853", penwidth=2.2, ];
+    "model.latam_bank.customers" [label="customers\n27 columnas · 2 pruebas", fillcolor="white", color="#34A853", penwidth=2.2, ];
+    "model.latam_bank.products" [label="products\n17 columnas · 2 pruebas", fillcolor="white", color="#34A853", penwidth=2.2, ];
+    "model.latam_bank.transactions" [label="transactions\n20 columnas · 2 pruebas", fillcolor="white", color="#34A853", penwidth=2.2, ];
+  }
+  subgraph cluster_consumer { label="Quién lo lee"; style="rounded,filled"; fillcolor="#F3E8FD"; color="#A142F4"; fontname="Helvetica-Bold"; fontsize=13;
+    "exposure.latam_bank.backend_api" [label="Backend API (FastAPI)\n(aplicación)", fillcolor="white", color="#A142F4", ];
+  }
+  "source.latam_bank.bronze.daily_exchange_rates" -> "model.latam_bank.stg_daily_exchange_rates";
+  "source.latam_bank.bronze.call_transcripts" -> "model.latam_bank.stg_call_transcripts";
+  "source.latam_bank.bronze.transactions" -> "model.latam_bank.stg_transactions";
+  "source.latam_bank.bronze.branches" -> "model.latam_bank.stg_branches";
+  "source.latam_bank.bronze.service_agents" -> "model.latam_bank.stg_service_agents";
+  "source.latam_bank.bronze.complaints" -> "model.latam_bank.stg_complaints";
+  "source.latam_bank.bronze.satisfaction_surveys" -> "model.latam_bank.stg_satisfaction_surveys";
+  "source.latam_bank.bronze.products" -> "model.latam_bank.stg_products";
+  "source.latam_bank.bronze.call_center_interactions" -> "model.latam_bank.stg_call_center_interactions";
+  "source.latam_bank.bronze.digital_events" -> "model.latam_bank.stg_digital_events";
+  "source.latam_bank.bronze.campaign_sends" -> "model.latam_bank.stg_campaign_sends";
+  "source.latam_bank.bronze.marketing_campaigns" -> "model.latam_bank.stg_marketing_campaigns";
+  "source.latam_bank.bronze.customers" -> "model.latam_bank.stg_customers";
+  "model.latam_bank.stg_call_center_interactions" -> "model.latam_bank.call_center_interactions";
+  "model.latam_bank.stg_customers" -> "model.latam_bank.customers";
+  "model.latam_bank.stg_complaints" -> "model.latam_bank.complaints";
+  "model.latam_bank.stg_transactions" -> "model.latam_bank.transactions";
+  "model.latam_bank.stg_products" -> "model.latam_bank.products";
+  "model.latam_bank.customers" -> "exposure.latam_bank.backend_api";
+  "model.latam_bank.transactions" -> "exposure.latam_bank.backend_api";
+}

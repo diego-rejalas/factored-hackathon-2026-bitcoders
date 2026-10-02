@@ -1,4 +1,5 @@
 import datetime as dt
+from pathlib import Path
 
 import duckdb
 import pytest
@@ -95,3 +96,70 @@ def test_grant_rejects_a_role_name_that_could_inject_sql():
 def test_record_run_is_best_effort_without_a_database(monkeypatch):
     monkeypatch.delenv("PG_HOST", raising=False)
     stages.record_run("r1", dt.datetime.now(dt.timezone.utc), "success", {})  # must not raise
+
+
+FAKE_DBT = """#!/bin/sh
+# Stands in for dbt: writes what `dbt docs generate --static` writes into --target-path.
+while [ $# -gt 0 ]; do
+    if [ "$1" = "--target-path" ]; then target="$2"; fi
+    shift
+done
+mkdir -p "$target"
+echo "<html>static docs</html>" > "$target/static_index.html"
+echo '{"nodes": {}}' > "$target/manifest.json"
+echo '{"nodes": {}}' > "$target/catalog.json"
+[ -n "$FAKE_DBT_FAIL" ] && { echo "Runtime Error: no database" >&2; exit 2; }
+exit 0
+"""
+
+
+def fake_dbt(tmp_path):
+    path = tmp_path / "fake-dbt"
+    path.write_text(FAKE_DBT)
+    path.chmod(0o755)
+    return str(path)
+
+
+def test_dbt_docs_stores_the_site_with_the_lakehouse(tmp_path, settings):
+    from dataclasses import replace
+
+    from latam_pipeline import stages
+
+    lake = tmp_path / "lake"
+    settings = replace(settings, dbt_bin=fake_dbt(tmp_path), lake_uri=str(lake))
+    # The test results of the build are copied next to the documentation.
+    build = Path(settings.work_dir) / "dbt_target"
+    build.mkdir(parents=True)
+    (build / "run_results.json").write_text('{"results": []}')
+
+    result = stages.dbt_docs(settings, "manual__2026-10-02T12:11:10+00:00")
+
+    short = short_id("manual__2026-10-02T12:11:10+00:00")
+    assert result["run"] == short
+    assert result["files"] == ["static_index.html", "manifest.json", "catalog.json", "run_results.json"]
+    for place in (lake / "docs" / "latest", lake / "docs" / "runs" / short):
+        assert (place / "static_index.html").read_text().startswith("<html>")
+        assert (place / "run_results.json").exists()
+    assert result["location"].endswith("/docs/latest/static_index.html")
+
+
+def test_dbt_docs_without_a_lake_keeps_the_files_locally(tmp_path, settings):
+    from dataclasses import replace
+
+    from latam_pipeline import stages
+
+    settings = replace(settings, dbt_bin=fake_dbt(tmp_path), lake_uri="")
+    result = stages.dbt_docs(settings, "r1")
+    assert (Path(result["location"]) / "static_index.html").exists()
+
+
+def test_dbt_docs_failure_raises_with_the_reason(tmp_path, settings, monkeypatch):
+    from dataclasses import replace
+
+    from latam_pipeline import stages
+
+    monkeypatch.setenv("FAKE_DBT_FAIL", "1")
+    settings = replace(settings, dbt_bin=fake_dbt(tmp_path), lake_uri=str(tmp_path / "lake"))
+    with pytest.raises(RuntimeError, match="dbt docs generate failed.*no database"):
+        stages.dbt_docs(settings, "r1")
+    assert not (tmp_path / "lake").exists()  # nothing half-written
