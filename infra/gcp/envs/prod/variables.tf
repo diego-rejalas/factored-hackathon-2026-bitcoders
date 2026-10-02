@@ -217,11 +217,11 @@ variable "edge_domain" {
 variable "edge_lockdown" {
   description = "Send the browser through the load balancer and make the frontend and the agent accept traffic only from it. Turn on once the load balancer answers over HTTPS: its managed certificate takes 15 to 60 minutes to become active, and until then the load balancer cannot serve the application."
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "service_db_users" {
   description = "The backend and the agent connect with their own database roles (backend_app, agent_app) instead of the owner. Turn on only after infra/gcp/sql/roles.sql has been applied."
   type        = bool
-  default     = false
+  default     = true
 }
