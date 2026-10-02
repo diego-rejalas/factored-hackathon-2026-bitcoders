@@ -22,7 +22,8 @@ _run_lock = threading.Lock()
 
 def _run_dbt(*args: str) -> dict:
     result = subprocess.run(
-        ["dbt", *args, "--project-dir", DBT_PROJECT_DIR, "--profiles-dir", DBT_PROFILES_DIR],
+        # The default profile target is DuckDB (used by the GCP ETL job); this service builds on Postgres.
+        ["dbt", *args, "--project-dir", DBT_PROJECT_DIR, "--profiles-dir", DBT_PROFILES_DIR, "--target", "postgres"],
         capture_output=True,
         text=True,
     )

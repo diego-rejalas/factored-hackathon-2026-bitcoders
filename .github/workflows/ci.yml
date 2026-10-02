@@ -3,10 +3,10 @@ name: CI
 on:
   pull_request:
     branches: [main]
-    paths: ["infra/airflow/**", "infra/dbt/**", "data/dags/**", "data/dbt/**"]
+    paths: ["infra/airflow/**", "infra/dbt/**", "data/dags/**", "data/dbt/**", "backend/**", "agent/**", "frontend/**", ".github/workflows/ci.yml"]
   push:
     branches: [main]
-    paths: ["infra/airflow/**", "infra/dbt/**", "data/dags/**", "data/dbt/**"]
+    paths: ["infra/airflow/**", "infra/dbt/**", "data/dags/**", "data/dbt/**", "backend/**", "agent/**", "frontend/**", ".github/workflows/ci.yml"]
 
 jobs:
   airflow:
@@ -31,3 +31,49 @@ jobs:
           docker run --rm -w /app/dbt
           -e DBT_PG_HOST=x -e DBT_PG_PORT=5432 -e DBT_PG_USER=x -e DBT_PG_PASSWORD=x -e DBT_PG_DATABASE=x
           dbt-ci-check dbt parse --profiles-dir . --project-dir .
+
+  backend:
+    name: Build the backend image and run its tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image (tests ship inside, DB access is mocked)
+        run: docker build . -f backend/Dockerfile -t backend-ci-check
+      - name: pytest inside the image
+        run: >
+          docker run --rm -w /app
+          -e SESSION_JWT_SECRET=ci-secret -e SESSION_TTL_MINUTES=120
+          backend-ci-check sh -c "pip install --no-cache-dir pytest httpx && python -m pytest -q"
+
+  agent:
+    name: Build the agent image and run its tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image (tests ship inside, backend and LLM are faked)
+        run: docker build . -f agent/Dockerfile -t agent-ci-check
+      - name: pytest inside the image
+        run: >
+          docker run --rm -w /app
+          -e SESSION_JWT_SECRET=ci-secret -e GUARDRAIL_MAX_USD=500
+          agent-ci-check sh -c "pip install --no-cache-dir pytest httpx && python -m pytest -q"
+
+  frontend:
+    name: Build the frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        working-directory: frontend
+        run: pnpm build

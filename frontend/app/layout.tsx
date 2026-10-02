@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Asistente bancario LATAM",
-  description: "Prototipo de atención al cliente bancario con IA",
+  title: "Asistencia bancaria",
+  description: "Chat de atención al cliente — Factored AI & Data Hackathon 2026",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

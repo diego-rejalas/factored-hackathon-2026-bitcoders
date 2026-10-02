@@ -1,54 +1,56 @@
-"""LATAM Bank tool layer (skeleton).
+from contextlib import asynccontextmanager
 
-Deterministic endpoints the agent calls as tools; permissions are enforced here,
-not in a prompt. This skeleton only proves the wiring (service up, database
-reachable, pipeline output visible). There is deliberately nothing that returns
-customer data yet: that arrives together with the test-session authentication.
+from fastapi import FastAPI
+
+from app.db import BankStore
+from app.routes import customers, disputes
+from app.auth import router as session_router
+
+DESCRIPTION = """
+Mock banking service (tool layer) for the Factored AI & Data Hackathon 2026
+prototype. Sandbox limitations, stated explicitly:
+
+- Login is a test session: `POST /session` checks `customer_id` +
+  `document_number` against `gold.customers` and issues a short-lived JWT
+  (HS256). No real identity provider is behind it.
+- Reads come from the read-only `gold.*` tables published by the dbt pipeline;
+  operational tables (`app.disputes`, `app.dispute_events`) are created at
+  startup with `CREATE TABLE IF NOT EXISTS` instead of a real migration.
+- No money is ever moved: disputes only explain, document and escalate.
+- Fraud ground truth (`is_fraud`/`fraud_score`) is not part of `gold.transactions`
+  and is never exposed here.
 """
-from fastapi import FastAPI, HTTPException
-
-from app import db
-from app.schemas import DataMeta, Health, LastRun, TableCount
-
-app = FastAPI(
-    title="LATAM Bank tool layer",
-    version="0.1.0",
-    description="Mock banking tool layer over the gold tables. Skeleton: no customer data yet.",
-)
-
-GOLD_TABLES = ["customers", "products", "transactions", "complaints", "call_center_interactions"]
 
 
-@app.get("/health", response_model=Health)
-def health() -> Health:
-    return Health(status="ok")
+def create_app(store: BankStore | None = None) -> FastAPI:
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        if store is None:
+            owned = await BankStore.create()
+            await owned.init_schema()
+            app.state.store = owned
+            yield
+            await owned.close()
+        else:
+            yield
+
+    app = FastAPI(
+        title="mock-banking-service",
+        description=DESCRIPTION,
+        version="0.1.0",
+        lifespan=lifespan,
+    )
+    if store is not None:
+        app.state.store = store
+    app.include_router(session_router)
+    app.include_router(customers.router)
+    app.include_router(disputes.router)
+
+    @app.get("/health", tags=["health"])
+    async def health() -> dict:
+        return {"status": "ok", "service": "backend"}
+
+    return app
 
 
-@app.get("/health/db", response_model=Health)
-def health_db() -> Health:
-    try:
-        with db.connect() as conn:
-            conn.execute("SELECT 1")
-    except Exception as exc:  # noqa: BLE001 - any failure means the database is not usable
-        raise HTTPException(status_code=503, detail=f"database unreachable: {type(exc).__name__}") from None
-    return Health(status="ok")
-
-
-@app.get("/meta/data", response_model=DataMeta)
-def data_meta() -> DataMeta:
-    """Row counts of the gold tables and the last successful pipeline run (aggregates only)."""
-    try:
-        with db.connect() as conn:
-            # Table names come from the constant list above, never from the request.
-            gold = [
-                TableCount(table=t, rows=conn.execute(f"SELECT count(*) FROM gold.{t}").fetchone()[0])
-                for t in GOLD_TABLES
-            ]
-            row = conn.execute(
-                "SELECT run_id, status, started_at, finished_at FROM ops.etl_runs "
-                "WHERE status = 'success' ORDER BY started_at DESC LIMIT 1"
-            ).fetchone()
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=503, detail=f"database unreachable: {type(exc).__name__}") from None
-    last = LastRun(run_id=row[0], status=row[1], started_at=row[2], finished_at=row[3]) if row else None
-    return DataMeta(gold=gold, last_successful_run=last)
+app = create_app()
