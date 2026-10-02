@@ -54,3 +54,8 @@ output "airflow_vm" {
 output "airflow_zone" {
   value = try(module.airflow[0].zone, null)
 }
+
+output "edge_url" {
+  description = "Public HTTPS address of the application (load balancer). Null when the load balancer is off."
+  value       = var.enable_edge ? module.edge[0].url : null
+}

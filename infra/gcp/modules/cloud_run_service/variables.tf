@@ -63,6 +63,22 @@ variable "allow_unauthenticated" {
   default     = false
 }
 
+variable "invoker_members" {
+  description = "IAM members granted roles/run.invoker (for example the service account of the caller). Callers send an ID token."
+  type        = list(string)
+  default     = []
+}
+
+variable "ingress" {
+  description = "Who can reach the service: INGRESS_TRAFFIC_ALL, INGRESS_TRAFFIC_INTERNAL_ONLY or INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER (only through an external Application Load Balancer)."
+  type        = string
+  default     = "INGRESS_TRAFFIC_ALL"
+  validation {
+    condition     = contains(["INGRESS_TRAFFIC_ALL", "INGRESS_TRAFFIC_INTERNAL_ONLY", "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"], var.ingress)
+    error_message = "ingress must be INGRESS_TRAFFIC_ALL, INGRESS_TRAFFIC_INTERNAL_ONLY or INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER."
+  }
+}
+
 variable "min_instances" {
   type    = number
   default = 0

@@ -25,6 +25,7 @@ with DAG(
     start_date=datetime(2026, 1, 1),
     catchup=False,
     max_active_runs=1,  # one run at a time: the DuckDB file has a single writer
+    is_paused_upon_creation=False,  # Airflow creates DAGs paused, and a triggered run then waits in "queued"
     default_args={"retries": 1, "retry_delay": timedelta(seconds=60)},
     tags=["etl", "duckdb", "dbt", "gcp"],
 ):

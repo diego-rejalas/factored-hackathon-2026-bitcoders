@@ -98,9 +98,9 @@ variable "db_authorized_networks" {
 }
 
 variable "backend_public" {
-  description = "Open the backend to the internet. The agent calls it without an ID token today, so it stays true until the agent authenticates."
+  description = "Open the backend to the internet (allUsers). Off by default: only the agent's service account may call it, with an ID token."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "backend_min_instances" {
@@ -200,4 +200,22 @@ variable "db_audit_logging" {
   description = "Connection, lock-wait, checkpoint, temp-file and DDL logging on Cloud SQL (changing database flags can restart the instance)."
   type        = bool
   default     = true
+}
+
+variable "enable_edge" {
+  description = "External Application Load Balancer with Cloud Armor in front of the frontend and the agent (about US$20 a month). When on, both services accept traffic only through it."
+  type        = bool
+  default     = true
+}
+
+variable "edge_domain" {
+  description = "Domain of the load balancer's certificate. Empty: <ip>.sslip.io."
+  type        = string
+  default     = ""
+}
+
+variable "edge_lockdown" {
+  description = "Send the browser through the load balancer and make the frontend and the agent accept traffic only from it. Turn on once the load balancer answers over HTTPS: its managed certificate takes 15 to 60 minutes to become active, and until then the load balancer cannot serve the application."
+  type        = bool
+  default     = false
 }
