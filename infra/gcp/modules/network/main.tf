@@ -15,6 +15,13 @@ resource "google_compute_subnetwork" "app" {
   network                  = google_compute_network.vpc.id
   ip_cidr_range            = var.subnet_cidr
   private_ip_google_access = true
+
+  # Flow logs: who talked to whom inside the VPC. Sampled, to keep the volume (and the cost) small.
+  log_config {
+    aggregation_interval = "INTERVAL_5_MIN"
+    flow_sampling        = 0.5
+    metadata             = "INCLUDE_ALL_METADATA"
+  }
 }
 
 # Private Service Access: Google-managed services (Cloud SQL) get private IPs from this range.

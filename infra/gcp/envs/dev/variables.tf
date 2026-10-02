@@ -62,7 +62,7 @@ variable "db_connectivity" {
     private_ip = private IP over the VPC (Direct VPC egress); the database has no public address
   EOT
   type        = string
-  default     = "public_ip"
+  default     = "private_ip"
 
   validation {
     condition     = contains(["public_ip", "connector", "private_ip"], var.db_connectivity)
@@ -94,7 +94,7 @@ variable "db_authorized_networks" {
     name = string
     cidr = string
   }))
-  default = [{ name = "dev-open-password-only", cidr = "0.0.0.0/0" }]
+  default = []
 }
 
 variable "backend_public" {
@@ -188,4 +188,16 @@ variable "airflow_admin_members" {
   description = "Who may open the IAP tunnel and SSH into the Airflow VM, for example [\"user:name@example.com\"]."
   type        = list(string)
   default     = []
+}
+
+variable "db_require_ssl" {
+  description = "Refuse unencrypted connections to Cloud SQL."
+  type        = bool
+  default     = true
+}
+
+variable "db_audit_logging" {
+  description = "Connection, lock-wait, checkpoint, temp-file and DDL logging on Cloud SQL (changing database flags can restart the instance)."
+  type        = bool
+  default     = true
 }

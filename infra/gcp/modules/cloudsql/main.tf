@@ -5,6 +5,19 @@ resource "random_password" "db" {
   special = false
 }
 
+locals {
+  audit_flags = var.audit_logging ? {
+    log_checkpoints         = "on"
+    log_connections         = "on"
+    log_disconnections      = "on"
+    log_lock_waits          = "on"
+    log_temp_files          = "0"
+    log_statement           = "ddl"
+    log_min_messages        = "warning"
+    log_min_error_statement = "error"
+  } : {}
+}
+
 resource "google_sql_database_instance" "postgres" {
   name                = var.name
   database_version    = var.database_version
@@ -26,7 +39,16 @@ resource "google_sql_database_instance" "postgres" {
       point_in_time_recovery_enabled = var.point_in_time_recovery
     }
 
+    dynamic "database_flags" {
+      for_each = local.audit_flags
+      content {
+        name  = database_flags.key
+        value = database_flags.value
+      }
+    }
+
     ip_configuration {
+      ssl_mode        = var.require_ssl ? "ENCRYPTED_ONLY" : "ALLOW_UNENCRYPTED_AND_ENCRYPTED"
       ipv4_enabled    = var.enable_public_ip
       private_network = var.private_ip ? var.private_network_id : null
       dynamic "authorized_networks" {

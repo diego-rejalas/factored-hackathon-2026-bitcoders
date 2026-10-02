@@ -37,6 +37,10 @@ env:
   REGION: ${{ vars.GCP_REGION || 'us-east4' }}
   TAG: ${{ github.sha }}
 
+# The default token is read-only; a job that needs more says so itself.
+permissions:
+  contents: read
+
 jobs:
   # The `env` context is not available in a job-level `if`, so credentials are detected here.
   # Without GCP_SA_KEY (a repository secret) the deploy job is skipped instead of failing.
@@ -108,11 +112,20 @@ jobs:
           for img in backend agent etl frontend; do docker push "$BASE/$img:$TAG"; done
 
       - name: Terraform plan
-        run: terraform plan -input=false -var "image_tag=$TAG" -var "project_id=${{ vars.GCP_PROJECT_ID }}"
+        run: terraform plan -input=false -var "image_tag=$TAG" -var "project_id=${{ vars.GCP_PROJECT_ID }}" -out=tfplan
+
+      # Checkov cannot evaluate dynamic blocks or conditionals in the source, so Terraform is judged on the
+      # resolved plan. The skips (each with its reason) are the ones in .checkov.yaml.
+      - name: Checkov on the resolved plan
+        run: |
+          terraform show -json tfplan > "$RUNNER_TEMP/plan.json"
+          pip install --quiet checkov
+          SKIPS=$(grep -E '^\s+- (CKV[A-Z0-9_]+)' "$GITHUB_WORKSPACE/.checkov.yaml" | grep -oE 'CKV[A-Z0-9_]+' | paste -sd,)
+          checkov -f "$RUNNER_TEMP/plan.json" --framework terraform_plan --skip-check "$SKIPS" --compact --quiet
 
       - name: Terraform apply
         if: env.APPLY == 'true'
-        run: terraform apply -auto-approve -input=false -var "image_tag=$TAG" -var "project_id=${{ vars.GCP_PROJECT_ID }}"
+        run: terraform apply -auto-approve -input=false tfplan
 
       - name: URLs of the stack
         if: env.APPLY == 'true'

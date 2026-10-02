@@ -30,7 +30,8 @@ infra/gcp/
 | | dev | qa | prod |
 |---|---|---|---|
 | Cloud SQL | `db-f1-micro`, 20 GB | `db-g1-small`, 20 GB | `db-custom-2-7680`, 50 GB, recuperación a un instante |
-| Conectividad a la base (`db_connectivity`) | `public_ip`: IP pública abierta (`0.0.0.0/0`), como el stack original | `private_ip`: sin IP pública, por la VPC | `private_ip`: sin IP pública, por la VPC |
+| Conectividad a la base (`db_connectivity`) | `private_ip`: sin IP pública, por la VPC (antes `dev` usaba IP pública abierta; se cambió tras el análisis de seguridad) | `private_ip` | `private_ip` |
+| Airflow (`enable_airflow`) | apagado | apagado | **encendido**: VM `e2-standard-4`, apagada de noche y a demanda (`scripts/airflow_vm.sh`) |
 | Rangos de red | `10.10.0.0/24` y `10.10.1.0/24` | `10.20.0.0/24` y `10.20.1.0/24` | `10.30.0.0/24` y `10.30.1.0/24` |
 | Protección contra borrado (base y Cloud Run) | no | no | **sí** |
 | Instancias mínimas (backend, agent) | 0 | 0 | 1 |
@@ -102,6 +103,10 @@ AGENT_URL=$(terraform output -raw agent_uri) python infra/gcp/scripts/e2e.py
 ```
 
 Los clientes son filas del dataset sintético del organizador; las expectativas suponen el umbral por defecto de USD 500.
+
+## Seguridad
+
+Los hallazgos de Checkov y Trivy, lo que se corrigió, lo que se acepta y cómo se repite están en `spec/SECURITY_SCANS.md`. Resumen de lo que aplica a esta carpeta: SSL obligatorio y registro en Cloud SQL, base sin IP pública en los tres ambientes, registro de flujo en la subred, y el plan de cada despliegue se escanea con Checkov antes de aplicarse.
 
 ## Ahorro de costos
 
