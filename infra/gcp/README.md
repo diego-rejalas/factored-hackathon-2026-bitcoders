@@ -93,6 +93,16 @@ Ejecutar el ETL: `gcloud run jobs execute factored-dev-etl --region us-east4 --w
 
 `.github/workflows/gcp-deploy.yml`: un `push` a `main` hace el build de las imágenes y un `plan` de **dev**. Con `workflow_dispatch` se elige el ambiente (`dev`, `qa`, `prod`) y `plan` o `apply`, y opcionalmente se ejecuta el ETL. Como el job usa `environment:` de GitHub, se puede exigir una aprobación manual para `prod` desde la configuración del repositorio.
 
+## Prueba de punta a punta
+
+`scripts/e2e.py` ejecuta 11 escenarios contra un agente desplegado (login, rechazos de token, y las rutas de la política: resuelve, pregunta, escala por monto, por transacción ya cobrada, por fraude, inyección, datos de otro cliente; en español y portugués). Sale con código 0 solo si todos se comportan como se espera:
+
+```bash
+AGENT_URL=$(terraform output -raw agent_uri) python infra/gcp/scripts/e2e.py
+```
+
+Los clientes son filas del dataset sintético del organizador; las expectativas suponen el umbral por defecto de USD 500.
+
 ## Ahorro de costos
 
 ```bash
