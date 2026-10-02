@@ -1,0 +1,107 @@
+#!/bin/bash
+# Runs at every boot and is idempotent: installs Docker once, mounts the data disk, and (re)starts
+# the Airflow stack. Secrets are read from Secret Manager with the VM's own service account and are
+# written only to /etc/airflow/airflow.env (root, mode 600), never into instance metadata.
+set -euo pipefail
+exec > >(tee -a /var/log/airflow-startup.log) 2>&1
+echo "== airflow startup $(date -u +%FT%TZ)"
+
+# --- 0. Outbound internet (Cloud NAT can take a minute or two after the VM boots) -----------
+for attempt in $(seq 1 60); do
+  curl -fsS -m 5 -o /dev/null https://download.docker.com/linux/debian/gpg && break
+  echo "waiting for outbound internet (attempt $attempt)..."
+  sleep 10
+done
+
+# --- 1. Docker ---------------------------------------------------------------
+if ! command -v docker >/dev/null 2>&1; then
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update
+  apt-get install -y ca-certificates curl gnupg
+  install -m 0755 -d /etc/apt/keyrings
+  curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+  chmod a+r /etc/apt/keyrings/docker.asc
+  echo "deb [signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list
+  apt-get update
+  apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+fi
+systemctl enable --now docker
+
+# --- 2. Ops Agent (logs and metrics to Cloud Logging and Monitoring) ----------
+if ! systemctl list-unit-files 2>/dev/null | grep -q google-cloud-ops-agent; then
+  curl -fsSO https://dl.google.com/cloudagents/add-google-cloud-ops-agent-repo.sh
+  bash add-google-cloud-ops-agent-repo.sh --also-install
+fi
+
+# --- 3. Data disk -------------------------------------------------------------
+DEV=/dev/disk/by-id/google-airflow-data
+if ! blkid "$DEV" >/dev/null 2>&1; then
+  mkfs.ext4 -m 0 -F -E lazy_itable_init=0,lazy_journal_init=0,discard "$DEV"
+fi
+mkdir -p /mnt/airflow-data
+UUID=$(blkid -s UUID -o value "$DEV")
+grep -q "$UUID" /etc/fstab || echo "UUID=$UUID /mnt/airflow-data ext4 discard,defaults,nofail 0 2" >> /etc/fstab
+mountpoint -q /mnt/airflow-data || mount /mnt/airflow-data
+mkdir -p /mnt/airflow-data/logs /mnt/airflow-data/work
+chown -R 50000:0 /mnt/airflow-data   # 50000 is the airflow user inside the image
+
+# --- 4. gcloud (Debian GCE images ship it; install it if a future image does not) ---
+if ! command -v gcloud >/dev/null 2>&1; then
+  curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
+  echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" > /etc/apt/sources.list.d/google-cloud-sdk.list
+  apt-get update && apt-get install -y google-cloud-cli
+fi
+
+# --- 5. refresh script: secrets, compose file and registry login --------------
+install -d -m 0750 /etc/airflow /opt/airflow
+cat > /opt/airflow/refresh.sh <<'REFRESH'
+#!/bin/bash
+set -euo pipefail
+MD=http://metadata.google.internal/computeMetadata/v1
+secret() { gcloud secrets versions access latest --secret="$1" --project="${project_id}"; }
+
+umask 077
+{
+  echo "AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${airflow_db_user}:$(secret ${secret_db})@${airflow_db_host}:5432/${airflow_db_name}"
+  echo "AIRFLOW__CORE__FERNET_KEY=$(secret ${secret_fernet})"
+  echo "AIRFLOW__API_AUTH__JWT_SECRET=$(secret ${secret_jwt})"
+  echo "PG_PASSWORD=$(secret ${secret_pg})"
+  echo "LATAM_BANK_AWS_ACCESS_KEY_ID=$(secret ${secret_aws_id})"
+  echo "LATAM_BANK_AWS_SECRET_ACCESS_KEY=$(secret ${secret_aws_secret})"
+} > /etc/airflow/airflow.env.new
+mv /etc/airflow/airflow.env.new /etc/airflow/airflow.env
+
+printf '{"admin": "%s"}' "$(secret ${secret_admin})" > /mnt/airflow-data/simple_auth_manager_passwords.json
+chown 50000:0 /mnt/airflow-data/simple_auth_manager_passwords.json
+chmod 600 /mnt/airflow-data/simple_auth_manager_passwords.json
+
+curl -fsS -H 'Metadata-Flavor: Google' "$MD/instance/attributes/airflow-compose" > /opt/airflow/docker-compose.yml
+gcloud auth configure-docker ${registry_location}-docker.pkg.dev --quiet
+REFRESH
+chmod 750 /opt/airflow/refresh.sh
+
+# --- 6. systemd unit: `systemctl restart airflow` is the deploy ---------------
+cat > /etc/systemd/system/airflow.service <<'UNIT'
+[Unit]
+Description=Airflow stack (api-server, scheduler, dag-processor, triggerer)
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/airflow
+ExecStartPre=/opt/airflow/refresh.sh
+ExecStart=/usr/bin/docker compose -f /opt/airflow/docker-compose.yml up -d --pull always --remove-orphans
+ExecStop=/usr/bin/docker compose -f /opt/airflow/docker-compose.yml down
+TimeoutStartSec=900
+TimeoutStopSec=300
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable airflow.service
+systemctl restart airflow.service
+echo "== airflow startup done $(date -u +%FT%TZ)"
