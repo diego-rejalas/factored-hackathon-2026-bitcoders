@@ -8,6 +8,11 @@ def _fmt_amount(tx: dict) -> str:
     return f"{value} {currency}"
 
 
+def describe(tx: dict) -> str:
+    """The merchant is empty in most transactions: fall back to what kind of movement it was."""
+    return tx.get("merchant_name") or tx.get("transaction_type") or tx.get("transaction_category") or "una transacción"
+
+
 def _fmt_date(tx: dict) -> str:
     date = str(tx.get("transaction_date") or "")[:10]
     return date
@@ -32,12 +37,12 @@ def resolved_reply(language: str, case: dict, tx: dict) -> str:
     )
     if language == "pt":
         return (
-            f"Verifiquei sua transação na {_fmt_date(tx)} em {tx.get('merchant_name')} "
+            f"Verifiquei sua transação na {_fmt_date(tx)} em {describe(tx)} "
             f"por {_fmt_amount(tx)}: {explanation}. Registrei o caso {case['case_id']} "
             f"com o detalhe e a evidência da verificação. Não foi movido nenhum dinheiro."
         )
     return (
-        f"Verifiqué tu transacción del {_fmt_date(tx)} en {tx.get('merchant_name')} "
+        f"Verifiqué tu transacción del {_fmt_date(tx)} en {describe(tx)} "
         f"por {_fmt_amount(tx)}: {explanation}. Registré el caso {case['case_id']} "
         f"con el detalle y la evidencia de la verificación. No se movió dinero."
     )
@@ -45,7 +50,7 @@ def resolved_reply(language: str, case: dict, tx: dict) -> str:
 
 def clarify_reply(language: str, candidates: list) -> str:
     options = "; ".join(
-        f"{tx.get('merchant_name')} {_fmt_amount(tx)} del {_fmt_date(tx)}" for tx in candidates[:3]
+        f"{describe(tx)} {_fmt_amount(tx)} del {_fmt_date(tx)}" for tx in candidates[:3]
     )
     if language == "pt":
         return (
@@ -62,7 +67,7 @@ def clarify_reply(language: str, candidates: list) -> str:
 
 def confirm_reply(language: str, tx: dict) -> str:
     """One candidate exists but the customer did not identify it: ask, never assume."""
-    what = f"{tx.get('merchant_name') or tx.get('transaction_type')} {_fmt_amount(tx)} del {_fmt_date(tx)}"
+    what = f"{describe(tx)} {_fmt_amount(tx)} del {_fmt_date(tx)}"
     if language == "pt":
         return (
             f"Encontrei uma transação que pode ser a que você menciona: {what}. "

@@ -223,3 +223,31 @@ def test_pending_charge_also_escalates(graph, tools):
     result = _run(graph, "No reconozco el cobro de 50 en Tienda Norte")
     assert result["outcome"] == "escalated"
     assert result["handoff"]["reason"] == "posted_charge_disputed"
+
+
+def test_a_four_digit_amount_is_not_read_as_a_smaller_one(graph, tools):
+    """'1200' was read as 120 and could close an unrelated 120.00 transaction."""
+    _only(
+        tools,
+        _tx("TXN-SMALL", CUS_A, None, "Declined", 120.00, date="2026-06-02T10:00:00"),
+        _tx("TXN-BIG", CUS_A, None, "Declined", 400.00, effective=1200.00, date="2026-06-01T10:00:00"),
+    )
+    tools.transactions[1]["amount_usd_effective"] = 1200.00
+    result = _run(graph, "No reconozco el cobro de 1200")
+    # 1200 USD is above the 500 threshold: it must escalate on the RIGHT transaction, not close the 120 one.
+    assert result["outcome"] == "escalated"
+    assert result["handoff"]["reason"] == "amount_threshold"
+    assert tools.calls_of("create_dispute") == []
+
+
+def test_replies_never_print_none_for_a_missing_merchant(graph, tools):
+    _only(
+        tools,
+        _tx("TXN-A", CUS_A, None, "Declined", 40.00, date="2026-06-02T10:00:00"),
+        _tx("TXN-B", CUS_A, None, "Declined", 55.00, date="2026-06-01T10:00:00"),
+    )
+    result = _run(graph, "Me hicieron un cobro que no reconozco")
+    assert "None" not in result["reply"]
+    resolved = _run(graph, "No reconozco el cobro de 55")
+    assert resolved["outcome"] == "resolved"
+    assert "None" not in resolved["reply"]

@@ -83,7 +83,12 @@ def exceeds_threshold(transaction: dict) -> bool:
     return effective_usd(transaction) >= max_usd()
 
 
-AMOUNT_RE = re.compile(r"\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?|\d+(?:[.,]\d+)?")
+# Two shapes: a number with at least one thousands group ("4.189,18", "1,234.56"), or a plain
+# number ("4189.18", "1200", "45.50"). The old pattern let \d{1,3} win on "4189.18" and read it
+# as 418, which could then match an unrelated transaction of about 418.
+AMOUNT_RE = re.compile(r"\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d+)?")
+# Dates and "N days ago" are not amounts.
+NOT_AMOUNT_RE = re.compile(r"\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?")
 DAYS_RE = re.compile(r"hace\s+(\d+)\s+d[ií]as?|ha\s+(\d+)\s+dias?|last\s+(\d+)\s+days?")
 
 
@@ -107,7 +112,8 @@ def parse_number(raw: str) -> float:
 
 def extract_entities(message: str) -> dict:
     entities: dict = {}
-    numbers = [parse_number(m.group(0)) for m in AMOUNT_RE.finditer(message)]
+    stripped = DAYS_RE.sub(" ", NOT_AMOUNT_RE.sub(" ", message.lower()))
+    numbers = [parse_number(m.group(0)) for m in AMOUNT_RE.finditer(stripped)]
     if numbers:
         entities["amount"] = max(numbers)
     days = DAYS_RE.search(message)
