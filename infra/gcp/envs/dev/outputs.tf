@@ -45,3 +45,12 @@ output "image_base" {
   description = "Registry path the CI pushes images to."
   value       = module.foundation.image_base
 }
+
+output "airflow_vm" {
+  description = "Name of the Airflow VM, or null when Airflow is not enabled."
+  value       = try(module.airflow[0].instance_name, null)
+}
+
+output "airflow_zone" {
+  value = try(module.airflow[0].zone, null)
+}

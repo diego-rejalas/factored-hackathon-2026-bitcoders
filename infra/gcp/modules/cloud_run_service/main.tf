@@ -96,6 +96,12 @@ resource "google_cloud_run_v2_service" "this" {
     }
   }
 
+  # The API returns a service-level scaling block (0 and 0) that the provider wants to drop on every
+  # plan. It is not the scaling we configure (template.scaling), so ignoring it hides only noise.
+  lifecycle {
+    ignore_changes = [scaling]
+  }
+
   depends_on = [
     google_secret_manager_secret_iam_member.accessor,
     google_project_iam_member.cloudsql_client,

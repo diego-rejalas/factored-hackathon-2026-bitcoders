@@ -155,3 +155,37 @@ variable "guardrail_max_usd" {
   type        = string
   default     = "500"
 }
+
+variable "enable_airflow" {
+  description = "Deploy Airflow on its own VM (see spec/AIRFLOW_GCP.md). Needs db_connectivity = private_ip, and turns on Cloud NAT."
+  type        = bool
+  default     = false
+}
+
+variable "airflow_zone" {
+  type    = string
+  default = "us-east4-a"
+}
+
+variable "airflow_machine_type" {
+  description = "e2-standard-4 (4 CPU, 16 GB): DuckDB with 8 GB next to the Airflow containers."
+  type        = string
+  default     = "e2-standard-4"
+}
+
+variable "airflow_data_disk_gb" {
+  type    = number
+  default = 100
+}
+
+variable "airflow_auto_stop_cron" {
+  description = "Nightly stop of the Airflow VM, in America/Asuncion time. The VM is started by hand (scripts/airflow_vm.sh start)."
+  type        = string
+  default     = "0 3 * * *"
+}
+
+variable "airflow_admin_members" {
+  description = "Who may open the IAP tunnel and SSH into the Airflow VM, for example [\"user:name@example.com\"]."
+  type        = list(string)
+  default     = []
+}

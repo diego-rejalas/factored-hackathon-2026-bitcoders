@@ -56,7 +56,7 @@ module "network" {
   region               = var.region
   subnet_cidr          = var.subnet_cidr
   private_service_cidr = var.private_service_cidr
-  enable_nat           = var.enable_nat
+  enable_nat           = var.enable_nat || var.enable_airflow
 
   depends_on = [module.foundation]
 }
@@ -76,6 +76,7 @@ module "cloudsql" {
   enable_public_ip       = !local.use_private_ip
   private_ip             = local.use_private_ip
   private_network_id     = module.network.network_id
+  extra_databases        = var.enable_airflow ? { airflow = "airflow" } : {}
   labels                 = local.labels
 
   depends_on = [module.foundation, module.network]
@@ -84,11 +85,13 @@ module "cloudsql" {
 module "secrets" {
   source = "../../modules/secrets"
 
-  prefix             = local.prefix
-  db_password        = module.cloudsql.password
-  openrouter_api_key = var.openrouter_api_key
-  typesafe_api_key   = var.typesafe_api_key
-  labels             = local.labels
+  prefix              = local.prefix
+  db_password         = module.cloudsql.password
+  enable_airflow      = var.enable_airflow
+  airflow_db_password = lookup(module.cloudsql.extra_passwords, "airflow", "")
+  openrouter_api_key  = var.openrouter_api_key
+  typesafe_api_key    = var.typesafe_api_key
+  labels              = local.labels
 
   depends_on = [module.foundation]
 }
@@ -213,4 +216,55 @@ module "etl" {
   labels                   = local.labels
 
   depends_on = [module.foundation]
+}
+
+# Airflow reaches Cloud SQL over the VPC, so the database must have a private IP.
+resource "terraform_data" "airflow_requires_private_db" {
+  lifecycle {
+    precondition {
+      condition     = !var.enable_airflow || var.db_connectivity == "private_ip"
+      error_message = "enable_airflow needs db_connectivity = private_ip: the VM connects to Cloud SQL over the private network."
+    }
+  }
+}
+
+module "airflow" {
+  count  = var.enable_airflow ? 1 : 0
+  source = "../../modules/airflow_vm"
+
+  name         = "${local.prefix}-airflow"
+  project_id   = var.project_id
+  region       = var.region
+  zone         = var.airflow_zone
+  machine_type = var.airflow_machine_type
+  data_disk_gb = var.airflow_data_disk_gb
+
+  network_name           = module.network.network_name
+  subnetwork_name        = module.network.subnetwork_name
+  image                  = "${module.foundation.image_base}/airflow:${var.image_tag}"
+  registry_repository_id = module.foundation.repository_id
+  registry_location      = module.foundation.repository_location
+  lake_bucket            = module.lakehouse.name
+
+  secret_ids = {
+    airflow_db_password = module.secrets.secret_ids["airflow-db-password"]
+    fernet_key          = module.secrets.secret_ids["airflow-fernet-key"]
+    api_jwt_secret      = module.secrets.secret_ids["airflow-api-jwt-secret"]
+    admin_password      = module.secrets.secret_ids["airflow-admin-password"]
+    pg_password         = module.secrets.secret_ids["db-password"]
+    aws_id              = module.secrets.secret_ids["latam-bank-aws-id"]
+    aws_secret          = module.secrets.secret_ids["latam-bank-aws-secret"]
+  }
+
+  airflow_db_host = module.cloudsql.private_ip
+  pg_host         = module.cloudsql.private_ip
+  pg_user         = module.cloudsql.user_name
+  pg_database     = module.cloudsql.database_name
+
+  admin_members       = var.airflow_admin_members
+  auto_stop_cron      = var.airflow_auto_stop_cron
+  deletion_protection = var.run_deletion_protection
+  labels              = local.labels
+
+  depends_on = [module.foundation, module.network, terraform_data.airflow_requires_private_db]
 }
