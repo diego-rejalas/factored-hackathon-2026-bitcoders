@@ -1,0 +1,22 @@
+[project]
+name = "latam-pipeline"
+version = "0.1.0"
+description = "LATAM Bank pipeline stages: S3 -> DuckDB bronze -> dbt (silver, gold) -> Parquet lakehouse -> Postgres gold"
+requires-python = ">=3.11"
+dependencies = [
+    "duckdb>=1.1",
+    "google-cloud-storage>=2.18",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["latam_pipeline*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
