@@ -24,6 +24,7 @@ resource "google_cloud_run_v2_service" "this" {
   name                = var.name
   location            = var.location
   deletion_protection = var.deletion_protection
+  ingress             = var.ingress
   labels              = var.labels
 
   template {
@@ -114,4 +115,12 @@ resource "google_cloud_run_v2_service_iam_member" "public" {
   location = var.location
   role     = "roles/run.invoker"
   member   = "allUsers"
+}
+
+resource "google_cloud_run_v2_service_iam_member" "invoker" {
+  for_each = toset(var.invoker_members)
+  name     = google_cloud_run_v2_service.this.name
+  location = var.location
+  role     = "roles/run.invoker"
+  member   = each.value
 }

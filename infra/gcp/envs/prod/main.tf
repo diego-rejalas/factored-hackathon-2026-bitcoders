@@ -109,6 +109,13 @@ module "lakehouse" {
   depends_on = [module.foundation]
 }
 
+locals {
+  edge_locked = var.enable_edge && var.edge_lockdown
+  # Where the browser reaches the agent: the same origin as the page once the load balancer is the way in.
+  agent_public_url = local.edge_locked ? "https://${module.edge[0].domain}/agent" : module.agent.uri
+  edge_ingress     = local.edge_locked ? "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER" : "INGRESS_TRAFFIC_ALL"
+}
+
 module "backend" {
   source = "../../modules/cloud_run_service"
 
@@ -129,6 +136,7 @@ module "backend" {
   vpc_subnetwork           = module.network.subnetwork_name
   cloudsql_connection_name = module.cloudsql.connection_name
   allow_unauthenticated    = var.backend_public
+  invoker_members          = var.backend_public ? [] : ["serviceAccount:${module.agent.service_account_email}"]
   min_instances            = var.backend_min_instances
   deletion_protection      = var.run_deletion_protection
   labels                   = local.labels
@@ -146,7 +154,8 @@ module "agent" {
 
   env = merge(local.db_env, {
     BANK_URL             = module.backend.uri
-    CORS_ALLOWED_ORIGINS = join(",", var.cors_allowed_origins)
+    BANK_IAM_AUDIENCE    = var.backend_public ? "" : module.backend.uri
+    CORS_ALLOWED_ORIGINS = join(",", concat(var.cors_allowed_origins, var.enable_edge ? ["https://${module.edge[0].domain}"] : []))
     OPENROUTER_MODEL     = var.openrouter_model
     GUARDRAIL_MAX_USD    = var.guardrail_max_usd
   })
@@ -163,6 +172,7 @@ module "agent" {
   vpc_subnetwork           = module.network.subnetwork_name
   cloudsql_connection_name = module.cloudsql.connection_name
   allow_unauthenticated    = true
+  ingress                  = local.edge_ingress
   min_instances            = var.agent_min_instances
   deletion_protection      = var.run_deletion_protection
   labels                   = local.labels
@@ -179,12 +189,27 @@ module "frontend" {
   image      = "${module.foundation.image_base}/frontend:${var.image_tag}"
 
   env = {
-    AGENT_URL = module.agent.uri
+    AGENT_URL = local.agent_public_url
   }
 
   allow_unauthenticated = true
+  ingress               = local.edge_ingress
   deletion_protection   = var.run_deletion_protection
   labels                = local.labels
+
+  depends_on = [module.foundation]
+}
+
+module "edge" {
+  count  = var.enable_edge ? 1 : 0
+  source = "../../modules/edge"
+
+  name             = local.prefix
+  project_id       = var.project_id
+  region           = var.region
+  frontend_service = module.frontend.name
+  agent_service    = module.agent.name
+  domain           = var.edge_domain
 
   depends_on = [module.foundation]
 }

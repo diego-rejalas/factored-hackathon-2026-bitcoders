@@ -2,6 +2,8 @@ import os
 
 import httpx
 
+from app.gcp_auth import IdentityTokenProvider
+
 
 class ToolError(Exception):
     def __init__(self, status_code: int, detail: str):
@@ -17,9 +19,12 @@ class BankTools:
     so enforcement is double (agent pre-check + backend enforcement).
     """
 
-    def __init__(self, base_url: str, timeout: float = 10.0):
+    def __init__(
+        self, base_url: str, timeout: float = 10.0, identity: IdentityTokenProvider | None = None
+    ):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+        self.identity = identity
 
     async def login(self, customer_id: str, document_number: str) -> dict:
         return await self._request(
@@ -67,6 +72,8 @@ class BankTools:
 
     async def _request(self, method: str, path: str, token: str | None = None, **kwargs) -> dict:
         headers = kwargs.pop("headers", {})
+        if self.identity:
+            headers["X-Serverless-Authorization"] = f"Bearer {await self.identity.token()}"
         if token:
             headers["Authorization"] = f"Bearer {token}"
         async with httpx.AsyncClient(base_url=self.base_url, timeout=self.timeout) as client:
@@ -84,4 +91,10 @@ class BankTools:
 
 
 def bank_tools_from_env() -> BankTools:
-    return BankTools(os.environ.get("BANK_URL", "http://localhost:8000"))
+    # BANK_IAM_AUDIENCE is set where the backend requires an identity token (Cloud Run with IAM on);
+    # elsewhere (local, Railway) it is unset and the call goes out as before.
+    audience = os.environ.get("BANK_IAM_AUDIENCE")
+    return BankTools(
+        os.environ.get("BANK_URL", "http://localhost:8000"),
+        identity=IdentityTokenProvider(audience) if audience else None,
+    )
