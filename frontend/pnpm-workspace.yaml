@@ -14,8 +14,3 @@ minimumReleaseAge: 0
 # and tries to purge node_modules (no TTY in docker build → hard failure).
 # The install itself is --frozen-lockfile, so the check adds nothing here.
 verifyDepsBeforeRun: false
-# next bundles its own postcss internally (not a direct dependency we choose), pinned to a version
-# with 4 known CVEs (XSS, arbitrary file read via sourceMappingURL, path traversal). Forced to the
-# patched line until next's own pin catches up.
-overrides:
-  postcss: ">=8.5.23"
