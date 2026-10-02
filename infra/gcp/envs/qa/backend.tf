@@ -1,7 +1,8 @@
-# The state bucket is created once by scripts/setup-backend.sh and passed at init time:
-#   terraform init -backend-config="bucket=<PROJECT_ID>-tfstate"
+# Remote state, one prefix per environment, in the bucket created by scripts/setup-backend.sh.
+# The state holds generated secrets (database password, JWT key): the bucket stays private.
 terraform {
   backend "gcs" {
-    prefix = "factored/qa"
+    bucket = "bitcoders-factored-hackathon-tfstate"
+    prefix = "env/qa"
   }
 }
