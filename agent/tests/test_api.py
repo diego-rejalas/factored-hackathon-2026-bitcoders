@@ -107,3 +107,40 @@ def test_chat_precheck_is_optional_without_shared_secret(client, monkeypatch):
     )
     assert response.status_code == 200
     assert response.json()["outcome"] == "resolved"
+
+
+# --- CORS: the browser chat calls the agent from another origin ------------------------------
+
+PREFLIGHT = {"Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "content-type"}
+
+
+def _cors_client(monkeypatch, origins):
+    monkeypatch.setenv("CORS_ALLOWED_ORIGINS", origins)
+    return TestClient(create_app(tools=FakeBankTools(), tracer=NullTracer(), llm=None))
+
+
+def test_cors_allows_a_configured_origin(monkeypatch):
+    client = _cors_client(monkeypatch, "https://app.example.com, https://other.example.com/")
+    for origin in ("https://app.example.com", "https://other.example.com"):
+        response = client.options("/chat", headers={"Origin": origin, **PREFLIGHT})
+        assert response.status_code == 200
+        assert response.headers["access-control-allow-origin"] == origin
+
+
+def test_cors_rejects_an_unlisted_origin(monkeypatch):
+    client = _cors_client(monkeypatch, "https://app.example.com")
+    response = client.options("/chat", headers={"Origin": "https://evil.example.com", **PREFLIGHT})
+    assert "access-control-allow-origin" not in response.headers
+
+
+def test_cors_is_off_without_configuration(monkeypatch):
+    monkeypatch.delenv("CORS_ALLOWED_ORIGINS", raising=False)
+    client = TestClient(create_app(tools=FakeBankTools(), tracer=NullTracer(), llm=None))
+    response = client.options("/chat", headers={"Origin": "https://app.example.com", **PREFLIGHT})
+    assert "access-control-allow-origin" not in response.headers
+
+
+def test_cors_refuses_a_wildcard(monkeypatch):
+    monkeypatch.setenv("CORS_ALLOWED_ORIGINS", "*")
+    with pytest.raises(RuntimeError):
+        create_app(tools=FakeBankTools(), tracer=NullTracer(), llm=None)

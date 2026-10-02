@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 import jwt
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from app.graph import build_graph
@@ -76,6 +77,21 @@ def create_app(tools=None, tracer=None, llm=None) -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
+
+    # The chat UI calls this service from the browser, from another origin. Allowed origins come
+    # from CORS_ALLOWED_ORIGINS (comma separated, exact origins). Never "*": the session token
+    # travels in the request body, and an open policy would let any site drive a logged-in chat.
+    origins = [o.strip().rstrip("/") for o in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",") if o.strip()]
+    if "*" in origins:
+        raise RuntimeError("CORS_ALLOWED_ORIGINS must list exact origins, not '*'")
+    if origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=origins,
+            allow_methods=["GET", "POST", "OPTIONS"],
+            allow_headers=["Content-Type", "Authorization"],
+            max_age=600,
+        )
 
     if tools is not None or tracer is not None or llm is not None:
         app.state.tools = tools or bank_tools_from_env()
