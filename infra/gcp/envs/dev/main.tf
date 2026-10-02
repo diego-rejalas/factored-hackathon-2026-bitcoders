@@ -140,9 +140,10 @@ module "agent" {
   image      = "${module.foundation.image_base}/agent:${var.image_tag}"
 
   env = merge(local.db_env, {
-    BANK_URL          = module.backend.uri
-    OPENROUTER_MODEL  = var.openrouter_model
-    GUARDRAIL_MAX_USD = var.guardrail_max_usd
+    BANK_URL             = module.backend.uri
+    CORS_ALLOWED_ORIGINS = join(",", var.cors_allowed_origins)
+    OPENROUTER_MODEL     = var.openrouter_model
+    GUARDRAIL_MAX_USD    = var.guardrail_max_usd
   })
   secret_env = {
     PG_PASSWORD        = module.secrets.secret_ids["db-password"]

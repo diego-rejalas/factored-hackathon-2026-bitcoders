@@ -139,6 +139,12 @@ variable "typesafe_api_key" {
   sensitive   = true
 }
 
+variable "cors_allowed_origins" {
+  description = "Exact origins allowed to call the agent from a browser, for example [\"https://app.example.com\"]. Empty turns CORS off. A wildcard is refused by the agent."
+  type        = list(string)
+  default     = []
+}
+
 variable "openrouter_model" {
   type    = string
   default = "openai/gpt-4o-mini"
