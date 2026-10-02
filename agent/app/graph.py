@@ -188,6 +188,20 @@ def build_graph(tools, tracer, llm=None):
             f"monto efectivo {guardrail.effective_usd(candidate):.2f} USD",
             f"caso {fresh['case_id']} verificado en estado {fresh['status']}",
         ]
+        if fresh.get("status") == "open":
+            # The policy resolved it without a person: record that, so the customer's case list says "resolved"
+            # and not "open". Then read the case again; verify does not trust its own write.
+            try:
+                await tools.resolve_dispute(
+                    state["session_token"],
+                    case["case_id"],
+                    {"decided_by": "system", "rule": "auto_resolve", "verified_facts": facts},
+                )
+                fresh = await tools.get_dispute(state["session_token"], case["case_id"])
+            except ToolError as error:
+                # A backend without /resolve (404 or 405) leaves the case open: the answer to the customer is the
+                # same, only the case list is less precise. Any other failure is worth a trace.
+                await tracer.log(state["run_id"], state["conversation_id"], "verify", intent=state["intent"], tool="resolve_dispute", result_status=f"skipped_{error.status_code}", latency_ms=_elapsed(start))
         await tracer.log(state["run_id"], state["conversation_id"], "verify", intent=state["intent"], tool="get_dispute", result_status=fresh.get("status"), latency_ms=_elapsed(start))
         return {"case": fresh, "facts": facts, "outcome": "resolved", "route": "respond"}
 

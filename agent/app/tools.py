@@ -65,6 +65,11 @@ class BankTools:
     async def get_dispute(self, token: str, case_id: str) -> dict:
         return await self._request("GET", f"/disputes/{case_id}", token=token)
 
+    async def resolve_dispute(self, token: str, case_id: str, resolution: dict) -> dict:
+        return await self._request(
+            "POST", f"/disputes/{case_id}/resolve", token=token, json={"resolution": resolution}
+        )
+
     async def escalate_dispute(self, token: str, case_id: str, handoff: dict) -> dict:
         return await self._request(
             "POST", f"/disputes/{case_id}/escalate", token=token, json={"handoff": handoff}

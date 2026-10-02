@@ -4,32 +4,42 @@ Vertical 3 de `../spec/ARCHITECTURE.md`. Servicio FastAPI separado en Railway. E
 
 ## Contrato (OpenAPI en `/docs`)
 
-FastAPI expone el esquema completo en `/openapi.json` y la UI interactiva en `/docs`. Resumen:
+Dos superficies sobre el mismo servicio. La **raíz** es la del agente (no cambia); **`/v1`** es la de la aplicación web, a la que llega por su servidor (BFF), nunca desde el navegador. Diseño completo y decisiones en `../spec/BACKEND_API.md`.
+
+**`/v1` (aplicación web)**
 
 | Endpoint | Auth | Qué hace |
 |---|---|---|
-| `POST /session` | — | Login de prueba: valida `customer_id` + `document_number` contra `gold.customers` y emite JWT HS256 (exp ~2h, `SESSION_TTL_MINUTES`). Sesión sandbox, no hay IdP real detrás. |
-| `GET /health` | — | Liveness para el healthcheck de Railway. |
-| `GET /me` | Bearer | Perfil mínimo (nombre, país). Jamás expone income/credit_score/document_number. |
-| `GET /me/transactions?status=&merchant=&days=&limit=` | Bearer | Movimientos propios; siempre filtra por el `customer_id` del token (el query no acepta customer_id). `amount_usd_effective` = `coalesce(amount_usd, amount si currency='USD')` — 57% de `amount_usd` es nulo en filas USD (ver `../spec/DATA_FINDINGS.md`). `days` ancla al borde del snapshot (última transacción del dataset), no a `now()`. |
-| `GET /me/transactions/{id}` | Bearer | Detalle con verificación de titularidad → 404 si es ajena. |
-| `POST /disputes` | Bearer | Crea caso `open` en `app.disputes`; valida titularidad de la transacción primero → 404 si es ajena. Evidencia: snapshot de la transacción. |
-| `GET /disputes/{case_id}` | Bearer | Estado + evidencia + eventos (lo usa el nodo `verify` del agent). 404 si el caso no es del token. |
-| `POST /disputes/{case_id}/escalate` | Bearer | Marca `escalated` y guarda el handoff estructurado en la evidencia + evento append-only. |
+| `POST /v1/auth/login` | — | Usuario y clave (argon2id). Cinco fallos bloquean la cuenta 15 minutos (429 + `Retry-After`). Misma respuesta si el usuario no existe. |
+| `GET /v1/auth/demo-accounts` | — | Cuentas de demostración y su clave compartida. 404 salvo `DEMO_ACCOUNTS_ENABLED=true`. |
+| `GET /v1/me` | Bearer | Perfil mínimo. |
+| `GET /v1/me/summary` | Bearer | Inicio: saldos por moneda (depósitos y crédito por separado), 5 últimos movimientos, casos activos por estado. |
+| `GET /v1/me/products` y `/{id}` | Bearer | Productos con el número enmascarado (`****1234`), saldo, límite, estado. |
+| `GET /v1/me/transactions` | Bearer | Historial paginado por cursor (`?cursor=`), filtros `product_id`, `status`, `merchant`, `from`, `to`. Cada fila trae `case_id` y `dispute_status` si ya tiene caso. |
+| `GET /v1/me/transactions/{id}` | Bearer | Detalle, con titularidad. |
+| `POST /v1/disputes` | Bearer | Idempotente por (cliente, transacción): 201 si crea, **200 con el caso existente** si ya había uno. Acepta `Idempotency-Key`. |
+| `GET /v1/disputes` | Bearer | Mis casos, más nuevos primero (`?status=`). |
+| `GET /v1/disputes/{id}` | Bearer | Estado, evidencia y línea de tiempo. |
+| `POST /v1/disputes/{id}/escalate` | Bearer | `open` o `auto_resolved` → `escalated`, una vez. |
+| `POST /v1/disputes/{id}/resolve` | Bearer | `open` → `auto_resolved`, una vez (lo llama el agente cuando la política resuelve sin una persona). |
+
+**Raíz (agente)** — sin cambios de forma: `POST /session`, `GET /me`, `GET /me/transactions` (lista simple), `GET /me/transactions/{id}`, y las rutas de disputas (las mismas que bajo `/v1`). `GET /health` (el proceso vive) y `GET /ready` (alcanza la base).
 
 Garantías:
-- **Identidad:** siempre deriva del JWT validado (`get_current_customer`); el LLM/chat no puede proponer `customer_id`.
-- **`gold.*` es read-only** para este servicio; las tablas operacionales (`app.disputes`, `app.dispute_events`) se crean en startup con `CREATE TABLE IF NOT EXISTS` (documentado como limitación, no es una migración real).
+- **Identidad:** siempre deriva del JWT validado (`get_current_customer`); ningún parámetro propone un `customer_id`.
+- **`gold.*` es de solo lectura** para este servicio. Las tablas `app.*` las crean **migraciones SQL versionadas** (`app/migrations`), aplicadas al arrancar bajo un candado, cada una en su transacción.
+- **Un caso por (cliente, transacción)**, garantizado por un índice único, no por el código: dos solicitudes simultáneas crean un solo caso.
 - **`is_fraud`/`fraud_score` no existen en `gold.transactions`** y no aparecen en ningún SELECT (invariante del pipeline).
 - Sin mover dinero: las disputas solo explican, documentan y escalan.
 
 ## Estructura
 
-- `app/main.py` — app FastAPI, lifespan (pool + DDL), `/health`.
-- `app/auth.py` — `POST /session`, emisión/validación JWT HS256, dependencia `get_current_customer`.
+- `app/main.py` — app FastAPI, lifespan (pool, migraciones, cuentas de demostración), `/health`, `/ready`.
+- `app/auth.py` — `POST /session` (el del agente), emisión/validación JWT HS256, dependencia `get_current_customer`.
+- `app/passwords.py`, `app/demo.py`, `app/migrate.py`, `app/migrations/*.sql` — hash argon2id, cuentas de demostración, migraciones.
 - `app/db.py` — `BankStore` (asyncpg, SQL explícito, sin ORM).
-- `app/routes/customers.py`, `app/routes/disputes.py` — endpoints deterministas.
-- `tests/` — suite DB-less (store fake en memoria).
+- `app/routes/customers.py` (raíz, agente), `app/routes/v1.py` (web), `app/routes/disputes.py` (compartido por ambos) — endpoints deterministas.
+- `tests/` — rutas con un store en memoria, y `test_store_postgres.py` con el **SQL real** contra PostgreSQL (necesita `PG_TEST_HOST`; el CI lo levanta).
 
 ## Ejecutar y probar
 
@@ -39,10 +49,11 @@ set -a; . ./.env; set +a
 uvicorn app.main:app --reload   # desde esta carpeta; http://localhost:8000/docs
 ```
 
-Tests (no requieren Postgres):
+Tests:
 
 ```bash
-python -m pytest                # desde backend/, con pytest + httpx instalados
+python -m pytest                # desde backend/, con pytest + httpx instalados; sin PG_TEST_HOST se salta el SQL real
+PG_TEST_HOST=localhost PG_TEST_PORT=5432 PG_TEST_USER=postgres PG_TEST_PASSWORD=... python -m pytest   # todo
 ```
 
 Despliegue: `../.railway/railway.ts` (servicio `backend`, Dockerfile propio, watchPatterns `backend/**`, healthcheck `/health`).
