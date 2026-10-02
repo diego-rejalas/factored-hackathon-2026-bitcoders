@@ -5,9 +5,13 @@ name: GCP deploy
 # - push to main: dev only, image build + terraform plan (nothing is pushed or applied)
 # - workflow_dispatch: pick the environment (dev, qa, prod) and plan or apply, optionally run the ETL job
 #
+# Authentication is Workload Identity Federation: the job exchanges the OIDC token GitHub issues for it, so no
+# key is stored. Plans run as a read-only service account; applies run as the deployment one, which only
+# accepts workflows running on main (see infra/gcp/bootstrap).
+#
 # Needs in the repo (or per GitHub Environment, which lets prod require a manual approval):
-#   secrets: GCP_SA_KEY   (repository secret) JSON key of a service account allowed to deploy
-#   vars:    GCP_PROJECT_ID, GCP_STATE_BUCKET, GCP_REGION (default us-east4)
+#   vars: GCP_PROJECT_ID, GCP_STATE_BUCKET, GCP_REGION (default us-east4),
+#         GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_PLAN_SA, GCP_DEPLOY_SA (outputs of infra/gcp/bootstrap)
 # The state bucket is created once with infra/gcp/scripts/setup-backend.sh.
 
 on:
@@ -42,8 +46,7 @@ permissions:
   contents: read
 
 jobs:
-  # The `env` context is not available in a job-level `if`, so credentials are detected here.
-  # Without GCP_SA_KEY (a repository secret) the deploy job is skipped instead of failing.
+  # Without the federation variables the deploy job is skipped instead of failing.
   gate:
     runs-on: ubuntu-latest
     outputs:
@@ -51,8 +54,9 @@ jobs:
     steps:
       - id: check
         env:
-          KEY: ${{ secrets.GCP_SA_KEY }}
-        run: echo "ready=$([ -n "$KEY" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          PLAN_SA: ${{ vars.GCP_PLAN_SA }}
+        run: echo "ready=$([ -n "$PROVIDER" ] && [ -n "$PLAN_SA" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
   deploy:
     name: Build images + Terraform (${{ inputs.environment || 'dev' }})
@@ -62,6 +66,7 @@ jobs:
     environment: ${{ inputs.environment || 'dev' }}
     permissions:
       contents: read
+      id-token: write # lets the job ask GitHub for the OIDC token that Google exchanges
     defaults:
       run:
         working-directory: infra/gcp/envs/${{ inputs.environment || 'dev' }}
@@ -71,7 +76,10 @@ jobs:
       - id: auth
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          # Only an apply needs write access; every plan runs as the read-only account.
+          service_account: ${{ env.APPLY == 'true' && vars.GCP_DEPLOY_SA || vars.GCP_PLAN_SA }}
 
       - uses: google-github-actions/setup-gcloud@v2
 
@@ -102,6 +110,7 @@ jobs:
           docker build . -f agent/Dockerfile           -t "$BASE/agent:$TAG"
           docker build . -f infra/gcp/etl/Dockerfile   -t "$BASE/etl:$TAG"
           docker build . -f frontend/Dockerfile        -t "$BASE/frontend:$TAG"
+          docker build . -f infra/airflow-gcp/Dockerfile -t "$BASE/airflow:$TAG"
 
       - name: Push images
         if: env.APPLY == 'true'
@@ -109,10 +118,11 @@ jobs:
         run: |
           gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
           BASE="${REGION}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/factored-${ENVIRONMENT}"
-          for img in backend agent etl frontend; do docker push "$BASE/$img:$TAG"; done
+          for img in backend agent etl frontend airflow; do docker push "$BASE/$img:$TAG"; done
 
       - name: Terraform plan
-        run: terraform plan -input=false -var "image_tag=$TAG" -var "project_id=${{ vars.GCP_PROJECT_ID }}" -out=tfplan
+        # The read-only account cannot take the state lock, so a plan that will not be applied skips it.
+        run: terraform plan -input=false -lock=${{ env.APPLY == 'true' }} -var "image_tag=$TAG" -var "project_id=${{ vars.GCP_PROJECT_ID }}" -out=tfplan
 
       # Checkov cannot evaluate dynamic blocks or conditionals in the source, so Terraform is judged on the
       # resolved plan. The skips (each with its reason) are the ones in .checkov.yaml.
@@ -145,10 +155,16 @@ jobs:
       - name: Health checks
         if: env.APPLY == 'true'
         run: |
-          AGENT=$(terraform output -raw agent_uri)
-          BACKEND=$(terraform output -raw backend_uri)
-          FRONTEND=$(terraform output -raw frontend_uri)
-          curl -fsS "$AGENT/health"    | grep -q '"ok"'
-          curl -fsS "$BACKEND/health"  | grep -q '"ok"'
-          curl -fsS -o /dev/null "$FRONTEND"
+          EDGE=$(terraform output -raw edge_url)
+          LOCKDOWN=$(terraform output -raw edge_locked)
+          if [ "$EDGE" != "null" ] && [ -n "$EDGE" ] && [ "$LOCKDOWN" = "true" ]; then
+            # Through the load balancer: the path the browser takes. The certificate may still be provisioning.
+            curl -fsS --retry 10 --retry-delay 30 -o /dev/null "$EDGE/"
+            curl -fsS --retry 10 --retry-delay 30 "$EDGE/agent/health" | grep -q '"ok"'
+          else
+            curl -fsS "$(terraform output -raw agent_uri)/health" | grep -q '"ok"'
+            curl -fsS -o /dev/null "$(terraform output -raw frontend_uri)"
+          fi
+          # The backend is closed to the internet: without credentials it must answer 403.
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$(terraform output -raw backend_uri)/health")" = "403"
           echo "stack healthy"
