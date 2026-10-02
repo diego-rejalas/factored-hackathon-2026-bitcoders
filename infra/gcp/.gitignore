@@ -1,6 +1,17 @@
-*.tfvars
+# Terraform
+.terraform/
 *.tfstate
 *.tfstate.*
-.terraform/
-.terraform.lock.hcl
+*.backup
+
+# Real values (the .example files are committed; .terraform.lock.hcl is committed too)
+terraform.tfvars
+*.auto.tfvars
+
 crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*.pem
+*.key

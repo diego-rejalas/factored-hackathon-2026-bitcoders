@@ -1,4 +1,5 @@
 # Guía de Conexión y Onboarding para el Equipo (GCP & Datos)
+> **Nota (2026-10-02):** estos nombres (`factored-hackathon`, `us-central1`) son los del stack desplegado **antes** de separar el IaC en `envs/dev|qa|prod`. Los ambientes nuevos usan `factored-<ambiente>` y `us-east4`; los scripts aceptan `ENVIRONMENT=dev` (por defecto) o `INSTANCE=` y `REGION=` explícitos.
 > **Proyecto:** `bitcoders-factored-hackathon` | **Región:** `us-central1`  
 > **Hackathon:** Factored AI & Data Hackathon 2026
 
@@ -46,10 +47,10 @@ Para minimizar costos, Cloud SQL utiliza **Hibernación Just-in-Time**. Si la ba
 
 ```bash
 # Comprobar estado:
-./infra/gcp/manage_db.sh status
+./infra/gcp/scripts/manage_db.sh status
 
 # Si activationPolicy está en NEVER, reactívala (tarda ~60 segundos):
-./infra/gcp/manage_db.sh resume
+./infra/gcp/scripts/manage_db.sh resume
 ```
 
 ---
@@ -141,7 +142,7 @@ gcloud beta run services logs tail backend --region=us-central1
 
 * **Error: `connection refused` o timeout al conectar a PostgreSQL:**
   * Asegúrate de que el Cloud SQL Proxy esté corriendo en una terminal.
-  * Verifica si la base de datos está hibernada (`./infra/gcp/manage_db.sh status`). Si está en `NEVER`, ejecuta `./infra/gcp/manage_db.sh resume`.
+  * Verifica si la base de datos está hibernada (`./infra/gcp/scripts/manage_db.sh status`). Si está en `NEVER`, ejecuta `./infra/gcp/scripts/manage_db.sh resume`.
 * **Error: `password authentication failed for user`:**
   * Revisa que estés ingresando el usuario y contraseña exactos que te proporcionaron en el aprovisionamiento.
 * **Error: `Bucket not found` al consultar en GCS:**

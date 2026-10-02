@@ -5,7 +5,10 @@
 
 set -euo pipefail
 
-INSTANCE="factored-hackathon"
+# Environment of the stack (dev, qa or prod). INSTANCE and REGION can be overridden, for example
+# INSTANCE=factored-hackathon REGION=us-central1 for the stack deployed before the environment split.
+ENVIRONMENT="${ENVIRONMENT:-dev}"
+INSTANCE="${INSTANCE:-factored-${ENVIRONMENT}}"
 PROJECT="${GCP_PROJECT_ID:-bitcoders-factored-hackathon}"
 
 usage() {

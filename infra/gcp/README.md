@@ -1,140 +1,116 @@
-# infra/gcp/ — despliegue primario en GCP (migración completa)
+# infra/gcp/ — infraestructura en GCP por ambientes
 
-Desde la migración completa (rama `feat/app-layer`), **GCP es el despliegue
-primario**: Cloud Run + Cloud SQL ejecutan el mismo código que probamos en
-local, el pipeline corre como Cloud Run Job sin Airflow, y el frontend vive en
-GCP (Next.js standalone con `AGENT_URL` en runtime). Railway queda como
-legacy: `.railway/railway.ts` ya no se aplica (no corras `railway config
-plan/apply` contra él salvo teardown controlado).
+Terraform de GCP separado en **tres ambientes** (`dev`, `qa`, `prod`) que comparten módulos. Cada ambiente tiene su propio estado, sus propios recursos (todos con el prefijo `factored-<ambiente>`) y valores por defecto adecuados a su rol.
 
 ```text
-┌────────────────────────────────────────────────────────────────┐
-│ Cloud Run: frontend ──► Cloud Run: agent ──► Cloud Run: backend│
-│ (Next.js, AGENT_URL)      (guardrail)          (tool layer)    │
-│                              │                      │           │
-│                              ▼                      ▼           │
-│              Cloud SQL Postgres (data): gold.*, app.*,          │
-│              agent.trace_log (Modo Just-in-Time / Hibernable)   │
-│                              ▲                                  │
-│ Cloud Run Job: etl ── S3 (DuckDB + dbt-duckdb en RAM)           │
-│ (publica solo gold.*, purga tablas crudas, sin servicio dbt)    │
-└────────────────────────────────────────────────────────────────┘
+infra/gcp/
+├── envs/
+│   ├── dev/    backend.tf provider.tf main.tf variables.tf outputs.tf terraform.tfvars.example
+│   ├── qa/     (mismo contenido; cambian los valores por defecto de variables.tf)
+│   └── prod/
+├── modules/
+│   ├── foundation/         APIs del proyecto + Artifact Registry
+│   ├── cloudsql/           Cloud SQL Postgres 16 (base `data`, usuario `app`)
+│   ├── secrets/            Secret Manager: JWT, contraseña de la base, claves de LLM y de S3
+│   ├── lakehouse/          bucket de GCS para el Parquet de bronze y silver
+│   ├── cloud_run_service/  un servicio de Cloud Run con su propia cuenta de servicio
+│   └── etl_job/            el Cloud Run Job del ETL
+├── scripts/                setup-backend.sh · manage_db.sh · grant_access.sh · smoke.py
+├── docs/                   TEAM_ONBOARDING.md
+└── etl/                    Dockerfile y run_pipeline.py de la imagen del job
 ```
 
-Qué reutiliza y qué replica:
+`main.tf` es idéntico en los tres ambientes (así no divergen); lo que cambia es `backend.tf` (prefijo del estado) y los valores por defecto de `variables.tf`.
 
-| Pieza | En GCP | Cambios de código |
-|---|---|---|
-| backend / agent | Cloud Run, **mismos Dockerfiles** de `backend/` y `agent/` | Ninguno |
-| frontend | Cloud Run, `frontend/Dockerfile` (Next.js standalone); `AGENT_URL` es env de runtime | Solo `output: standalone` + URL por prop |
-| Pipeline | Cloud Run **Job** (`etl/`) con DuckDB + `dbt-duckdb` en RAM: procesa 23.5M filas en ~2.5 min y publica solo `gold.*` | Cero servicios dbt sueltos; esquemas crudos eliminados de Postgres |
-| Postgres | Cloud SQL for PostgreSQL 16 (DB `data`, solo ~150 MB de Gold) | Hibernación Just-in-Time (`./manage_db.sh pause/resume`) |
-| Secretos | Secret Manager (JWT autogenerado; keys OpenRouter/TypeSafe/S3 se copian) | Ninguno |
-| CI/CD | `.github/workflows/gcp-deploy.yml`: push → build (4 imágenes) + plan; `workflow_dispatch` → apply (+ ETL) | — |
+## Qué despliega cada ambiente
 
-## Prerequisitos (una vez)
+`foundation` → `cloudsql`, `secrets`, `lakehouse` → servicios `backend`, `agent`, `frontend` y el job `etl`. Un `plan` sin credenciales reales da **dev 47 recursos, qa 50, prod 50** (qa y prod suman los permisos del conector de Cloud SQL).
 
-1. Proyecto GCP con billing habilitado + `gcloud` y `terraform >= 1.6` instalados.
-2. Autenticarte: `gcloud auth login && gcloud config set project <PROJECT_ID>`.
-3. **Bucket de estado de Terraform** (CI y locales comparten estado):
+| | dev | qa | prod |
+|---|---|---|---|
+| Cloud SQL | `db-f1-micro`, 20 GB | `db-g1-small`, 20 GB | `db-custom-2-7680`, 50 GB, recuperación a un instante |
+| Acceso a la base | IP pública abierta (`0.0.0.0/0`), como el stack original | **Conector de Cloud SQL**, sin lista de redes | **Conector de Cloud SQL**, sin lista de redes |
+| Protección contra borrado (base y Cloud Run) | no | no | **sí** |
+| Instancias mínimas (backend, agent) | 0 | 0 | 1 |
+| Bucket del lago | se puede destruir con datos | se puede destruir con datos | **no** |
+
+Las diferencias salen de variables (`db_tier`, `use_cloud_sql_connector`, `db_deletion_protection`, `agent_min_instances`, ...): se pueden cambiar en un `terraform.tfvars` sin tocar el código.
+
+## Mejoras respecto al Terraform plano anterior
+
+- **Cada servicio tiene su propia cuenta de servicio** y puede leer solo los secretos que se le asignan. Antes los tres usaban la cuenta de cómputo por defecto, con acceso a todos los secretos del proyecto.
+- **La contraseña de la base va en Secret Manager** y se monta como variable de entorno. Antes se escribía en claro en la definición de cada servicio.
+- **Conector de Cloud SQL** (qa y prod): los servicios llegan a la base por un socket de Unix, sin abrir la IP pública a internet. Las apps leen `PG_HOST` como host de libpq o asyncpg, y ambos aceptan un directorio de socket, así que no hay cambios de código.
+- **Estado separado por ambiente** (`factored/<ambiente>`) y bloqueo de GCS por defecto.
+- Las llaves de S3 del organizador se cargan a mano como una versión nueva del secreto; un `apply` posterior no la revierte.
+- Bucket del lago con versionado y acceso público prohibido.
+- Se quitó el permiso `run.invoker` de la cuenta del ETL sobre su propio job: no cumplía ninguna función.
+- Región por defecto `us-east4` (la más cercana a `us-east-2`, donde está el bucket del organizador), en lugar de `us-central1`.
+
+## Prerequisitos (una vez por proyecto)
+
+1. Proyecto de GCP con facturación, y `gcloud` y `terraform >= 1.6` instalados. Autenticarte: `gcloud auth login && gcloud config set project <PROJECT_ID>`.
+2. Crear el bucket de estado (compartido por los tres ambientes):
    ```bash
-   gcloud storage buckets create gs://<PROJECT_ID>-tfstate --location=us-central1 --uniform-bucket-level-access
+   PROJECT_ID=<PROJECT_ID> ./infra/gcp/scripts/setup-backend.sh
    ```
-4. Para el deploy por CI: secret `GCP_SA_KEY` (JSON de una service account con
-   rol `Editor` del proyecto) y variables `GCP_PROJECT_ID`, `GCP_STATE_BUCKET`
-   en el repo — ver `.github/workflows/gcp-deploy.yml`. Para deploy local no
-   hacen falta (usa tus credenciales de `gcloud`).
+3. Para el despliegue por CI: secreto de repositorio `GCP_SA_KEY` y variables `GCP_PROJECT_ID`, `GCP_STATE_BUCKET` (y opcionalmente `GCP_REGION`). Ver `.github/workflows/gcp-deploy.yml`.
 
-## Despliegue
+## Desplegar un ambiente a mano
 
 ```bash
-cd infra/gcp
-cp terraform.tfvars.example terraform.tfvars   # y edita project_id/region/keys
-
-# 1) Construir y subir las 4 imágenes (desde la raíz del repo)
-docker build . -f backend/Dockerfile         -t <REGION>-docker.pkg.dev/<PROJECT_ID>/factored-hackathon/backend:latest  --platform linux/amd64
-docker build . -f agent/Dockerfile           -t <REGION>-docker.pkg.dev/<PROJECT_ID>/factored-hackathon/agent:latest    --platform linux/amd64
-docker build . -f infra/gcp/etl/Dockerfile   -t <REGION>-docker.pkg.dev/<PROJECT_ID>/factored-hackathon/etl:latest      --platform linux/amd64
-docker build . -f frontend/Dockerfile        -t <REGION>-docker.pkg.dev/<PROJECT_ID>/factored-hackathon/frontend:latest --platform linux/amd64
-gcloud auth configure-docker <REGION>-docker.pkg.dev
-docker push --all-tags <REGION>-docker.pkg.dev/<PROJECT_ID>/factored-hackathon
-
-# 2) Terraform
+cd infra/gcp/envs/dev                      # o qa, prod
+cp terraform.tfvars.example terraform.tfvars   # editar project_id y, si quieres, las claves
 terraform init -backend-config="bucket=<PROJECT_ID>-tfstate"
-terraform plan
+
+# 1. APIs y registro de imágenes
+terraform apply -target=module.foundation
+
+# 2. Construir y subir las imágenes (desde la raíz del repo)
+REG=us-east4-docker.pkg.dev/<PROJECT_ID>/factored-dev
+gcloud auth configure-docker us-east4-docker.pkg.dev
+for s in backend agent frontend; do docker build . -f $s/Dockerfile -t $REG/$s:latest && docker push $REG/$s:latest; done
+docker build . -f infra/gcp/etl/Dockerfile -t $REG/etl:latest && docker push $REG/etl:latest
+
+# 3. El resto
 terraform apply
-
-# 3) Copiar las credenciales S3 del organizador (estaban en Railway, no en el repo)
-echo -n "<LATAM_BANK_AWS_ACCESS_KEY_ID>"     | gcloud secrets versions add latam-bank-aws-id     --data-file=-
-echo -n "<LATAM_BANK_AWS_SECRET_ACCESS_KEY>" | gcloud secrets versions add latam-bank-aws-secret --data-file=-
-
-# 4) Cargar los datos
-gcloud run jobs execute etl --region=<REGION> --wait
 ```
 
-Con eso el stack queda sirviendo. `terraform output` imprime las URLs
-(`frontend_uri`, `agent_uri`, `backend_uri`, `cloudsql_public_ip`). El deploy
-por CI hace lo mismo: push a `main`/`feat/app-layer` construye y planifica;
-`workflow_dispatch` con `terraform_action=apply` (+`run_etl`) despliega.
-
-## Smoke
-
-1. Elegir un cliente real del dataset (el job ya cargó `gold.*`):
-   ```bash
-   gcloud sql connect factored-hackathon --user=app --database=data \
-     -c "select customer_id, document_number from gold.customers where document_number is not null limit 5"
-   ```
-2. Probar el agent:
-   ```bash
-   pip install httpx
-   AGENT_URL=<agent_uri> CUSTOMER_ID=<...> DOCUMENT_NUMBER=<...> python smoke.py
-   ```
-3. Abrir `<frontend_uri>` y usar la UI (login → disputa). Para apuntar el
-   frontend a otro entorno basta cambiar `AGENT_URL` del servicio.
-
-## Gestión Just-in-Time (Ahorro de Costos en GCP)
-
-Para evitar el cobro fijo de Cloud SQL mientras no se esté probando o presentando:
+Después del primer `apply`, copiar las llaves de S3 del organizador al Secret Manager (nunca a git ni a variables de Terraform):
 
 ```bash
-# 1. Pausar la base de datos (Gasto cae a ~$0.05 USD/día por disco)
-./manage_db.sh pause
-
-# 2. Despertar la base de datos (En ~60 segundos vuelve a estar operativa)
-./manage_db.sh resume
-
-# 3. Ver estado actual
-./manage_db.sh status
+printf '%s' "$LATAM_BANK_AWS_ACCESS_KEY_ID"     | gcloud secrets versions add factored-dev-latam-bank-aws-id     --data-file=-
+printf '%s' "$LATAM_BANK_AWS_SECRET_ACCESS_KEY" | gcloud secrets versions add factored-dev-latam-bank-aws-secret --data-file=-
 ```
 
-## Teardown de Railway (transición)
+Ejecutar el ETL: `gcloud run jobs execute factored-dev-etl --region us-east4 --wait`.
 
-Solo cuando el stack GCP esté verificado con datos y smoke en verde:
+## Por CI
+
+`.github/workflows/gcp-deploy.yml`: un `push` a `main` hace el build de las imágenes y un `plan` de **dev**. Con `workflow_dispatch` se elige el ambiente (`dev`, `qa`, `prod`) y `plan` o `apply`, y opcionalmente se ejecuta el ETL. Como el job usa `environment:` de GitHub, se puede exigir una aprobación manual para `prod` desde la configuración del repositorio.
+
+## Ahorro de costos
 
 ```bash
-# revisar qué se destruiría y luego aplicar
-railway config plan   # con .railway/railway.ts tal cual
-railway config apply  # destruye el proyecto factored-hackathon (Postgres incluido)
+ENVIRONMENT=dev ./infra/gcp/scripts/manage_db.sh pause    # la base deja de cobrar cómputo
+ENVIRONMENT=dev ./infra/gcp/scripts/manage_db.sh resume   # vuelve en ~60 s con los datos
+ENVIRONMENT=dev ./infra/gcp/scripts/manage_db.sh status
 ```
 
-Las credenciales S3 del organizador viven en la service de Railway: cópialas a
-Secret Manager (paso 3) **antes** de destruir.
+Cloud Run a 0 instancias cuesta casi nada; Cloud SQL es el único costo permanente.
 
-## Límites y hardening (documentados, aceptados a escala hackathon)
+## Estado de esta estructura y qué falta
 
-- **Cloud SQL con IP pública + password** (sin redes autorizadas ni SSL
-  forzado): cero cambios de código en backend/agent. Endurecer: redes
-  autorizadas, `ssl_mode=ENCRYPTED_ONLY` + `PGSSLMODE=require`, o IP privada
-  con Serverless VPC connector.
-- **dbt y backend con invoker `allUsers`**: paridad con el modelo de confianza
-  de Railway (dominio privado sin auth). Endurecer: ingress `internal` +
-  VPC connector, u OIDC ID tokens entre servicios.
-- **Estado de Terraform en GCS** con lock por defecto; el estado contiene
-  secretos generados (passwords) — restringir el bucket a los dueños.
-- **Costo**: Cloud Run a 0 instancias ≈ $0; Cloud SQL `db-f1-micro` + 20 GB es
-  el único costo always-on (orden de decenas de USD/mes). `terraform destroy`
-  lo baja todo (`db_deletion_protection=false` por defecto; ponerlo en `true`
-  cuando el stack tenga datos que importen).
-- **Pipeline sin Airflow**: el Job ejecuta los mismos pasos del DAG;
-  `ops.etl_runs` registra `runner: cloud-run-job`. Para orquestación/UI de
-  DAGs en GCP, el camino natural sería Composer (fuera de alcance ahora).
+**Verificado:** `terraform fmt`, `init` y `validate` pasan en los tres ambientes, y un `plan` sin credenciales (token falso, sin refrescar) los planifica sin errores.
+**No verificado:** ningún `apply` contra GCP. En particular el conector de Cloud SQL de qa y prod (la ruta de socket `/cloudsql/<conexión>` en `PG_HOST`, y los permisos `roles/cloudsql.client`) está sin probar: `dev` es el ambiente que reproduce lo que ya funcionaba.
+
+Pendiente de endurecer (no cambió con esta reestructura):
+- Backend y agente siguen abiertos a todos (`allUsers`): el agente llama al backend sin token de identidad. Cerrar el backend exige que el agente envíe un ID token.
+- La base sigue con usuario `app` único (propietario). Falta separar un rol de solo lectura para `gold` y otro acotado a `app.*` y `agent.trace_log`.
+- `ssl_mode=ENCRYPTED_ONLY`, IP privada con Direct VPC egress, presupuesto con alerta y monitoreo.
+- El CI usa una llave JSON de larga vida; mejor Workload Identity Federation.
+- **Airflow y dbt como servicio no están en este Terraform** (el pipeline es el Cloud Run Job con `dbt-duckdb`). Llevarlos a GCP es el siguiente paso, y encaja como un módulo nuevo `airflow` (VM de Compute Engine) en los tres ambientes.
+
+## Migración desde el stack anterior
+
+El stack desplegado antes de esta separación usa nombres antiguos (`factored-hackathon`, `us-central1`) y estado sin prefijo de ambiente. Los ambientes nuevos son despliegues **nuevos** (otros nombres, otra región): no reemplazan al anterior ni lo destruyen. Para retirarlo, hacer `terraform destroy` con la versión anterior del código (commit `62a97b1`) y su estado, después de verificar el ambiente nuevo.

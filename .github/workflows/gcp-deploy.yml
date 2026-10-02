@@ -1,42 +1,66 @@
-name: GCP deploy (primario desde la migración)
+name: GCP deploy
 
-# Railway queda como legacy (no aplicar .railway/railway.ts). Este workflow
-# construye y despliega el stack completo en GCP. Requiere en el repo:
-#   secrets: GCP_SA_KEY  — JSON key de una service account con Editor del proyecto
-#   vars:    GCP_PROJECT_ID, GCP_REGION (default us-central1), GCP_STATE_BUCKET
+# Builds the images and applies infra/gcp/envs/<environment> with Terraform.
 #
-# - push (main / feat/app-layer): build + push de imágenes + terraform plan
-# - workflow_dispatch: plan o apply (+ ejecutar el job ETL opcional)
+# - push to main: dev only, image build + terraform plan (nothing is pushed or applied)
+# - workflow_dispatch: pick the environment (dev, qa, prod) and plan or apply, optionally run the ETL job
+#
+# Needs in the repo (or per GitHub Environment, which lets prod require a manual approval):
+#   secrets: GCP_SA_KEY   (repository secret) JSON key of a service account allowed to deploy
+#   vars:    GCP_PROJECT_ID, GCP_STATE_BUCKET, GCP_REGION (default us-east4)
+# The state bucket is created once with infra/gcp/scripts/setup-backend.sh.
 
 on:
   push:
-    branches: [main, feat/app-layer]
-    paths: ["backend/**", "agent/**", "frontend/**", "data/dbt/**", "infra/gcp/**", "data/dags/**", ".github/workflows/gcp-deploy.yml"]
+    branches: [main]
+    paths: ["backend/**", "agent/**", "frontend/**", "data/dbt/**", "infra/gcp/**", ".github/workflows/gcp-deploy.yml"]
   workflow_dispatch:
     inputs:
+      environment:
+        description: "Environment"
+        type: choice
+        default: dev
+        options: [dev, qa, prod]
       terraform_action:
         description: "Terraform action"
         type: choice
         default: plan
         options: [plan, apply]
       run_etl:
-        description: "Run the ETL job after applying (loads S3 -> bronze -> gold)"
+        description: "Run the ETL job after applying (S3 -> bronze -> gold in Cloud SQL)"
         type: boolean
         default: false
 
 env:
-  HAS_GCP: ${{ secrets.GCP_SA_KEY != '' }}
-  REGION: ${{ vars.GCP_REGION || 'us-central1' }}
-  REPO: ${{ vars.GCP_REGION || 'us-central1' }}-docker.pkg.dev
+  ENVIRONMENT: ${{ inputs.environment || 'dev' }}
+  APPLY: ${{ github.event_name == 'workflow_dispatch' && inputs.terraform_action == 'apply' }}
+  REGION: ${{ vars.GCP_REGION || 'us-east4' }}
   TAG: ${{ github.sha }}
 
 jobs:
-  deploy:
-    name: Build images + Terraform
+  # The `env` context is not available in a job-level `if`, so credentials are detected here.
+  # Without GCP_SA_KEY (a repository secret) the deploy job is skipped instead of failing.
+  gate:
     runs-on: ubuntu-latest
-    if: env.HAS_GCP == 'true'
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+    steps:
+      - id: check
+        env:
+          KEY: ${{ secrets.GCP_SA_KEY }}
+        run: echo "ready=$([ -n "$KEY" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Build images + Terraform (${{ inputs.environment || 'dev' }})
+    needs: gate
+    if: needs.gate.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'dev' }}
     permissions:
       contents: read
+    defaults:
+      run:
+        working-directory: infra/gcp/envs/${{ inputs.environment || 'dev' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -47,60 +71,70 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
-      - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
-
-      - name: Build and push images (same Dockerfiles as the services use locally)
-        run: |
-          BASE="${REPO}/${{ vars.GCP_PROJECT_ID }}/factored-hackathon"
-          docker build . -f backend/Dockerfile         -t "$BASE/backend:$TAG"
-          docker build . -f agent/Dockerfile           -t "$BASE/agent:$TAG"
-          docker build . -f infra/gcp/etl/Dockerfile   -t "$BASE/etl:$TAG"
-          docker build . -f frontend/Dockerfile        -t "$BASE/frontend:$TAG"
-          for img in backend agent etl frontend; do docker push "$BASE/$img:$TAG"; done
-
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.8
 
-      - name: Terraform fmt
+      - name: Terraform fmt (all environments and modules)
         working-directory: infra/gcp
         run: terraform fmt -check -recursive
 
       - name: Terraform init
-        working-directory: infra/gcp
         run: terraform init -backend-config="bucket=${{ vars.GCP_STATE_BUCKET }}" -input=false
 
+      - name: Terraform validate
+        run: terraform validate
+
+      # The registry is created by Terraform, so it has to exist before the first image push.
+      - name: Create the project APIs and the image registry
+        if: env.APPLY == 'true'
+        run: terraform apply -auto-approve -input=false -target=module.foundation -var "project_id=${{ vars.GCP_PROJECT_ID }}"
+
+      - name: Build images (same Dockerfiles the services use locally)
+        working-directory: .
+        run: |
+          BASE="${REGION}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/factored-${ENVIRONMENT}"
+          docker build . -f backend/Dockerfile         -t "$BASE/backend:$TAG"
+          docker build . -f agent/Dockerfile           -t "$BASE/agent:$TAG"
+          docker build . -f infra/gcp/etl/Dockerfile   -t "$BASE/etl:$TAG"
+          docker build . -f frontend/Dockerfile        -t "$BASE/frontend:$TAG"
+
+      - name: Push images
+        if: env.APPLY == 'true'
+        working-directory: .
+        run: |
+          gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
+          BASE="${REGION}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/factored-${ENVIRONMENT}"
+          for img in backend agent etl frontend; do docker push "$BASE/$img:$TAG"; done
+
       - name: Terraform plan
-        working-directory: infra/gcp
         run: terraform plan -input=false -var "image_tag=$TAG" -var "project_id=${{ vars.GCP_PROJECT_ID }}"
 
       - name: Terraform apply
-        if: github.event_name == 'workflow_dispatch' && inputs.terraform_action == 'apply'
-        working-directory: infra/gcp
+        if: env.APPLY == 'true'
         run: terraform apply -auto-approve -input=false -var "image_tag=$TAG" -var "project_id=${{ vars.GCP_PROJECT_ID }}"
 
       - name: URLs of the stack
-        if: github.event_name == 'workflow_dispatch' && inputs.terraform_action == 'apply'
-        working-directory: infra/gcp
+        if: env.APPLY == 'true'
         run: |
           echo "frontend: $(terraform output -raw frontend_uri)"
           echo "agent:    $(terraform output -raw agent_uri)"
           echo "backend:  $(terraform output -raw backend_uri)"
-          echo "sql ip:   $(terraform output -raw cloudsql_public_ip)"
+          echo "sql:      $(terraform output -raw cloudsql_connection_name)"
 
       - name: Run the ETL job (S3 -> bronze -> gold in Cloud SQL)
-        if: github.event_name == 'workflow_dispatch' && inputs.run_etl && inputs.terraform_action == 'apply'
+        if: env.APPLY == 'true' && inputs.run_etl
         run: |
-          gcloud run jobs execute etl --region "$REGION" --wait
-          gcloud run jobs executions list --job etl --region "$REGION" --limit 1
+          JOB=$(terraform output -raw etl_job)
+          gcloud run jobs execute "$JOB" --region "$REGION" --project "${{ vars.GCP_PROJECT_ID }}" --wait
+          gcloud run jobs executions list --job "$JOB" --region "$REGION" --project "${{ vars.GCP_PROJECT_ID }}" --limit 1
 
       - name: Health checks
-        if: github.event_name == 'workflow_dispatch' && inputs.terraform_action == 'apply'
+        if: env.APPLY == 'true'
         run: |
-          AGENT=$(cd infra/gcp && terraform output -raw agent_uri)
-          BACKEND=$(cd infra/gcp && terraform output -raw backend_uri)
-          FRONTEND=$(cd infra/gcp && terraform output -raw frontend_uri)
+          AGENT=$(terraform output -raw agent_uri)
+          BACKEND=$(terraform output -raw backend_uri)
+          FRONTEND=$(terraform output -raw frontend_uri)
           curl -fsS "$AGENT/health"    | grep -q '"ok"'
           curl -fsS "$BACKEND/health"  | grep -q '"ok"'
           curl -fsS -o /dev/null "$FRONTEND"

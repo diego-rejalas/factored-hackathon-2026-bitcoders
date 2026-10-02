@@ -21,7 +21,7 @@ Prototipo de sistema de atención al cliente bancario AI-first para el Factored 
 | `agent/` | AI engineer — agente + guardrail (LangGraph) | Implementado (PR #1); en revisión, ver `spec/PR1_REVIEW.md` |
 | `frontend/` | Chat UI — Next.js (Cloud Run standalone con `AGENT_URL`); documentación de datos en `/data-docs` | Implementado |
 | `.railway/railway.ts` | Infra Railway: pipeline A y servicios actuales | Vigente hasta decidir la migración |
-| `infra/gcp/` | Infra GCP en Terraform (Cloud Run, Cloud SQL, Job ETL) | Definido, pendiente de endurecer |
+| `infra/gcp/` | Infra GCP en Terraform, en tres ambientes (`envs/dev|qa|prod`) con módulos compartidos | Definido, `validate` y `plan` verificados; sin `apply` |
 | `spec/` | Documentación de diseño y decisiones | — |
 | `doc/` | Material del organizador (no editar) | — |
 
@@ -35,7 +35,7 @@ Workflow confirmado: **Opción A — disputas de transacciones**, con umbral de 
 - **Backend Bancario**: FastAPI tool layer con permisos y acceso a base de datos en Cloud Run (`https://backend-127503393524.us-central1.run.app`).
 - **Pipeline ETL Ultraligero**: Cloud Run Job (`etl`) ejecutando DuckDB + `dbt-duckdb` en RAM (procesa 23.5M filas en ~2.5 min, ejecuta 121 tests de calidad y publica exclusivamente las tablas `gold.*`). Sin microservicios dbt sueltos.
 - **Data Lakehouse (GCS + Parquet)**: Capas Bronze y Silver preservadas en Parquet comprimido (ZSTD) particionado por Hive en Google Cloud Storage (`gs://factored-lakehouse-*`) por ~$0.03 USD/mes, manteniendo Cloud SQL libre de tablas crudas intermedias.
-- **Base de Datos Serving**: Cloud SQL PostgreSQL 16 con **Hibernación Just-in-Time** (`./infra/gcp/manage_db.sh pause/resume`), reduciendo el costo en reposo a ~$0.05 USD/día.
+- **Base de Datos Serving**: Cloud SQL PostgreSQL 16 con **Hibernación Just-in-Time** (`./infra/gcp/scripts/manage_db.sh pause/resume`), reduciendo el costo en reposo a ~$0.05 USD/día.
 
 Railway queda como referencia histórica (`.railway/railway.ts` legacy).
 
@@ -51,8 +51,8 @@ cd frontend && pnpm build         # build y typecheck de la UI
 
 Control de base de datos Just-in-Time (GCP):
 ```bash
-./infra/gcp/manage_db.sh resume   # Despierta Cloud SQL para pruebas (~60s)
-./infra/gcp/manage_db.sh status   # Inspecciona estado actual (RUNNABLE / STOPPED)
-./infra/gcp/manage_db.sh pause    # Hiberna Cloud SQL y congela facturación de cómputo/IP
+./infra/gcp/scripts/manage_db.sh resume   # Despierta Cloud SQL para pruebas (~60s)
+./infra/gcp/scripts/manage_db.sh status   # Inspecciona estado actual (RUNNABLE / STOPPED)
+./infra/gcp/scripts/manage_db.sh pause    # Hiberna Cloud SQL y congela facturación de cómputo/IP
 ```
 
