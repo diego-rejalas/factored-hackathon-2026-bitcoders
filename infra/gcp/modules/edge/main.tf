@@ -80,6 +80,17 @@ resource "google_compute_security_policy" "this" {
   }
 
   rule {
+    action   = "deny(403)"
+    priority = 1002
+    match {
+      expr {
+        expression = "evaluatePreconfiguredWaf('cve-canary')"
+      }
+    }
+    description = "Known exploits, including Log4j (CVE-2021-44228)"
+  }
+
+  rule {
     action   = "allow"
     priority = 2147483647
     match {

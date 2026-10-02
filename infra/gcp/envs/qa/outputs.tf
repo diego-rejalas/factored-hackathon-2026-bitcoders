@@ -59,3 +59,8 @@ output "edge_url" {
   description = "Public HTTPS address of the application (load balancer). Null when the load balancer is off."
   value       = var.enable_edge ? module.edge[0].url : null
 }
+
+output "edge_locked" {
+  description = "True when the frontend and the agent accept traffic only through the load balancer."
+  value       = local.edge_locked
+}

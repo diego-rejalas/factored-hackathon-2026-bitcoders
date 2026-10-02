@@ -219,3 +219,9 @@ variable "edge_lockdown" {
   type        = bool
   default     = false
 }
+
+variable "service_db_users" {
+  description = "The backend and the agent connect with their own database roles (backend_app, agent_app) instead of the owner. Turn on only after infra/gcp/sql/roles.sql has been applied."
+  type        = bool
+  default     = false
+}

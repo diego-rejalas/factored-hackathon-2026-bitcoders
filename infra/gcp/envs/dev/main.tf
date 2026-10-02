@@ -79,6 +79,7 @@ module "cloudsql" {
   private_ip             = local.use_private_ip
   private_network_id     = module.network.network_id
   extra_databases        = var.enable_airflow ? { airflow = "airflow" } : {}
+  service_users          = { backend = "backend_app", agent = "agent_app" }
   labels                 = local.labels
 
   depends_on = [module.foundation, module.network]
@@ -87,13 +88,14 @@ module "cloudsql" {
 module "secrets" {
   source = "../../modules/secrets"
 
-  prefix              = local.prefix
-  db_password         = module.cloudsql.password
-  enable_airflow      = var.enable_airflow
-  airflow_db_password = lookup(module.cloudsql.extra_passwords, "airflow", "")
-  openrouter_api_key  = var.openrouter_api_key
-  typesafe_api_key    = var.typesafe_api_key
-  labels              = local.labels
+  prefix               = local.prefix
+  db_password          = module.cloudsql.password
+  enable_airflow       = var.enable_airflow
+  airflow_db_password  = lookup(module.cloudsql.extra_passwords, "airflow", "")
+  service_db_passwords = module.cloudsql.service_passwords
+  openrouter_api_key   = var.openrouter_api_key
+  typesafe_api_key     = var.typesafe_api_key
+  labels               = local.labels
 
   depends_on = [module.foundation]
 }
@@ -124,9 +126,9 @@ module "backend" {
   location   = var.region
   image      = "${module.foundation.image_base}/backend:${var.image_tag}"
 
-  env = local.db_env
+  env = merge(local.db_env, var.service_db_users ? { PG_USER = module.cloudsql.service_user_names["backend"] } : {})
   secret_env = {
-    PG_PASSWORD        = module.secrets.secret_ids["db-password"]
+    PG_PASSWORD        = module.secrets.secret_ids[var.service_db_users ? "backend-db-password" : "db-password"]
     SESSION_JWT_SECRET = module.secrets.secret_ids["session-jwt"]
   }
 
@@ -152,7 +154,7 @@ module "agent" {
   location   = var.region
   image      = "${module.foundation.image_base}/agent:${var.image_tag}"
 
-  env = merge(local.db_env, {
+  env = merge(local.db_env, var.service_db_users ? { PG_USER = module.cloudsql.service_user_names["agent"] } : {}, {
     BANK_URL             = module.backend.uri
     BANK_IAM_AUDIENCE    = var.backend_public ? "" : module.backend.uri
     CORS_ALLOWED_ORIGINS = join(",", concat(var.cors_allowed_origins, var.enable_edge ? ["https://${module.edge[0].domain}"] : []))
@@ -160,7 +162,7 @@ module "agent" {
     GUARDRAIL_MAX_USD    = var.guardrail_max_usd
   })
   secret_env = {
-    PG_PASSWORD        = module.secrets.secret_ids["db-password"]
+    PG_PASSWORD        = module.secrets.secret_ids[var.service_db_users ? "agent-db-password" : "db-password"]
     SESSION_JWT_SECRET = module.secrets.secret_ids["session-jwt"]
     OPENROUTER_API_KEY = module.secrets.secret_ids["openrouter-api-key"]
     TYPESAFE_API_KEY   = module.secrets.secret_ids["typesafe-api-key"]
@@ -227,6 +229,7 @@ module "etl" {
     DUCKDB_MEMORY_LIMIT = "8GB"
     DUCKDB_THREADS      = "4"
     LAKE_STORAGE_URI    = "gs://${module.lakehouse.name}"
+    GOLD_READER_ROLES   = module.cloudsql.service_user_names["backend"]
   })
   secret_env = {
     PG_PASSWORD                      = module.secrets.secret_ids["db-password"]
@@ -289,10 +292,11 @@ module "airflow" {
     aws_secret          = module.secrets.secret_ids["latam-bank-aws-secret"]
   }
 
-  airflow_db_host = module.cloudsql.private_ip
-  pg_host         = module.cloudsql.private_ip
-  pg_user         = module.cloudsql.user_name
-  pg_database     = module.cloudsql.database_name
+  airflow_db_host   = module.cloudsql.private_ip
+  pg_host           = module.cloudsql.private_ip
+  pg_user           = module.cloudsql.user_name
+  gold_reader_roles = module.cloudsql.service_user_names["backend"]
+  pg_database       = module.cloudsql.database_name
 
   admin_members       = var.airflow_admin_members
   auto_stop_cron      = var.airflow_auto_stop_cron

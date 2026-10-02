@@ -160,6 +160,7 @@ resource "google_compute_instance" "airflow" {
       pg_host             = var.pg_host
       pg_port             = var.pg_port
       pg_user             = var.pg_user
+      gold_reader_roles   = var.gold_reader_roles
       pg_database         = var.pg_database
       lake_bucket         = var.lake_bucket
       duckdb_memory_limit = var.duckdb_memory_limit

@@ -17,6 +17,7 @@ x-airflow: &airflow
     PG_HOST: "${pg_host}"
     PG_PORT: "${pg_port}"
     PG_USER: "${pg_user}"
+    GOLD_READER_ROLES: "${gold_reader_roles}"
     PG_DATABASE: "${pg_database}"
     LAKE_STORAGE_URI: "gs://${lake_bucket}"
     DUCKDB_MEMORY_LIMIT: "${duckdb_memory_limit}"

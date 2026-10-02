@@ -33,3 +33,14 @@ output "extra_passwords" {
   value       = { for name, password in random_password.extra : name => password.result }
   sensitive   = true
 }
+
+output "service_passwords" {
+  description = "Password of each service's login role, by short name."
+  value       = { for name, password in random_password.service : name => password.result }
+  sensitive   = true
+}
+
+output "service_user_names" {
+  description = "Login role of each service, by short name."
+  value       = { for name, user in google_sql_user.service : name => user.name }
+}
