@@ -149,3 +149,9 @@ variable "labels" {
   type    = map(string)
   default = {}
 }
+
+variable "gold_reader_roles" {
+  description = "Database roles that get SELECT on gold.* after each publish (comma separated). The publish swaps the tables, and a swapped-in table has none of the old grants."
+  type        = string
+  default     = ""
+}

@@ -32,6 +32,8 @@ locals {
   secret_names = toset(concat([
     "session-jwt",
     "db-password",
+    "backend-db-password",
+    "agent-db-password",
     "openrouter-api-key",
     "typesafe-api-key",
     "latam-bank-aws-id",
@@ -48,10 +50,12 @@ locals {
   } : {}
 
   secret_values = merge(local.airflow_secret_values, {
-    "session-jwt"        = random_password.session_jwt.result
-    "db-password"        = var.db_password
-    "openrouter-api-key" = coalesce(var.openrouter_api_key, "NOT_SET")
-    "typesafe-api-key"   = coalesce(var.typesafe_api_key, "NOT_SET")
+    "session-jwt"         = random_password.session_jwt.result
+    "db-password"         = var.db_password
+    "backend-db-password" = lookup(var.service_db_passwords, "backend", "NOT_SET")
+    "agent-db-password"   = lookup(var.service_db_passwords, "agent", "NOT_SET")
+    "openrouter-api-key"  = coalesce(var.openrouter_api_key, "NOT_SET")
+    "typesafe-api-key"    = coalesce(var.typesafe_api_key, "NOT_SET")
     # The organizer's read-only S3 keys are copied in by hand after the first apply
     # (never through Terraform variables or git); the ETL fails fast while they are NOT_SET.
     "latam-bank-aws-id"     = "NOT_SET"

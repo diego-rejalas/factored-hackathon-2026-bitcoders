@@ -111,3 +111,9 @@ variable "audit_logging" {
   type        = bool
   default     = false
 }
+
+variable "service_users" {
+  description = "Login roles for the services that use the database, by short name (for example backend = \"backend_app\"). Each gets a generated password. The privileges are granted by infra/gcp/sql/roles.sql: Cloud SQL adds every user it creates to cloudsqlsuperuser, which that script removes."
+  type        = map(string)
+  default     = {}
+}

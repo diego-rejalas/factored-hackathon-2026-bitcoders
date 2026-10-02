@@ -38,3 +38,10 @@ variable "airflow_db_password" {
   default   = ""
   sensitive = true
 }
+
+variable "service_db_passwords" {
+  description = "Password of each service's database role, by short name (backend, agent)."
+  type        = map(string)
+  default     = {}
+  sensitive   = true
+}
