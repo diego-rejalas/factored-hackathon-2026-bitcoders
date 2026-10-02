@@ -25,7 +25,10 @@ else
         --public-access-prevention
 fi
 
-gcloud storage buckets update "gs://${BUCKET}" --project="${PROJECT_ID}" --versioning
+# Applied also to a bucket that already existed: the state holds generated secrets, and
+# versioning lets you recover an earlier state after a bad apply.
+gcloud storage buckets update "gs://${BUCKET}" --project="${PROJECT_ID}" \
+    --versioning --public-access-prevention
 
 echo
 echo "Ready. Then, for each environment:"
