@@ -73,9 +73,9 @@ variable "labels" {
 }
 
 variable "enable_public_ip" {
-  description = "Give the instance a public IPv4. Set false together with private_ip."
+  description = "Give the instance a public IPv4. Off by default: callers that need it (dev) say so explicitly."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "private_ip" {
@@ -94,4 +94,20 @@ variable "extra_databases" {
   description = "Additional databases on the same instance, as { database = owner user }. Each gets its own generated password. Used for Airflow's metadata, kept apart from the business data."
   type        = map(string)
   default     = {}
+}
+
+variable "require_ssl" {
+  description = "Refuse connections that are not encrypted (ssl_mode ENCRYPTED_ONLY). The clients here use sslmode=prefer, which negotiates TLS."
+  type        = bool
+  default     = true
+}
+
+variable "audit_logging" {
+  description = <<-EOT
+    Log connections, disconnections, lock waits, checkpoints, temporary files and DDL statements.
+    Not enabled: log_duration and log_hostname (volume and reverse DNS cost) and pgaudit (the extension
+    must also be created in the database); see .checkov.yaml.
+  EOT
+  type        = bool
+  default     = false
 }

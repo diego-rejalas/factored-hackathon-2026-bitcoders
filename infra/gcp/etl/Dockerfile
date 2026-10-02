@@ -14,4 +14,11 @@ RUN pip install --no-cache-dir /app/pipeline
 
 COPY data/dbt/ /app/dbt/
 
+# Not root. Everything the job writes (the DuckDB file, dbt's target and logs, the Parquet staging
+# area) goes under /tmp; the DuckDB extensions are fetched now so a run never depends on the network
+# for them.
+RUN useradd --create-home --uid 10001 etl
+USER etl
+RUN python -c "import duckdb; c = duckdb.connect(); c.execute('INSTALL httpfs'); c.execute('INSTALL postgres')"
+
 CMD ["python", "-m", "latam_pipeline", "all"]

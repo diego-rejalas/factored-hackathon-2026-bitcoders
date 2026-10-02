@@ -7,6 +7,11 @@ variable "project_id" {
   type = string
 }
 
+variable "project_number" {
+  description = "Project number (not the id): the Compute Engine service agent that runs the schedule is service-<number>@compute-system. Read in the environment, because a data source read inside this module is deferred by its depends_on and would make Terraform replace the IAM binding on every plan."
+  type        = string
+}
+
 variable "region" {
   type = string
 }

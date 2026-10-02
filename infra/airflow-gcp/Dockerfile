@@ -3,7 +3,10 @@
 ARG AIRFLOW_VERSION=3.3.0
 ARG PYTHON_VERSION=3.12
 
-FROM apache/airflow:${AIRFLOW_VERSION}-python${PYTHON_VERSION}
+# The slim base carries Airflow's core and none of the ~100 optional providers the full image bundles
+# (litellm, snowflake, ...): fewer packages to patch, and nothing we do not use. The two providers the
+# stack needs are added below: postgres (Airflow's metadata database driver) and standard (@task).
+FROM apache/airflow:slim-${AIRFLOW_VERSION}-python${PYTHON_VERSION}
 
 ARG AIRFLOW_VERSION
 ARG PYTHON_VERSION
@@ -23,7 +26,15 @@ RUN python -m venv /opt/airflow/dbt-venv \
 COPY --chown=airflow:root data/pipeline /opt/airflow/pipeline
 RUN pip install --no-cache-dir \
       --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYTHON_VERSION}.txt" \
-      "duckdb==${DUCKDB_VERSION}" /opt/airflow/pipeline
+      "duckdb==${DUCKDB_VERSION}" \
+      apache-airflow-providers-postgres apache-airflow-providers-standard \
+      /opt/airflow/pipeline
+
+# Patch-level security fixes over Airflow's constraint pins (found with Trivy). These are minor or patch
+# bumps; the DAG run in CI and the pip check below are what shows nothing broke. cryptography has a
+# fix only in a new major version and is left alone on purpose.
+RUN pip install --no-cache-dir "PyJWT>=2.14.0" "anyio>=4.14.2" "pyasn1>=0.6.4" "urllib3>=2.8.0" "sqlparse>=0.6.0" \
+    && pip check
 
 # DuckDB extensions fetched now, so a task never depends on extensions.duckdb.org at run time.
 RUN python -c "import duckdb; c = duckdb.connect(); c.execute('INSTALL httpfs'); c.execute('INSTALL postgres')" \
@@ -37,3 +48,6 @@ ENV DBT_BIN=/opt/airflow/dbt-venv/bin/dbt \
     DBT_DIR=/opt/airflow/dbt-project \
     PIPELINE_WORK_DIR=/opt/airflow/data/work \
     DUCKDB_PATH=/opt/airflow/data/work/latam.duckdb
+
+# The base image already runs as airflow; say so explicitly so nothing here can leave the image as root.
+USER airflow

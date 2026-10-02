@@ -1,0 +1,59 @@
+{
+    "failed_checks": [
+        {
+            "file": "/agent/Dockerfile",
+            "findings": [
+                {
+                    "resource": "/agent/Dockerfile.",
+                    "check_ids": [
+                        "CKV_DOCKER_3"
+                    ]
+                }
+            ]
+        },
+        {
+            "file": "/backend/Dockerfile",
+            "findings": [
+                {
+                    "resource": "/backend/Dockerfile.",
+                    "check_ids": [
+                        "CKV_DOCKER_3"
+                    ]
+                }
+            ]
+        },
+        {
+            "file": "/frontend/Dockerfile",
+            "findings": [
+                {
+                    "resource": "/frontend/Dockerfile.",
+                    "check_ids": [
+                        "CKV_DOCKER_3"
+                    ]
+                }
+            ]
+        },
+        {
+            "file": "/infra/airflow/Dockerfile",
+            "findings": [
+                {
+                    "resource": "/infra/airflow/Dockerfile.USER",
+                    "check_ids": [
+                        "CKV_DOCKER_8"
+                    ]
+                }
+            ]
+        },
+        {
+            "file": "/infra/dbt/Dockerfile",
+            "findings": [
+                {
+                    "resource": "/infra/dbt/Dockerfile.",
+                    "check_ids": [
+                        "CKV_DOCKER_3"
+                    ]
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,58 @@
+# Checkov configuration. Every skipped check is a decision, with its reason. Anything not listed here
+# must pass; findings that already existed in code owned by other people are in .checkov.baseline
+# (new findings fail CI, see spec/SECURITY_SCANS.md).
+# Terraform is NOT scanned from source: Checkov cannot evaluate dynamic blocks or conditionals, so it
+# reports options as missing that the real configuration sets (Cloud SQL flags, SSL mode). Terraform is
+# scanned from the resolved plan instead: see .github/workflows/gcp-deploy.yml and spec/SECURITY_SCANS.md.
+framework:
+  - dockerfile
+  - github_actions
+directory:
+  - .
+skip-path:
+  - node_modules
+  - .terraform
+  - frontend/node_modules
+  - agent/poc
+  - infra/gcp/envs
+  - infra/gcp/modules
+compact: true
+quiet: true
+baseline: .checkov.baseline
+
+skip-check:
+  # --- encryption keys: Google-managed keys (AES-256) are used. Customer-supplied keys (CSEK) turn a lost
+  # key into lost data, and customer-managed keys (CMEK) add a Cloud KMS dependency we do not need here.
+  - CKV_GCP_37   # Compute disk: customer-supplied encryption key
+  - CKV_GCP_38   # Compute instance boot disk: customer-supplied encryption key
+  - CKV_GCP_84   # Artifact Registry: customer-managed encryption key
+
+  # --- the Compute Engine service agent needs roles/compute.instanceAdmin.v1 to stop the Airflow VM
+  # on its schedule. It is Google's own agent, not a user or workload account.
+  - CKV_GCP_42
+
+  # --- Cloud SQL logging we deliberately do not turn on: log_hostname does a reverse DNS lookup per
+  # connection (latency), log_duration logs every statement (volume and cost), and pgaudit logs
+  # nothing until the extension is also created in the database. The useful subset is on in qa/prod.
+  - CKV_GCP_108  # log_hostname
+  - CKV2_GCP_13  # log_duration
+  - CKV_GCP_110  # pgaudit
+
+  # --- access logging on the lakehouse bucket would need a second bucket just for logs; the data is
+  # synthetic and the bucket is private (public access prevention enforced, uniform access).
+  - CKV_GCP_62
+
+  # --- SSL on Cloud SQL is enforced with ssl_mode = ENCRYPTED_ONLY (visible in the resolved plan). Checkov only
+  # recognizes the old require_ssl attribute, which the provider has deprecated in favor of ssl_mode.
+  - CKV_GCP_6
+
+  # --- same decision as CKV_GCP_62: the bucket does not log access to another bucket (plan-mode twin of that check)
+  - CKV_GCP_63
+
+  # --- a workflow_dispatch input reaches the build only as the environment name, and it is a choice
+  # restricted to dev, qa and prod. Only people with write access to the repository can dispatch it.
+  - CKV_GHA_7
+
+  # --- HEALTHCHECK: Cloud Run ignores the Dockerfile instruction and uses its own startup and liveness
+  # probes; the Airflow containers have a healthcheck in their compose file.
+  - CKV_DOCKER_2

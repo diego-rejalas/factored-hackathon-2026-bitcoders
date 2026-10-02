@@ -74,6 +74,8 @@ module "cloudsql" {
   point_in_time_recovery = var.db_point_in_time_recovery
   authorized_networks    = var.db_authorized_networks
   enable_public_ip       = !local.use_private_ip
+  require_ssl            = var.db_require_ssl
+  audit_logging          = var.db_audit_logging
   private_ip             = local.use_private_ip
   private_network_id     = module.network.network_id
   extra_databases        = var.enable_airflow ? { airflow = "airflow" } : {}
@@ -218,6 +220,11 @@ module "etl" {
   depends_on = [module.foundation]
 }
 
+data "google_project" "this" {
+  count      = var.enable_airflow ? 1 : 0
+  project_id = var.project_id
+}
+
 # Airflow reaches Cloud SQL over the VPC, so the database must have a private IP.
 resource "terraform_data" "airflow_requires_private_db" {
   lifecycle {
@@ -232,12 +239,13 @@ module "airflow" {
   count  = var.enable_airflow ? 1 : 0
   source = "../../modules/airflow_vm"
 
-  name         = "${local.prefix}-airflow"
-  project_id   = var.project_id
-  region       = var.region
-  zone         = var.airflow_zone
-  machine_type = var.airflow_machine_type
-  data_disk_gb = var.airflow_data_disk_gb
+  name           = "${local.prefix}-airflow"
+  project_id     = var.project_id
+  project_number = data.google_project.this[0].number
+  region         = var.region
+  zone           = var.airflow_zone
+  machine_type   = var.airflow_machine_type
+  data_disk_gb   = var.airflow_data_disk_gb
 
   network_name           = module.network.network_name
   subnetwork_name        = module.network.subnetwork_name

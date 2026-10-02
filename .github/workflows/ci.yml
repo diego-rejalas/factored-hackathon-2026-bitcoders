@@ -8,6 +8,10 @@ on:
     branches: [main]
     paths: ["infra/airflow/**", "infra/airflow-gcp/**", "infra/gcp/etl/**", "infra/dbt/**", "data/dags/**", "data/dbt/**", "data/pipeline/**", "backend/**", "agent/**", "frontend/**", ".github/workflows/ci.yml"]
 
+# The default token is read-only; a job that needs more says so itself.
+permissions:
+  contents: read
+
 jobs:
   airflow:
     name: Build the Airflow image and check the DAG imports
@@ -54,6 +58,37 @@ jobs:
           assert not bag.import_errors and 'latam_bank_gcp' in bag.dags"
       - name: Build the ETL job image
         run: docker build . -f infra/gcp/etl/Dockerfile -t etl-ci-check
+      # Gate: a CRITICAL vulnerability that already has a fix fails the build. Ones without a fix
+      # cannot be acted on (the Debian base has several), so they would only block every build.
+      - name: Trivy, the Airflow image (critical and fixable)
+        run: >
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest
+          image airflow-gcp-ci-check --severity CRITICAL --ignore-unfixed --exit-code 1 --scanners vuln,secret
+      - name: Trivy, the ETL image (critical and fixable)
+        run: >
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest
+          image etl-ci-check --severity CRITICAL --ignore-unfixed --exit-code 1 --scanners vuln,secret
+
+  security:
+    name: Security scans (Checkov, Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Checkov, Dockerfiles and workflows (new findings fail; known ones are in .checkov.baseline)
+        run: |
+          uv venv /tmp/checkov-venv
+          uv pip install --python /tmp/checkov-venv/bin/python checkov
+          /tmp/checkov-venv/bin/checkov
+      - name: Trivy, infrastructure configuration (HIGH and CRITICAL)
+        run: >
+          docker run --rm -v "$PWD:/src" aquasec/trivy:latest config /src
+          --severity HIGH,CRITICAL --ignorefile /src/.trivyignore.yaml
+          --skip-dirs /src/frontend/node_modules --skip-dirs /src/agent/poc --exit-code 1
+      - name: Trivy, secrets committed to the repository
+        run: >
+          docker run --rm -v "$PWD:/src" aquasec/trivy:latest fs /src --scanners secret
+          --skip-dirs /src/frontend/node_modules --exit-code 1
 
   dbt:
     name: Build the dbt image and parse the project

@@ -2,12 +2,8 @@
 # service account with the minimum it needs, a separate data disk with daily snapshots, and a
 # nightly stop so it never keeps running by accident.
 
-data "google_project" "this" {
-  project_id = var.project_id
-}
-
 locals {
-  compute_agent = "serviceAccount:service-${data.google_project.this.number}@compute-system.iam.gserviceaccount.com"
+  compute_agent = "serviceAccount:service-${var.project_number}@compute-system.iam.gserviceaccount.com"
 }
 
 # --- identity -----------------------------------------------------------------

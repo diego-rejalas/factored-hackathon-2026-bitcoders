@@ -189,3 +189,15 @@ variable "airflow_admin_members" {
   type        = list(string)
   default     = []
 }
+
+variable "db_require_ssl" {
+  description = "Refuse unencrypted connections to Cloud SQL."
+  type        = bool
+  default     = true
+}
+
+variable "db_audit_logging" {
+  description = "Connection, lock-wait, checkpoint, temp-file and DDL logging on Cloud SQL (changing database flags can restart the instance)."
+  type        = bool
+  default     = true
+}
