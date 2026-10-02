@@ -19,7 +19,17 @@ output "cloudsql_connection_name" {
 }
 
 output "cloudsql_public_ip" {
-  value = module.cloudsql.public_ip
+  description = "Null when db_connectivity is private_ip."
+  value       = module.cloudsql.public_ip
+}
+
+output "cloudsql_private_ip" {
+  description = "Null when the instance has no private IP."
+  value       = module.cloudsql.private_ip
+}
+
+output "network" {
+  value = module.network.network_name
 }
 
 output "lakehouse_bucket" {

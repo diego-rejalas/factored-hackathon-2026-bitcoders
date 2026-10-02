@@ -10,6 +10,8 @@ resource "google_project_service" "services" {
     "iam.googleapis.com",
     "serviceusage.googleapis.com",
     "storage.googleapis.com",
+    "compute.googleapis.com",
+    "servicenetworking.googleapis.com",
   ])
   service            = each.key
   disable_on_destroy = false

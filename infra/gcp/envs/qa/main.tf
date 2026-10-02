@@ -19,10 +19,19 @@ locals {
     environment = var.environment
   }
 
-  # Cloud Run reaches Cloud SQL either through the connector (unix socket, no network
-  # allow-list) or over the public IP. The apps read PG_HOST as a libpq/asyncpg host, and
-  # both accept a socket directory, so no application change is needed.
-  db_host = var.use_cloud_sql_connector ? "/cloudsql/${module.cloudsql.connection_name}" : module.cloudsql.public_ip
+  # How workloads reach Cloud SQL (var.db_connectivity):
+  #   public_ip  public IPv4 plus an authorized-networks allow-list (what the first stack did)
+  #   connector  Cloud SQL connector, a unix socket; the apps read PG_HOST as a libpq/asyncpg
+  #              host and both accept a socket directory, so no application change is needed
+  #   private_ip private IP over Private Service Access; Cloud Run uses Direct VPC egress
+  use_connector  = var.db_connectivity == "connector"
+  use_private_ip = var.db_connectivity == "private_ip"
+
+  db_host = (
+    local.use_connector ? "/cloudsql/${module.cloudsql.connection_name}" :
+    local.use_private_ip ? module.cloudsql.private_ip :
+    module.cloudsql.public_ip
+  )
 
   db_env = {
     PG_HOST     = local.db_host
@@ -40,6 +49,18 @@ module "foundation" {
   labels = local.labels
 }
 
+module "network" {
+  source = "../../modules/network"
+
+  prefix               = local.prefix
+  region               = var.region
+  subnet_cidr          = var.subnet_cidr
+  private_service_cidr = var.private_service_cidr
+  enable_nat           = var.enable_nat
+
+  depends_on = [module.foundation]
+}
+
 module "cloudsql" {
   source = "../../modules/cloudsql"
 
@@ -51,9 +72,12 @@ module "cloudsql" {
   deletion_protection    = var.db_deletion_protection
   point_in_time_recovery = var.db_point_in_time_recovery
   authorized_networks    = var.db_authorized_networks
+  enable_public_ip       = !local.use_private_ip
+  private_ip             = local.use_private_ip
+  private_network_id     = module.network.network_id
   labels                 = local.labels
 
-  depends_on = [module.foundation]
+  depends_on = [module.foundation, module.network]
 }
 
 module "secrets" {
@@ -93,7 +117,10 @@ module "backend" {
     SESSION_JWT_SECRET = module.secrets.secret_ids["session-jwt"]
   }
 
-  enable_cloudsql          = var.use_cloud_sql_connector
+  enable_cloudsql          = local.use_connector
+  enable_vpc               = local.use_private_ip
+  vpc_network              = module.network.network_name
+  vpc_subnetwork           = module.network.subnetwork_name
   cloudsql_connection_name = module.cloudsql.connection_name
   allow_unauthenticated    = var.backend_public
   min_instances            = var.backend_min_instances
@@ -123,7 +150,10 @@ module "agent" {
     TYPESAFE_API_KEY   = module.secrets.secret_ids["typesafe-api-key"]
   }
 
-  enable_cloudsql          = var.use_cloud_sql_connector
+  enable_cloudsql          = local.use_connector
+  enable_vpc               = local.use_private_ip
+  vpc_network              = module.network.network_name
+  vpc_subnetwork           = module.network.subnetwork_name
   cloudsql_connection_name = module.cloudsql.connection_name
   allow_unauthenticated    = true
   min_instances            = var.agent_min_instances
@@ -172,7 +202,10 @@ module "etl" {
     LATAM_BANK_AWS_SECRET_ACCESS_KEY = module.secrets.secret_ids["latam-bank-aws-secret"]
   }
 
-  enable_cloudsql          = var.use_cloud_sql_connector
+  enable_cloudsql          = local.use_connector
+  enable_vpc               = local.use_private_ip
+  vpc_network              = module.network.network_name
+  vpc_subnetwork           = module.network.subnetwork_name
   cloudsql_connection_name = module.cloudsql.connection_name
   lakehouse_bucket         = module.lakehouse.name
   labels                   = local.labels
