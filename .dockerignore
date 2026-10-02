@@ -1,0 +1,17 @@
+# Keeps the Docker build context small: every image is built from the repo root.
+.git
+**/.terraform
+**/*.tfstate*
+**/node_modules
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.next
+.env
+**/.env
+doc
+spec
+ml
+agent/poc
+infra/gcp/envs
+infra/gcp/modules
