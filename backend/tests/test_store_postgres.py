@@ -330,3 +330,31 @@ async def test_the_app_boots_migrates_seeds_the_demo_accounts_and_serves_the_log
         assert resolved["status"] == "auto_resolved" and resolved["evidence"]["resolution"] == {"rule": "r"}
         assert [c["status"] for c in client.get("/v1/disputes", headers=headers).json()] == ["auto_resolved"]
         assert client.get(f"/v1/disputes/{case_id}", headers=headers).json()["events"][-1]["event"] == "resolved"
+
+
+@pytest.mark.anyio
+async def test_data_meta_reads_the_last_successful_run_and_is_unknown_without_one(store):
+    assert await store.data_meta() == {"gold": [], "last_successful_run": None}  # no ops.etl_runs at all
+    await put(store, "create schema ops")
+    await put(store, "create table ops.etl_runs (run_id text primary key, started_at timestamptz, finished_at timestamptz, status text, detail text)")
+    assert await store.data_meta() == {"gold": [], "last_successful_run": None}  # the table, but no run
+    await put(store, "insert into ops.etl_runs values ('r1', '2026-10-01 10:00+00', '2026-10-01 10:20+00', 'success', $1)", '{"published_rows": {"customers": 10, "transactions": 99}}')
+    await put(store, "insert into ops.etl_runs values ('r2', '2026-10-02 10:00+00', '2026-10-02 10:05+00', 'failed', '{}')")
+    await put(store, "insert into ops.etl_runs values ('r3', '2026-10-03 10:00+00', '2026-10-03 10:20+00', 'success', 'not json')")
+    meta = await store.data_meta()
+    assert meta["last_successful_run"]["run_id"] == "r3"  # the newest success; a failed run does not count
+    assert meta["gold"] == []  # its detail is not JSON: unknown rows, not a crash
+    await put(store, "delete from ops.etl_runs where run_id = 'r3'")
+    meta = await store.data_meta()
+    assert meta["last_successful_run"]["run_id"] == "r1"
+    assert meta["gold"] == [{"table": "customers", "rows": 10}, {"table": "transactions", "rows": 99}]
+
+
+@pytest.mark.anyio
+async def test_transactions_carry_the_meaning_of_their_response_code_in_sql(store):
+    await add_customer(store)
+    await add_tx(store, "T1")  # the helper writes response code 51
+    expected = {"es": "fondos insuficientes", "pt": "saldo insuficiente"}
+    assert (await store.get_transaction("C1", "T1"))["response_meaning"] == expected
+    assert (await store.list_transactions("C1"))[0]["response_meaning"] == expected
+    assert (await store.list_transactions_page("C1"))[0][0]["response_meaning"] == expected

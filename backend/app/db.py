@@ -9,6 +9,7 @@ import asyncpg
 from fastapi import Request
 
 from app.migrate import apply_migrations
+from app.response_codes import meanings
 
 
 def _json_default(value: Any) -> Any:
@@ -110,6 +111,13 @@ def decode_cursor(cursor: str) -> tuple[datetime, str]:
         return datetime.fromisoformat(moment), str(transaction_id)
     except Exception as error:  # noqa: BLE001
         raise ValueError("invalid cursor") from error
+
+
+def transaction_row(row: Any) -> dict:
+    """A transaction as the API returns it: the row plus the meaning of its response code, when it has one."""
+    data = dict(row)
+    data["response_meaning"] = meanings(data.get("response_code"))
+    return data
 
 
 def get_store(request: Request) -> "BankStore":
@@ -218,7 +226,7 @@ class BankStore:
         sql += f" order by transaction_date desc limit ${len(params)}"
         async with self.pool.acquire() as conn:
             rows = await conn.fetch(sql, *params)
-        return [dict(row) for row in rows]
+        return [transaction_row(row) for row in rows]
 
     async def get_transaction(self, customer_id: str, transaction_id: str) -> dict | None:
         async with self.pool.acquire() as conn:
@@ -231,7 +239,7 @@ class BankStore:
                 transaction_id,
                 customer_id,
             )
-        return dict(row) if row else None
+        return transaction_row(row) if row else None
 
     async def create_dispute(
         self,
@@ -430,7 +438,7 @@ class BankStore:
         params.append(limit + 1)
         sql += f" order by t.transaction_date desc, t.transaction_id desc limit ${len(params)}"
         async with self.pool.acquire() as conn:
-            rows = [dict(row) for row in await conn.fetch(sql, *params)]
+            rows = [transaction_row(row) for row in await conn.fetch(sql, *params)]
         next_cursor = None
         if len(rows) > limit:
             rows = rows[:limit]
@@ -483,6 +491,37 @@ class BankStore:
         async with self.pool.acquire() as conn:
             rows = await conn.fetch(sql, *params)
         return [dict(row) for row in rows]
+
+    async def data_meta(self) -> dict:
+        """When the data the customer sees was last refreshed: the last successful pipeline run, from ops.etl_runs.
+
+        None when there is no such table or no successful run yet (a fresh database): the caller says "unknown",
+        it does not guess.
+        """
+        async with self.pool.acquire() as conn:
+            if await conn.fetchval("select to_regclass('ops.etl_runs')") is None:
+                return {"gold": [], "last_successful_run": None}
+            row = await conn.fetchrow(
+                """
+                select run_id, status, started_at, finished_at, detail
+                from ops.etl_runs where status = 'success' order by finished_at desc limit 1
+                """
+            )
+        if row is None:
+            return {"gold": [], "last_successful_run": None}
+        try:
+            published = json.loads(row["detail"] or "{}").get("published_rows") or {}
+        except ValueError:
+            published = {}
+        return {
+            "gold": [{"table": name, "rows": int(count)} for name, count in sorted(published.items())],
+            "last_successful_run": {
+                "run_id": row["run_id"],
+                "status": row["status"],
+                "started_at": row["started_at"],
+                "finished_at": row["finished_at"],
+            },
+        }
 
     # ------------------------------------------------------------------ v1: password login
 

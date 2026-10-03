@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from app.db import DEPOSIT_TYPES, CREDIT_TYPES, decode_cursor, encode_cursor, product_kind
+from app.db import DEPOSIT_TYPES, CREDIT_TYPES, decode_cursor, encode_cursor, product_kind, transaction_row
 from app.passwords import hash_password
 
 CUS_A = "CUS-AAAA0001"
@@ -57,7 +57,7 @@ def _public_product(row: dict) -> dict:
 
 
 def _with_effective_usd(tx: dict) -> dict:
-    row = dict(tx)
+    row = transaction_row(tx)
     if row["amount_usd"] is None and row["currency"] == "USD":
         row["amount_usd_effective"] = row["amount"]
     else:
@@ -94,6 +94,14 @@ class FakeStore:
         self.disputes: dict[str, dict] = {}
         self.events: dict[str, list] = {}
         self._seq = 0
+        self.meta = {
+            "gold": [{"table": "customers", "rows": 150000}, {"table": "transactions", "rows": 4425008}],
+            "last_successful_run": {
+                "run_id": "run-1", "status": "success",
+                "started_at": datetime(2026, 10, 2, 14, 13, tzinfo=timezone.utc),
+                "finished_at": datetime(2026, 10, 2, 14, 34, tzinfo=timezone.utc),
+            },
+        }
         self.products = {
             "PRD-A-SAV": _product("PRD-A-SAV", CUS_A, "Cuenta Ahorro", "1111222233334444", "COP", "1500000.50"),
             "PRD-A-CC": _product("PRD-A-CC", CUS_A, "Tarjeta Crédito", "5555666677778888", "COP", "320000.00", credit_limit="2000000.00"),
@@ -226,6 +234,9 @@ class FakeStore:
     # ---- v1
     async def ping(self):
         return True
+
+    async def data_meta(self):
+        return self.meta
 
     async def list_products(self, customer_id):
         rows = [_public_product(p) for p in self.products.values() if p["customer_id"] == customer_id]

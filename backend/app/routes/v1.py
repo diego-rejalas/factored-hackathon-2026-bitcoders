@@ -11,6 +11,7 @@ from app.db import get_store
 from app.passwords import DUMMY_HASH, verify_password
 from app.schemas import (
     Customer,
+    DataMeta,
     DemoAccounts,
     LoginRequest,
     LoginResponse,
@@ -74,6 +75,12 @@ async def get_me(customer_id: str = Depends(get_current_customer), store=Depends
     if profile is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Customer not found")
     return profile
+
+
+@router.get("/meta/data", response_model=DataMeta)
+async def data_meta(customer_id: str = Depends(get_current_customer), store=Depends(get_store)) -> dict:
+    """When the data was last refreshed (the last successful pipeline run), for a "data as of ..." line."""
+    return await store.data_meta()
 
 
 @router.get("/me/summary", response_model=Summary)
