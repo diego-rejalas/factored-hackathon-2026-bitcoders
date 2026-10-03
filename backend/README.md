@@ -4,7 +4,7 @@ Vertical 3 de `../spec/ARCHITECTURE.md`. Servicio FastAPI separado en Railway. E
 
 ## Contrato (OpenAPI en `/docs`)
 
-Dos superficies sobre el mismo servicio. La **raíz** es la del agente (no cambia); **`/v1`** es la de la aplicación web, a la que llega por su servidor (BFF), nunca desde el navegador. Diseño completo y decisiones en `../spec/BACKEND_API.md`.
+Dos superficies sobre el mismo servicio. La **raíz** es la del agente (no cambia); **`/v1`** es la de la aplicación web, a la que llega por su servidor (BFF), nunca desde el navegador. Diseño y decisiones en `../spec/BACKEND_API.md`; **el contrato (rutas, estados, errores, seguridad) en `../spec/API_CONTRACT.md`**, cuyo OpenAPI se guarda en `tests/contract/openapi.json` y una prueba falla si el código se desvía de él.
 
 **`/v1` (aplicación web)**
 
@@ -13,6 +13,7 @@ Dos superficies sobre el mismo servicio. La **raíz** es la del agente (no cambi
 | `POST /v1/auth/login` | — | Usuario y clave (argon2id). Cinco fallos bloquean la cuenta 15 minutos (429 + `Retry-After`). Misma respuesta si el usuario no existe. |
 | `GET /v1/auth/demo-accounts` | — | Cuentas de demostración y su clave compartida. 404 salvo `DEMO_ACCOUNTS_ENABLED=true`. |
 | `GET /v1/me` | Bearer | Perfil mínimo. |
+| `GET /v1/meta/data` | Bearer | Cuándo corrió por última vez el pipeline con éxito (`ops.etl_runs`); `null` si no se sabe. |
 | `GET /v1/me/summary` | Bearer | Inicio: saldos por moneda (depósitos y crédito por separado), 5 últimos movimientos, casos activos por estado. |
 | `GET /v1/me/products` y `/{id}` | Bearer | Productos con el número enmascarado (`****1234`), saldo, límite, estado. |
 | `GET /v1/me/transactions` | Bearer | Historial paginado por cursor (`?cursor=`), filtros `product_id`, `status`, `merchant`, `from`, `to`. Cada fila trae `case_id` y `dispute_status` si ya tiene caso. |
