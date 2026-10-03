@@ -98,6 +98,10 @@ class Transaction(BaseModel):
     transaction_city: str | None = None
     transaction_status: str
     response_code: str | None = None
+    response_meaning: dict[str, str] | None = Field(
+        default=None,
+        description="Standard (ISO 8583) meaning of response_code, as {es, pt}. An assumption: the organizer does not define the codes. Null when the code is empty or unknown.",
+    )
     case_id: UUID | None = Field(default=None, description="Set when the transaction already has a dispute case.")
     dispute_status: str | None = None
 

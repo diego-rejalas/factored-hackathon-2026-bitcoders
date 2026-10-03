@@ -50,3 +50,11 @@ insert into gold.transactions values
     ('TXN-BRU-003', '2026-06-16 21:05:00', '2026-06-16', 'PRD-BRU-SAV', 'CLI-0064RNKCVQCN', 'Payment',  'Utilities',     29.99, 'USD',   29.99, 'App',    null, 'Telefonía Móvil',      'Utilities',  'Argentina','Córdoba',  'Approved', '00'),
     ('TXN-CAR-001', '2026-06-17 08:20:00', '2026-06-17', 'PRD-CAR-SAV', 'CLI-00232W4ZDQPP', 'Purchase', 'Retail',       389.87, 'USD',  389.87, 'Online', null, 'Moda Express',         'Retail',     'México',   'Monterrey','Reversed', '00'),
     ('TXN-CAR-002', '2026-06-13 12:40:00', '2026-06-13', 'PRD-CAR-SAV', 'CLI-00232W4ZDQPP', 'Purchase', 'Restaurants',   71.30, 'USD',   71.30, 'POS',    null, 'Taquería La Esquina',  'Restaurants','México',   'Monterrey','Approved', '00');
+
+-- The pipeline's own run log, so /v1/meta/data has a last successful run to report ("data as of ...").
+create schema ops;
+create table ops.etl_runs (run_id text primary key, started_at timestamptz, finished_at timestamptz, status text, detail text);
+insert into ops.etl_runs values (
+    'local-fixture', '2026-06-21 09:00:00+00', '2026-06-21 09:20:00+00', 'success',
+    '{"published_rows": {"customers": 3, "products": 6, "transactions": 13}}'
+);

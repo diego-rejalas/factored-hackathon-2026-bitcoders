@@ -153,3 +153,23 @@ def test_ready_is_503_when_the_database_is_down(client, store):
 
     store.ping = down
     assert client.get("/ready").status_code == 503
+
+
+# ------------------------------------------------------------------ data freshness
+
+
+def test_meta_data_says_when_the_data_was_last_refreshed(client, auth_headers):
+    body = client.get("/v1/meta/data", headers=auth_headers).json()
+    assert body["last_successful_run"]["status"] == "success"
+    assert body["last_successful_run"]["finished_at"].startswith("2026-10-02T14:34")
+    assert {"table": "transactions", "rows": 4425008} in body["gold"]
+
+
+def test_meta_data_without_a_run_is_unknown_not_invented(client, auth_headers, store):
+    store.meta = {"gold": [], "last_successful_run": None}
+    body = client.get("/v1/meta/data", headers=auth_headers).json()
+    assert body == {"gold": [], "last_successful_run": None}
+
+
+def test_meta_data_needs_a_session(client):
+    assert client.get("/v1/meta/data").status_code == 401
