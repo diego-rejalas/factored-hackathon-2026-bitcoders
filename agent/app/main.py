@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 import app.replies as replies
+from app.observability import RequestLogMiddleware
 from app.graph import build_graph
 from app.llm import LLM
 from app.tools import ToolError, bank_tools_from_env
@@ -97,9 +98,11 @@ def create_app(tools=None, tracer=None, llm=None) -> FastAPI:
             CORSMiddleware,
             allow_origins=origins,
             allow_methods=["GET", "POST", "OPTIONS"],
-            allow_headers=["Content-Type", "Authorization"],
+            allow_headers=["Content-Type", "Authorization", "X-Request-ID"],
+            expose_headers=["X-Request-ID"],
             max_age=600,
         )
+    app.add_middleware(RequestLogMiddleware, service="agent")
 
     if tools is not None or tracer is not None or llm is not None:
         app.state.tools = tools or bank_tools_from_env()

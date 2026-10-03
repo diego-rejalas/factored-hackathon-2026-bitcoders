@@ -5,6 +5,7 @@ from fastapi import FastAPI, HTTPException
 
 from app.db import BankStore
 from app.demo import seed_demo_accounts
+from app.observability import RequestLogMiddleware
 from app.routes import customers, disputes, v1
 from app.auth import router as session_router
 
@@ -46,6 +47,7 @@ def create_app(store: BankStore | None = None) -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
+    app.add_middleware(RequestLogMiddleware, service="backend")
     if store is not None:
         app.state.store = store
     # Root: the routes the agent calls. /v1: what the web app uses, plus the same dispute routes.

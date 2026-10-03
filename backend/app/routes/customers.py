@@ -2,11 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.auth import get_current_customer
 from app.db import get_store
+from app.schemas import Customer, Transaction
 
 router = APIRouter(prefix="/me", tags=["customers"])
 
 
-@router.get("")
+@router.get("", response_model=Customer)
 async def get_me(
     customer_id: str = Depends(get_current_customer),
     store=Depends(get_store),
@@ -17,7 +18,7 @@ async def get_me(
     return profile
 
 
-@router.get("/transactions")
+@router.get("/transactions", response_model=list[Transaction])
 async def list_transactions(
     status_filter: str | None = Query(default=None, alias="status"),
     merchant: str | None = Query(default=None, min_length=2),
@@ -31,7 +32,7 @@ async def list_transactions(
     )
 
 
-@router.get("/transactions/{transaction_id}")
+@router.get("/transactions/{transaction_id}", response_model=Transaction)
 async def get_transaction(
     transaction_id: str,
     customer_id: str = Depends(get_current_customer),
