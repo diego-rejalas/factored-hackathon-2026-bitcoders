@@ -1,3 +1,29 @@
+PORTUGUESE_MARKERS = (
+    "não", "você", "obrigado", "obrigada", "bom dia", "boa tarde", "boa noite", "não reconheço", "cobrança", "estorno",
+)
+
+
+def detect_language(message: str) -> str:
+    """"pt" when the message has Portuguese markers, otherwise "es" (the demo's two languages)."""
+    lowered = message.lower()
+    return "pt" if any(marker in lowered for marker in PORTUGUESE_MARKERS) else "es"
+
+
+def decline_reason(tx: dict, language: str) -> str:
+    """The card network's reason for a decline, in a sentence, or "" when the code is empty or unknown.
+
+    The meaning comes from the backend (ISO 8583, an assumption: the organizer does not define the codes), so the
+    sentence says it is the standard's meaning and gives the code, and never presents it as the bank's own finding.
+    """
+    meaning = (tx.get("response_meaning") or {}).get(language) or (tx.get("response_meaning") or {}).get("es")
+    code = tx.get("response_code")
+    if tx.get("transaction_status") != "Declined" or not meaning or not code:
+        return ""
+    if language == "pt":
+        return f" Motivo informado pelo padrão de cartões (código {code}): {meaning}."
+    return f" Motivo informado por el estándar de tarjetas (código {code}): {meaning}."
+
+
 def _fmt_amount(tx: dict) -> str:
     amount = tx.get("amount_usd_effective")
     currency = "USD" if amount is not None else tx.get("currency")
@@ -38,12 +64,12 @@ def resolved_reply(language: str, case: dict, tx: dict) -> str:
     if language == "pt":
         return (
             f"Verifiquei sua transação na {_fmt_date(tx)} em {describe(tx)} "
-            f"por {_fmt_amount(tx)}: {explanation}. Registrei o caso {case['case_id']} "
+            f"por {_fmt_amount(tx)}: {explanation}.{decline_reason(tx, 'pt')} Registrei o caso {case['case_id']} "
             f"com o detalhe e a evidência da verificação. Não foi movido nenhum dinheiro."
         )
     return (
         f"Verifiqué tu transacción del {_fmt_date(tx)} en {describe(tx)} "
-        f"por {_fmt_amount(tx)}: {explanation}. Registré el caso {case['case_id']} "
+        f"por {_fmt_amount(tx)}: {explanation}.{decline_reason(tx, 'es')} Registré el caso {case['case_id']} "
         f"con el detalle y la evidencia de la verificación. No se movió dinero."
     )
 
@@ -123,3 +149,16 @@ def status_reply(language: str, case: dict) -> str:
     if language == "pt":
         return f"Seu caso {case['case_id']} está como \"{case.get('status')}\" (último evento: {last})."
     return f"Tu caso {case['case_id']} está como \"{case.get('status')}\" (último evento: {last})."
+
+
+def unavailable_reply(language: str) -> str:
+    """When the banking service could not be reached after the retries: a safe answer, nothing was changed."""
+    if language == "pt":
+        return (
+            "Não consegui concluir a verificação agora por um problema técnico. Nenhuma alteração foi feita na sua conta. "
+            "Tente novamente em alguns instantes ou fale com um atendente."
+        )
+    return (
+        "No pude completar la verificación ahora por un problema técnico. No se hizo ningún cambio en tu cuenta. "
+        "Inténtalo de nuevo en unos instantes o habla con un agente."
+    )

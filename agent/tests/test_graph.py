@@ -96,7 +96,12 @@ def test_fraud_mention_always_escalates_with_structured_handoff(graph, tools):
     assert tools.calls_of("create_dispute") == []
 
 
-def test_amount_above_threshold_escalates_without_creating_case(graph, tools):
+def _cases_opened(tools):
+    """The transactions a case was opened on, in order."""
+    return [params["transaction_id"] for _, params in tools.calls_of("create_dispute")]
+
+
+def test_amount_above_threshold_escalates_and_opens_an_escalated_case(graph, tools):
     tools.transactions.append(
         _tx("TXN-BIG", CUS_A, "Electro Mega", "Declined", 600.00)
     )
@@ -104,13 +109,21 @@ def test_amount_above_threshold_escalates_without_creating_case(graph, tools):
 
     assert result["outcome"] == "escalated"
     assert result["handoff"]["reason"] == "amount_threshold"
-    assert tools.calls_of("create_dispute") == []
+    # The workflow spec: escalating opens the case as `escalated` and the customer gets its number.
+    assert _cases_opened(tools) == ["TXN-BIG"]
+    case = result["case"]
+    assert case["status"] == "escalated"
+    assert result["handoff"]["case_id"] == case["case_id"]
+    assert result["handoff"]["escalated_in_backend"] is True
+    assert case["case_id"] in result["reply"]
+    assert [c[0] for c in tools.calls if c[0] in ("create_dispute", "escalate_dispute")] == ["create_dispute", "escalate_dispute"]
 
 
 def test_out_of_scope_escalates(graph, tools):
     result = _run(graph, "quiero un préstamo personal nuevo")
     assert result["outcome"] == "escalated"
     assert result["handoff"]["reason"] == "out_of_scope"
+    assert _cases_opened(tools) == []  # no transaction: nothing to open a case on
 
 
 def test_greeting_gets_answer_not_escalation(graph, tools):
@@ -208,7 +221,8 @@ def test_unknown_usd_amount_escalates_instead_of_counting_as_zero(graph, tools):
 
     assert result["outcome"] == "escalated"
     assert result["handoff"]["reason"] == "amount_unknown"
-    assert tools.calls_of("create_dispute") == []
+    assert _cases_opened(tools) == ["TXN-5"]
+    assert result["case"]["status"] == "escalated"
 
 
 def test_unrecognized_approved_charge_escalates_as_possible_fraud(graph, tools):
@@ -218,7 +232,8 @@ def test_unrecognized_approved_charge_escalates_as_possible_fraud(graph, tools):
 
     assert result["outcome"] == "escalated"
     assert result["handoff"]["reason"] == "posted_charge_disputed"
-    assert tools.calls_of("create_dispute") == []
+    assert _cases_opened(tools) == ["TXN-7"]
+    assert result["case"]["status"] == "escalated"
 
 
 def test_pending_charge_also_escalates(graph, tools):
@@ -240,7 +255,8 @@ def test_a_four_digit_amount_is_not_read_as_a_smaller_one(graph, tools):
     # 1200 USD is above the 500 threshold: it must escalate on the RIGHT transaction, not close the 120 one.
     assert result["outcome"] == "escalated"
     assert result["handoff"]["reason"] == "amount_threshold"
-    assert tools.calls_of("create_dispute") == []
+    # The case is opened on the RIGHT transaction, and never on the 120 one.
+    assert _cases_opened(tools) == ["TXN-BIG"]
 
 
 def test_replies_never_print_none_for_a_missing_merchant(graph, tools):
@@ -268,3 +284,99 @@ def test_a_backend_without_resolve_still_answers_the_customer(graph, tools, monk
     assert result["outcome"] == "resolved"
     assert result["case"]["status"] == "open"
     assert str(result["case"]["case_id"]) in result["reply"]
+
+
+# ------------------------------------------------------------------ the transaction the customer picked in the app
+
+
+def _run_selected(graph, message, transaction_id, conversation="conv-sel", token=f"token-{CUS_A}"):
+    import asyncio
+    import uuid
+
+    return asyncio.run(
+        graph.ainvoke(
+            {
+                "session_token": token,
+                "message": message,
+                "conversation_id": conversation,
+                "run_id": str(uuid.uuid4()),
+                "selected_transaction_id": transaction_id,
+            },
+            config={"configurable": {"thread_id": conversation}},
+        )
+    )
+
+
+def test_a_picked_transaction_needs_no_description_to_resolve(graph, tools):
+    """Words alone are not enough to close a case (a vague report is only proposed), but a transaction the customer
+    picked in the app identifies itself."""
+    result = _run_selected(graph, "No reconozco este cobro", "TXN-1")
+    assert result["outcome"] == "resolved"
+    assert _cases_opened(tools) == ["TXN-1"]
+    assert result["case"]["status"] == "auto_resolved"
+    assert "clarify" not in str(result.get("reason"))
+
+
+def test_the_same_vague_words_without_a_pick_are_not_closed(graph, tools):
+    result = _run(graph, "No reconozco este cobro")
+    assert result["outcome"] != "resolved" or _cases_opened(tools) == []
+
+
+def test_a_picked_transaction_does_not_skip_the_guardrail(graph, tools):
+    tools.transactions.append(_tx("TXN-BIG", CUS_A, "Electro Mega", "Declined", 600.00))
+    big = _run_selected(graph, "No reconozco este cobro", "TXN-BIG", conversation="c1")
+    assert big["outcome"] == "escalated" and big["handoff"]["reason"] == "amount_threshold"
+    tools.transactions.append(_tx("TXN-POSTED", CUS_A, "Casino", "Approved", 50.00))
+    posted = _run_selected(graph, "No reconozco este cobro", "TXN-POSTED", conversation="c2")
+    assert posted["outcome"] == "escalated" and posted["handoff"]["reason"] == "posted_charge_disputed"
+
+
+def test_somebody_elses_transaction_is_ignored_and_never_leaks(graph, tools):
+    result = _run_selected(graph, "No reconozco este cobro", "TXN-B1")  # belongs to CUS_B
+    assert "TXN-B1" not in str(result.get("case")) and "Mega Mercado" not in result["reply"]
+    assert "TXN-B1" not in _cases_opened(tools)
+
+
+def test_a_transaction_that_does_not_exist_is_ignored(graph, tools):
+    result = _run_selected(graph, "No reconozco este cobro", "TXN-NOPE")
+    assert _cases_opened(tools) == []
+    assert result["outcome"] != "resolved"
+
+
+def test_fraud_wording_on_a_picked_transaction_escalates_with_its_case(graph, tools):
+    result = _run_selected(graph, "me robaron la tarjeta, no fui yo", "TXN-1")
+    assert result["outcome"] == "escalated" and result["handoff"]["reason"] == "fraud_suspected"
+    assert _cases_opened(tools) == ["TXN-1"]
+    assert result["case"]["status"] == "escalated"
+
+
+def test_the_pick_does_not_carry_over_to_the_next_turn(graph, tools):
+    _run_selected(graph, "No reconozco este cobro", "TXN-1", conversation="conv-carry")
+    assert _cases_opened(tools) == ["TXN-1"]
+    again = _run_selected(graph, "No reconozco el cobro de 120 en Farmacia Central", None, conversation="conv-carry")
+    # The second turn is about TXN-2 (Farmacia Central), not about the transaction picked in the first.
+    assert _cases_opened(tools)[-1] == "TXN-2"
+    assert again["case"]["transaction_id"] == "TXN-2"
+
+
+def test_a_declined_charge_explains_why_when_the_code_is_known(graph, tools):
+    tools.transactions[0]["response_code"] = "51"
+    tools.transactions[0]["response_meaning"] = {"es": "fondos insuficientes", "pt": "saldo insuficiente"}
+    result = _run_selected(graph, "No reconozco este cobro", "TXN-1")
+    assert "fondos insuficientes" in result["reply"] and "código 51" in result["reply"]
+    assert "estándar" in result["reply"]  # said as the standard's meaning, not the bank's finding
+    assert any("fondos insuficientes" in fact for fact in result["facts"])
+
+
+def test_the_reason_is_in_portuguese_for_a_portuguese_message(graph, tools):
+    tools.transactions[0]["response_code"] = "51"
+    tools.transactions[0]["response_meaning"] = {"es": "fondos insuficientes", "pt": "saldo insuficiente"}
+    result = _run_selected(graph, "Não reconheço esta cobrança", "TXN-1")
+    assert "saldo insuficiente" in result["reply"] and "fondos" not in result["reply"]
+
+
+def test_no_reason_is_invented_for_an_unknown_or_empty_code(graph, tools):
+    tools.transactions[0]["response_code"] = "99"
+    tools.transactions[0]["response_meaning"] = None
+    result = _run_selected(graph, "No reconozco este cobro", "TXN-1")
+    assert "Motivo informado" not in result["reply"] and "código 99" not in result["reply"]

@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+import app.replies as replies
 from app.graph import build_graph
 from app.llm import LLM
 from app.tools import ToolError, bank_tools_from_env
@@ -31,11 +32,18 @@ class ChatRequest(BaseModel):
     session_token: str = Field(min_length=1)
     message: str = Field(min_length=1, max_length=4000)
     conversation_id: str | None = Field(default=None, max_length=100)
+    transaction_id: str | None = Field(
+        default=None,
+        max_length=100,
+        description="The transaction the customer picked in the app. The backend checks it is theirs; one that is not is ignored.",
+    )
 
 
 class ChatResponse(BaseModel):
     reply: str
     conversation_id: str
+    case_id: str | None = Field(default=None, description="The dispute case this turn opened or found, if any.")
+    case_status: str | None = None
     outcome: str
     handoff: dict | None = None
 
@@ -122,16 +130,28 @@ def create_app(tools=None, tracer=None, llm=None) -> FastAPI:
                     "message": body.message,
                     "conversation_id": conversation_id,
                     "run_id": run_id,
+                    # Always set: the conversation keeps its state between turns, and a turn without a pick must
+                    # not inherit the previous one's.
+                    "selected_transaction_id": body.transaction_id,
                 },
                 config={"configurable": {"thread_id": conversation_id}},
             )
         except ToolError as error:
             if error.status_code == 401:
                 raise HTTPException(status_code=401, detail="Invalid or expired session token")
-            raise HTTPException(status_code=502, detail=f"Banking service error: {error.detail}")
+            # The banking service could not be reached after the bounded retries, or failed. A safe answer, not a
+            # stack trace: nothing was changed, and the customer is told so. The outcome says it was not handled.
+            return ChatResponse(
+                reply=replies.unavailable_reply(replies.detect_language(body.message)),
+                conversation_id=conversation_id,
+                outcome="unavailable",
+            )
+        case = result.get("case") or {}
         return ChatResponse(
             reply=result.get("reply", ""),
             conversation_id=conversation_id,
+            case_id=str(case["case_id"]) if case.get("case_id") else None,
+            case_status=case.get("status"),
             outcome=result.get("outcome", "resolved"),
             handoff=result.get("handoff"),
         )

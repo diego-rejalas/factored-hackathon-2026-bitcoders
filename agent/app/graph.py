@@ -35,7 +35,16 @@ class AgentState(TypedDict, total=False):
     handoff: dict | None
     clarify_rounds: int
     proposed_id: str | None
+    selected_transaction_id: str | None
     error: str | None
+
+
+def dispute_summary(candidate: dict) -> str:
+    status = candidate.get("transaction_status", "")
+    return (
+        f"Cliente reporta cobro de {replies.describe(candidate)} que no reconoce; "
+        f"la transacción {candidate['transaction_id']} figura como {status}."
+    )
 
 
 def _elapsed(start: float) -> int:
@@ -50,7 +59,7 @@ def build_graph(tools, tracer, llm=None):
     async def understand(state: AgentState) -> dict:
         start = time.monotonic()
         message = state["message"]
-        language = "pt" if any(w in message.lower() for w in ("não", "você", "obrigado", "obrigada", "bom dia", "boa tarde", "boa noite", "não reconheço", "cobrança", "estorno")) else "es"
+        language = replies.detect_language(message)
         intent = await intents.classify(message, llm)
         # A short "yes" answers the candidate proposed in the previous turn: it is part of the
         # dispute, whatever the classifier makes of two words.
@@ -61,6 +70,22 @@ def build_graph(tools, tracer, llm=None):
             intent=intent, params={"language": language}, latency_ms=_elapsed(start),
         )
         return {"language": language, "intent": intent, "entities": guardrail.extract_entities(message)}
+
+    async def selected_transaction(state: AgentState) -> dict | None:
+        """The transaction the customer picked in the app (a button on a movement), or None.
+
+        The backend checks that it is theirs: a 404 means "not found for this customer", and then it is as if
+        nothing had been picked, never an error and never somebody else's data.
+        """
+        transaction_id = state.get("selected_transaction_id")
+        if not transaction_id:
+            return None
+        try:
+            return await tools.get_transaction(state["session_token"], transaction_id)
+        except ToolError as error:
+            if error.status_code == 404:
+                return None
+            raise
 
     async def fetch_candidates(state: AgentState, entities: dict) -> list:
         """Every status, not only Declined/Reversed: a charge that was approved is exactly the
@@ -80,7 +105,11 @@ def build_graph(tools, tracer, llm=None):
 
         if intent == "fraud_report":
             await tracer.log(state["run_id"], state["conversation_id"], "decide", intent=intent, result_status="escalate", params={"reason": "fraud_suspected"}, latency_ms=_elapsed(start))
-            return {"intent": intent, "route": "escalate", "reason": "fraud_suspected", "outcome": "escalated"}
+            decision = {"intent": intent, "route": "escalate", "reason": "fraud_suspected", "outcome": "escalated"}
+            selected = await selected_transaction(state)
+            if selected is not None:
+                decision["candidate"] = selected
+            return decision
 
         if intent == "out_of_scope":
             await tracer.log(state["run_id"], state["conversation_id"], "decide", intent=intent, result_status="escalate", params={"reason": "out_of_scope"}, latency_ms=_elapsed(start))
@@ -105,15 +134,21 @@ def build_graph(tools, tracer, llm=None):
             return {"intent": intent, "route": "escalate", "reason": "ambiguity_unresolved", "outcome": "escalated"}
 
         entities = state.get("entities") or {}
-        candidates = await fetch_candidates(state, entities)
-
-        # A short "yes" confirms the one candidate proposed in the previous turn.
-        proposed = state.get("proposed_id")
-        affirmed = bool(proposed) and guardrail.is_affirmation(message)
-        if affirmed:
-            pool = [tx for tx in candidates if tx.get("transaction_id") == proposed]
+        selected = await selected_transaction(state)
+        if selected is not None:
+            # The customer picked it in the app: that identifies the transaction better than any words do, so
+            # there is nothing to search or to confirm. Every other check below still applies to it.
+            candidates, pool, affirmed = [selected], [selected], False
         else:
-            pool = guardrail.narrow_candidates(candidates, message, entities)
+            candidates = await fetch_candidates(state, entities)
+
+            # A short "yes" confirms the one candidate proposed in the previous turn.
+            proposed = state.get("proposed_id")
+            affirmed = bool(proposed) and guardrail.is_affirmation(message)
+            if affirmed:
+                pool = [tx for tx in candidates if tx.get("transaction_id") == proposed]
+            else:
+                pool = guardrail.narrow_candidates(candidates, message, entities)
 
         if len(pool) != 1:
             await tracer.log(state["run_id"], state["conversation_id"], "decide", intent=intent, result_status="clarify", params={"candidates": len(pool)}, latency_ms=_elapsed(start))
@@ -137,7 +172,7 @@ def build_graph(tools, tracer, llm=None):
 
         # The customer's own words must identify the transaction. A vague report is never closed
         # against whatever single candidate exists: the agent proposes it and asks.
-        if not (affirmed or guardrail.is_corroborated(candidate, message, entities)):
+        if not (affirmed or selected is not None or guardrail.is_corroborated(candidate, message, entities)):
             await tracer.log(state["run_id"], state["conversation_id"], "decide", intent=intent, result_status="clarify", params={"reason": "unconfirmed_candidate"}, latency_ms=_elapsed(start))
             return {
                 "intent": intent,
@@ -164,13 +199,8 @@ def build_graph(tools, tracer, llm=None):
     async def act(state: AgentState) -> dict:
         start = time.monotonic()
         candidate = state["candidate"]
-        status = candidate.get("transaction_status", "")
-        summary = (
-            f"Cliente reporta cobro de {replies.describe(candidate)} que no reconoce; "
-            f"la transacción {candidate['transaction_id']} figura como {status}."
-        )
         case = await tools.create_dispute(
-            state["session_token"], candidate["transaction_id"], REASON_CODE, summary
+            state["session_token"], candidate["transaction_id"], REASON_CODE, dispute_summary(candidate)
         )
         await tracer.log(state["run_id"], state["conversation_id"], "act", intent=state["intent"], tool="create_dispute", params={"transaction_id": candidate["transaction_id"]}, result_status=case.get("status"), latency_ms=_elapsed(start))
         return {"case": case}
@@ -188,6 +218,8 @@ def build_graph(tools, tracer, llm=None):
             f"monto efectivo {guardrail.effective_usd(candidate):.2f} USD",
             f"caso {fresh['case_id']} verificado en estado {fresh['status']}",
         ]
+        if replies.decline_reason(candidate, "es"):
+            facts.append(replies.decline_reason(candidate, "es").strip())
         if fresh.get("status") == "open":
             # The policy resolved it without a person: record that, so the customer's case list says "resolved"
             # and not "open". Then read the case again; verify does not trust its own write.
@@ -232,17 +264,31 @@ def build_graph(tools, tracer, llm=None):
 
     async def escalate(state: AgentState) -> dict:
         start = time.monotonic()
-        handoff = build_handoff(state)
         case = state.get("case")
+        candidate = state.get("candidate")
+        if case is None and candidate:
+            # An escalation about a transaction is a case too: it is how the customer follows it and how the
+            # person who takes it over finds it. (Without a transaction, such as an injection attempt or a
+            # question out of scope, there is nothing to open a case on.) One case per transaction, so a repeat
+            # returns the same one. If it cannot be opened the escalation still goes out, without a case id.
+            try:
+                case = await tools.create_dispute(
+                    state["session_token"], candidate["transaction_id"], REASON_CODE, dispute_summary(candidate)
+                )
+                state = {**state, "case": case}
+            except ToolError:
+                case = None
+        handoff = build_handoff(state)
         if case:
             try:
-                await tools.escalate_dispute(state["session_token"], case["case_id"], handoff)
+                # The case as the backend now has it (escalated), not as it was opened.
+                case = await tools.escalate_dispute(state["session_token"], case["case_id"], handoff) or case
                 handoff["escalated_in_backend"] = True
             except ToolError as error:
                 handoff["escalated_in_backend"] = False
                 handoff["backend_error"] = error.detail
         await tracer.log(state["run_id"], state["conversation_id"], "escalate", intent=state["intent"], tool="escalate_dispute" if case else None, result_status="escalated", latency_ms=_elapsed(start))
-        return {"handoff": handoff, "outcome": "escalated"}
+        return {"handoff": handoff, "outcome": "escalated", "case": case}
 
     async def respond(state: AgentState) -> dict:
         start = time.monotonic()
