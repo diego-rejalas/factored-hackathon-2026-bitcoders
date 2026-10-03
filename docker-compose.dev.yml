@@ -1,0 +1,65 @@
+# Local development: a database with example data, the backend and the agent. The frontend runs on your machine
+# (pnpm dev) so it reloads as you edit. See docs/LOCAL_DEV.md.
+#
+#   docker compose -f docker-compose.dev.yml up --build
+#
+# The database is created from backend/dev/gold_fixture.sql the first time; `down -v` throws it away.
+name: factored-dev
+
+x-session-secret: &session_secret dev-only-session-secret-change-me-0123456789
+
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_PASSWORD: dev
+      POSTGRES_DB: data
+    ports:
+      - "${DB_PORT:-5433}:5432"
+    volumes:
+      - ./backend/dev/gold_fixture.sql:/docker-entrypoint-initdb.d/10-gold.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d data"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      PG_HOST: db
+      PG_USER: postgres
+      PG_PASSWORD: dev
+      PG_DATABASE: data
+      SESSION_JWT_SECRET: *session_secret
+      # The demonstration accounts, listed on the sign-in page. Local password, public.
+      DEMO_ACCOUNTS_ENABLED: "true"
+      DEMO_PASSWORD: Demo-Local-2026
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  agent:
+    build:
+      context: .
+      dockerfile: agent/Dockerfile
+    environment:
+      BANK_URL: http://backend:8000
+      SESSION_JWT_SECRET: *session_secret
+      PG_HOST: db
+      PG_USER: postgres
+      PG_PASSWORD: dev
+      PG_DATABASE: data
+      # The browser calls the agent from the page served on localhost:3000.
+      CORS_ALLOWED_ORIGINS: http://localhost:3000
+      # Without a key the agent answers with its deterministic text; with one it drafts with the model.
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      GUARDRAIL_MAX_USD: "500"
+    ports:
+      - "8001:8000"
+    depends_on:
+      - backend
