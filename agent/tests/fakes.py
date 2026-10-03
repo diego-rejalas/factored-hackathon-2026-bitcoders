@@ -112,7 +112,7 @@ class FakeBankTools:
                     "evidence": {"transaction": tx},
                 }
                 self.disputes[case_id] = case
-                return case
+                return dict(case)  # a copy, like the JSON the real backend returns
         from app.tools import ToolError
 
         raise ToolError(404, "Transaction not found for this customer")

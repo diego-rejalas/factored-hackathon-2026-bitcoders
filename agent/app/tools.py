@@ -1,8 +1,21 @@
+import asyncio
 import os
 
 import httpx
 
 from app.gcp_auth import IdentityTokenProvider
+
+
+# Bounded retries: a call is tried up to MAX_ATTEMPTS times when the backend cannot be reached or answers 502, 503
+# or 504, with a short wait between attempts. Every call here is safe to repeat: reads, the login, and the dispute
+# writes, which are idempotent (one case per transaction; resolve and escalate do nothing the second time).
+# A 4xx is the backend's answer and is never retried.
+MAX_ATTEMPTS = 3
+BACKOFF_SECONDS = (0.2, 0.6)
+# Connecting to a service that is down usually hangs instead of failing, so the connection gets a short limit of
+# its own: with the full read timeout per attempt, three attempts took 31 seconds to say "unavailable".
+CONNECT_TIMEOUT_SECONDS = 2.0
+RETRY_STATUSES = (502, 503, 504)
 
 
 class ToolError(Exception):
@@ -24,6 +37,7 @@ class BankTools:
     ):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+        self.http_timeout = httpx.Timeout(timeout, connect=min(CONNECT_TIMEOUT_SECONDS, timeout))
         self.identity = identity
 
     async def login(self, customer_id: str, document_number: str) -> dict:
@@ -81,8 +95,21 @@ class BankTools:
             headers["X-Serverless-Authorization"] = f"Bearer {await self.identity.token()}"
         if token:
             headers["Authorization"] = f"Bearer {token}"
-        async with httpx.AsyncClient(base_url=self.base_url, timeout=self.timeout) as client:
-            response = await client.request(method, path, headers=headers, **kwargs)
+        response = None
+        for attempt in range(MAX_ATTEMPTS):
+            last = attempt == MAX_ATTEMPTS - 1
+            try:
+                async with httpx.AsyncClient(base_url=self.base_url, timeout=self.http_timeout) as client:
+                    response = await client.request(method, path, headers=headers, **kwargs)
+            except (httpx.TimeoutException, httpx.TransportError) as error:
+                if last:
+                    raise ToolError(503, f"banking service unreachable after {MAX_ATTEMPTS} attempts: {type(error).__name__}")
+                await asyncio.sleep(BACKOFF_SECONDS[min(attempt, len(BACKOFF_SECONDS) - 1)])
+                continue
+            if response.status_code in RETRY_STATUSES and not last:
+                await asyncio.sleep(BACKOFF_SECONDS[min(attempt, len(BACKOFF_SECONDS) - 1)])
+                continue
+            break
         if response.status_code >= 400:
             detail = response.text[:300]
             try:
