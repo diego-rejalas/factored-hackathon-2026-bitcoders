@@ -48,9 +48,13 @@ Esa segunda capa encontró tres errores que la primera no podía ver:
 2. `last_transaction_date` es `timestamp` en `gold` y el modelo de respuesta decía `date`: habría dado un 500 con cualquier hora que no fuera medianoche.
 3. `case_id` llega como `UUID` y el modelo decía `str`: un 500 en `GET /v1/disputes`.
 
-## 6. Pendiente
+## 6. Estado y pendiente
 
-- **El BFF y las pantallas** en el frontend (login, inicio, productos, movimientos, mis casos, el asistente en un panel).
-- **Desplegar:** requiere imagen nueva del backend y del agente, y un `apply` (variables `demo_accounts_enabled` y `demo_password`).
-- Comprobar en prod que la migración 0004 repara los handoffs ya guardados.
+Hecho después de la primera versión de este documento (ver `API_CONTRACT.md`): `GET /v1/meta/data`, el significado de los códigos de respuesta, el contexto de transacción elegida en el agente, el caso que se abre al escalar, los reintentos acotados con una respuesta segura (`unavailable`), `X-Request-ID` con registros estructurados, y los OpenAPI comprometidos con pruebas de desvío y de seguridad.
+
+Pendiente:
+- **El BFF y las pantallas** en el frontend, con los cambios de infraestructura que implican (`API_CONTRACT.md`, §6): el agente privado, el frontend como invocador del backend y del agente.
+- **Desplegar** lo nuevo: imágenes del backend y del agente, y un `apply` (variables `demo_accounts_enabled` y `demo_password`). Antes de eso nada de esto corre en prod.
+- Comprobar en prod que la migración 0004 repara los handoffs ya guardados, y volver a ejecutar `scripts/db_roles.sh` (el SQL nuevo da a `backend_app` lectura de `ops.etl_runs`).
 - Cambio de clave y recuperación: fuera de alcance (cuentas de demostración).
+- Estado de la conversación del agente en memoria de cada instancia (ver los límites del contrato).
