@@ -190,7 +190,7 @@ class FakeStore:
             "idempotency_key": idempotency_key,
         }
         self.disputes[case_id] = dispute
-        self.events[case_id] = [{"event": "created", "payload": {"reason_code": reason_code}}]
+        self.events[case_id] = [{"event": "created", "payload": {"reason_code": reason_code}, "ts": datetime(2026, 9, 30, 12, 0, 0)}]
         return dict(dispute), True
 
     async def get_dispute(self, customer_id: str, case_id: str):
@@ -210,7 +210,7 @@ class FakeStore:
             dispute["status"] = "escalated"
             dispute["evidence"] = {**dispute["evidence"], "handoff": handoff}
             dispute["resolved_at"] = datetime(2026, 9, 30, 12, 5, 0)
-            self.events[case_id].append({"event": "escalated", "payload": handoff})
+            self.events[case_id].append({"event": "escalated", "payload": handoff, "ts": datetime(2026, 9, 30, 12, 5, 0)})
         return dict(dispute)
 
     async def resolve_dispute(self, customer_id: str, case_id: str, resolution: dict):
@@ -221,7 +221,7 @@ class FakeStore:
             dispute["status"] = "auto_resolved"
             dispute["evidence"] = {**dispute["evidence"], "resolution": resolution}
             dispute["resolved_at"] = datetime(2026, 9, 30, 12, 6, 0)
-            self.events[case_id].append({"event": "resolved", "payload": resolution})
+            self.events[case_id].append({"event": "resolved", "payload": resolution, "ts": datetime(2026, 9, 30, 12, 6, 0)})
         return dict(dispute)
 
     async def list_disputes(self, customer_id, status=None, limit=20):

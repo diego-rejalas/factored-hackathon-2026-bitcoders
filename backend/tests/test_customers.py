@@ -45,7 +45,8 @@ def test_transactions_always_scoped_to_token(client, auth_headers):
     body = client.get("/me/transactions", headers=auth_headers).json()
     ids = {row["transaction_id"] for row in body}
     assert ids == {"TXN-A1", "TXN-A2", "TXN-A3"}
-    assert all(row["customer_id"] not in (None, CUS_B) for row in body)
+    assert "TXN-B1" not in ids  # the other customer's transaction is never in the list
+    assert all("customer_id" not in row for row in body)  # and the response does not echo whose they are
 
 
 def test_transaction_filters_apply(client, auth_headers):
@@ -67,9 +68,9 @@ def test_transaction_filters_apply(client, auth_headers):
 def test_amount_usd_effective_coalesces_null_on_usd_rows(client, auth_headers):
     rows = {row["transaction_id"]: row for row in client.get("/me/transactions", headers=auth_headers).json()}
     # TXN-A1 is USD with null amount_usd -> effective falls back to amount
-    assert rows["TXN-A1"]["amount_usd_effective"] == "49.90"
+    assert rows["TXN-A1"]["amount_usd_effective"] == 49.9
     # TXN-A2 is COP with amount_usd present -> effective is amount_usd
-    assert rows["TXN-A2"]["amount_usd_effective"] == "0.30"
+    assert rows["TXN-A2"]["amount_usd_effective"] == 0.3
 
 
 def test_foreign_transaction_returns_404(client, auth_headers):

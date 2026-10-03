@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 
 from app.auth import get_current_customer
 from app.db import get_store
-from app.schemas import Dispute
+from app.schemas import Dispute, DisputeDetail
 
 # Registered twice (see main.py): at the root, where the agent calls them, and under /v1 for the web app.
 router = APIRouter(prefix="/disputes", tags=["disputes"])
@@ -33,6 +33,7 @@ class ResolveRequest(BaseModel):
 @router.post(
     "",
     status_code=status.HTTP_201_CREATED,
+    response_model=Dispute,
     responses={200: {"description": "The transaction already had a case: this is it, nothing new was created."}},
 )
 async def create_dispute(
@@ -61,7 +62,7 @@ async def create_dispute(
     return case
 
 
-@router.get("", response_model=list[Dispute], response_model_exclude={"__all__": {"events"}})
+@router.get("", response_model=list[Dispute])
 async def list_disputes(
     status_filter: str | None = Query(
         default=None, alias="status", pattern="^(open|auto_resolved|escalated)$"
@@ -74,7 +75,7 @@ async def list_disputes(
     return await store.list_disputes(customer_id, status=status_filter, limit=limit)
 
 
-@router.get("/{case_id}")
+@router.get("/{case_id}", response_model=DisputeDetail)
 async def get_dispute(
     case_id: str,
     customer_id: str = Depends(get_current_customer),
@@ -87,7 +88,7 @@ async def get_dispute(
     return dispute
 
 
-@router.post("/{case_id}/escalate")
+@router.post("/{case_id}/escalate", response_model=Dispute)
 async def escalate_dispute(
     case_id: str,
     body: EscalateRequest,
@@ -100,7 +101,7 @@ async def escalate_dispute(
     return dispute
 
 
-@router.post("/{case_id}/resolve")
+@router.post("/{case_id}/resolve", response_model=Dispute)
 async def resolve_dispute(
     case_id: str,
     body: ResolveRequest,

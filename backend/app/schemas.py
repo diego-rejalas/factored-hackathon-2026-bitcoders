@@ -131,13 +131,18 @@ class DisputeEvent(BaseModel):
 
 
 class Dispute(BaseModel):
+    """A case. status: open (in progress), auto_resolved (the policy resolved it), escalated (a person has it) or closed."""
+
     case_id: UUID
     customer_id: str
     transaction_id: str
     reason_code: str
     summary: str
     status: str
-    evidence: dict
+    evidence: dict = Field(description="The transaction as it was, plus resolution (auto_resolved) or handoff (escalated).")
     created_at: datetime
     resolved_at: datetime | None = None
-    events: list[DisputeEvent] | None = None
+
+
+class DisputeDetail(Dispute):
+    events: list[DisputeEvent] = Field(description="Append-only timeline: created, then resolved or escalated.")

@@ -4,6 +4,7 @@ import os
 import httpx
 
 from app.gcp_auth import IdentityTokenProvider
+from app.observability import REQUEST_ID_HEADER, request_id_var
 
 
 # Bounded retries: a call is tried up to MAX_ATTEMPTS times when the backend cannot be reached or answers 502, 503
@@ -91,6 +92,10 @@ class BankTools:
 
     async def _request(self, method: str, path: str, token: str | None = None, **kwargs) -> dict:
         headers = kwargs.pop("headers", {})
+        request_id = request_id_var.get()
+        if request_id:
+            # The same id the customer's request carries, so the backend's log line for this call can be matched.
+            headers[REQUEST_ID_HEADER] = request_id
         if self.identity:
             headers["X-Serverless-Authorization"] = f"Bearer {await self.identity.token()}"
         if token:
