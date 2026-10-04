@@ -1,5 +1,6 @@
 "use client";
 
+import { CheckCircle, ClockCounterClockwise, CreditCard, UserCheck } from "@phosphor-icons/react";
 import { createContext, useContext, useId } from "react";
 import type { ReactNode } from "react";
 import { caseStatusLabel, reasonLabel, transactionStatusLabel } from "@/lib/i18n";
@@ -80,32 +81,10 @@ export function EvidenceItem({ data, language }: { data: EvidenceData; language:
 function EvidencePreview({ kind }: { kind: EvidenceKind }) {
   return (
     <span className="ev-preview" aria-hidden="true">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        {kind === "transaction" && (
-          <>
-            <rect x="3" y="5" width="18" height="14" rx="2" />
-            <path d="M3 10h18M7 15h4" />
-          </>
-        )}
-        {kind === "decision" && (
-          <>
-            <circle cx="12" cy="12" r="9" />
-            <path d="m8.5 12.5 2.5 2.5 4.5-5" />
-          </>
-        )}
-        {kind === "handoff" && (
-          <>
-            <circle cx="9" cy="8" r="3" />
-            <path d="M3.5 19c.5-3 2.7-5 5.5-5s5 2 5.5 5M16 11l2 2 3.5-4" />
-          </>
-        )}
-        {kind === "event" && (
-          <>
-            <circle cx="12" cy="12" r="9" />
-            <path d="M12 7v5l3 2" />
-          </>
-        )}
-      </svg>
+      {kind === "transaction" && <CreditCard size={20} />}
+      {kind === "decision" && <CheckCircle size={20} />}
+      {kind === "handoff" && <UserCheck size={20} />}
+      {kind === "event" && <ClockCounterClockwise size={20} />}
     </span>
   );
 }
