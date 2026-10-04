@@ -29,15 +29,15 @@ Extraído de `doc/Factored AI & Data Hackathon 2026.md` y `doc/Datathon_2026_Kic
 ## Datos y ML
 
 - [x] Pipeline de datos repetible: contratos de esquema, checks de calidad, linaje, política de actualización/frescura. (DAG de Airflow con DuckDB: reconstruye bronze desde S3 en cada corrida; 121 tests dbt, y si un test de silver falla `gold` no se reconstruye; linaje por fila en `_source_key`; política de frescura explícita en `ARCHITECTURE.md` (snapshot estático, recarga a demanda). Falta endurecer los contratos de `gold` a tipados con `contract: enforced`)
-- [ ] Al menos un componente aprendido evaluado contra un baseline apropiado.
-- [ ] Labels o juicios de relevancia válidos, sin leakage (ej. no usar `is_fraud` como input si se supone que el sistema lo "detecta").
-- [ ] Justificar representaciones, métricas, umbrales, y splits de evaluación.
+- [x] Al menos un componente aprendido evaluado contra un baseline apropiado. (Componente A: clasificador de intención+idioma con confianza vs baseline de palabras clave, y componente B: ranker de la transacción disputada (weighted + GBM) vs `narrow_candidates`, ambos sobre set retenido generado por el equipo — `ml/eval/`, informes y fallos en `ml/eval/reports/`, resumen en `ML_FINDINGS.md` §12)
+- [x] Labels o juicios de relevancia válidos, sin leakage (ej. no usar `is_fraud` como input si se supone que el sistema lo "detecta"). (Etiquetas válidas por construcción: intención escrita desde plantillas rotuladas "generado por el equipo"; disputas con etiqueta = `transaction_id` original. Los generadores eliminan `is_fraud`/`fraud_score` y lo verifican; sin columnas post-resultado en las features del ranker; `fraud_score` descartado por fuga documentada en `ML_FINDINGS.md` §4.2)
+- [x] Justificar representaciones, métricas, umbrales, y splits de evaluación. (Suma ponderada interpretable con pesos a priori; abstención de intención con umbral en variable `INTENT_MIN_CONFIDENCE` calibrable en dev con costo asimétrico 5:1; piso de "no encuentra" del ranker calibrado en train; splits estratificados por celda en A y **por cliente** en B — test y train no comparten clientes)
 
 ## Medición de calidad y manejo de fallas
 
-- [ ] Evaluación sobre casos held-out.
-- [ ] Incluir: datos incorrectos/faltantes, sesiones expiradas, intentos de acceso no autorizado, prompt injection, fallos de herramientas, ambigüedad multilingüe.
-- [ ] Reportar: resultados exitosos, resultados inseguros, comportamiento de handoff, latencia, costo — con tamaños de muestra y limitaciones explícitas.
+- [x] Evaluación sobre casos held-out. (Sets dev/test de `ml/eval/` generados con split estratificado (A) y por cliente disjunto (B); medición final en test con umbrales congelados de dev/train — `ML_FINDINGS.md` §12)
+- [x] Incluir: datos incorrectos/faltantes, sesiones expiradas, intentos de acceso no autorizado, prompt injection, fallos de herramientas, ambigüedad multilingüe. (En los sets ML: montos desviados/aproximados, comercio mal escrito o ausente, typos, prompt injection, ambigüedad es/pt/mixta y trampas out_of_scope — `gen_intent_set.py`, `gen_dispute_set.py`. Sesiones expiradas, acceso no autorizado y fallos de herramientas están cubiertos por los tests del agente y del backend, no por estos sets)
+- [ ] Reportar: resultados exitosos, resultados inseguros, comportamiento de handoff, latencia, costo — con tamaños de muestra y limitaciones explícitas. (Parcial: accuracy/F1, falsos "dispute" y vacíos falsos con n y denominadores, latencia p50/p95 y tokens están en `ml/eval/reports/`; el harness calcula costo p50/p95 con `usage.cost` o tarifas por millón para un modelo fijado. **Pendiente de medir** el costo LLM con clave/tarifas del equipo y el costo end-to-end del sistema — `ML_FINDINGS.md` §12)
 
 ## Métricas a reportar (definiciones exactas del reto)
 

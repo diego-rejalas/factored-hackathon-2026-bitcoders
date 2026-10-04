@@ -1,0 +1,112 @@
+{
+  "split": "test",
+  "baseline": {
+    "n": 193,
+    "top1": 0.2588,
+    "top3": 0.2765,
+    "empty_on_unrelated": 0.8696,
+    "false_empty_on_labeled": 0.5824,
+    "top1_by_noise": {
+      "amount_off": 0.0,
+      "amount_vague": 0.8261,
+      "combo": 0.1818,
+      "date_vague": 0.0,
+      "merchant_missing": 0.4706,
+      "merchant_misspelled": 0.1923
+    },
+    "top3_by_noise": {
+      "amount_off": 0.0,
+      "amount_vague": 0.8261,
+      "combo": 0.1818,
+      "date_vague": 0.0303,
+      "merchant_missing": 0.4706,
+      "merchant_misspelled": 0.2692
+    },
+    "top1_by_currency": {
+      "ARS": 0.2258,
+      "COP": 0.3556,
+      "USD": 0.2234
+    },
+    "baseline_pool_1_n": 46,
+    "baseline_pool_1_baseline_top1": 0.9348,
+    "baseline_pool_2plus_n": 25,
+    "baseline_pool_2plus_baseline_top1": 0.04,
+    "baseline_empty_on_labeled_n": 99
+  },
+  "weighted": {
+    "n": 193,
+    "top1": 0.5588,
+    "top3": 0.9,
+    "empty_on_unrelated": 0.0,
+    "false_empty_on_labeled": 0.0059,
+    "top1_by_noise": {
+      "amount_off": 0.375,
+      "amount_vague": 0.7826,
+      "combo": 0.5,
+      "date_vague": 0.2424,
+      "merchant_missing": 0.5882,
+      "merchant_misspelled": 1.0
+    },
+    "top3_by_noise": {
+      "amount_off": 0.8438,
+      "amount_vague": 1.0,
+      "combo": 0.9545,
+      "date_vague": 0.697,
+      "merchant_missing": 0.9706,
+      "merchant_misspelled": 1.0
+    },
+    "top1_by_currency": {
+      "ARS": 0.6774,
+      "COP": 0.6222,
+      "USD": 0.4894
+    },
+    "floor": 0.1,
+    "top1_on_baseline_single": 0.7826,
+    "top1_on_baseline_multi": 0.72,
+    "top1_on_baseline_empty": 0.4141,
+    "within_pool": {
+      "pool1_n": 46,
+      "pool1_top1": 0.9348,
+      "pool2plus_n": 25,
+      "pool2plus_top1": 0.6
+    }
+  },
+  "gbm": {
+    "n": 193,
+    "top1": 0.7294,
+    "top3": 0.9,
+    "empty_on_unrelated": 0.6087,
+    "false_empty_on_labeled": 0.0588,
+    "top1_by_noise": {
+      "amount_off": 0.6562,
+      "amount_vague": 0.8261,
+      "combo": 0.8182,
+      "date_vague": 0.3939,
+      "merchant_missing": 0.8529,
+      "merchant_misspelled": 0.9231
+    },
+    "top3_by_noise": {
+      "amount_off": 0.9375,
+      "amount_vague": 1.0,
+      "combo": 1.0,
+      "date_vague": 0.6061,
+      "merchant_missing": 0.9706,
+      "merchant_misspelled": 0.9615
+    },
+    "top1_by_currency": {
+      "ARS": 0.8065,
+      "COP": 0.7333,
+      "USD": 0.7021
+    },
+    "floor": 0.1,
+    "top1_on_baseline_single": 0.8696,
+    "top1_on_baseline_multi": 0.64,
+    "top1_on_baseline_empty": 0.6869,
+    "within_pool": {
+      "pool1_n": 46,
+      "pool1_top1": 0.9348,
+      "pool2plus_n": 25,
+      "pool2plus_top1": 0.6
+    }
+  }
+}

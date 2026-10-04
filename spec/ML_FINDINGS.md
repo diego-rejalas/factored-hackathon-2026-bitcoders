@@ -9,7 +9,7 @@ Documento para el ML engineer. Reúne lo que se midió sobre el dataset LATAM Ba
 - **La única señal real y limpia** es que el motivo de contacto (`contact_reason`, 6 valores) explica si una llamada se resuelve (AUC 0,76) y, en menor medida, la insatisfacción posterior (AUC 0,65). Equivale a una tabla de tasas por motivo; un modelo complejo no agrega nada.
 - **Hay dos trampas de fuga en los datos**: `fraud_score` (generado a partir de la etiqueta) y las columnas que se miden después de la llamada (sentimiento, duración).
 - **No existen etiquetas de "qué transacción se disputó"**, ni transacciones duplicadas naturales, ni texto con intención real (los textos son plantillas, 100% español, sin portugués). Todo lo que dependa de eso exige datos generados por el equipo.
-- **Propuesta**: componentes evaluables con etiquetas válidas por construcción (set generado por el equipo, rotulado como tal): (A) clasificación de intención e idioma, es/pt, con confianza y abstención; (B) identificación de la transacción disputada a partir de una descripción libre; (C) prioridad calibrada por motivo de contacto como señal secundaria. Candidato para (A): Jev de TypeSafe, a comparar con un clasificador local de embeddings y con un LLM de salida estructurada.
+- **Propuesta**: componentes evaluables con etiquetas válidas por construcción (set generado por el equipo, rotulado como tal): (A) clasificación de intención e idioma, es/pt, con confianza y abstención; (B) identificación de la transacción disputada a partir de una descripción libre; (C) prioridad calibrada por motivo de contacto como señal secundaria. **Ejecutado (2026-10-04, §12)**: A y B medidos contra baseline sobre set retenido propio; A integrado con abstención (LLM pendiente de clave), B integrado solo como ordenamiento del pool ambiguo. Jev de TypeSafe queda como stub defensivo sin evaluar (sin clave; descartado por medición cuando exista).
 
 ## 2. Lo que pide el reto (`doc/Factored AI & Data Hackathon 2026.md`)
 
@@ -209,9 +209,94 @@ Las cifras de `fraud_score` (sección 4.2) salen de consultas SQL directas sobre
 
 ## 11. Preguntas abiertas para el ML engineer
 
-1. ¿Se acepta que el componente aprendido sea preentrenado (Jev, embeddings o LLM) y que el trabajo de ML sea la selección, el set de evaluación y la calibración? El reto lo permite expresamente.
-2. ¿Qué tan grande y cómo se construye el set retenido (tamaño mínimo por intención e idioma, doble etiquetado, casos adversos)?
-3. ¿Se evalúa el componente B (identificar la transacción) o se deja solo A y C por tiempo?
-4. ¿Qué umbral de confianza y qué costo asimétrico (falso "resolver" contra falso "escalar") usamos para la abstención?
-5. ¿Se publica el set retenido en el repo (es generado por el equipo, sin datos reales) para que el evaluador reproduzca?
-6. ¿Se mantiene la decisión de no usar `fraud_score` (recomendado), o el equipo prefiere mostrar la comparación y explicar la fuga en las diapositivas?
+Respuestas decididas (2026-10-04, ver §12 para la ejecución):
+
+1. Preentrenado aceptado: **sí** (doc línea 54 lo permite expresamente).
+2. Set: **≥60 casos por celda normal en A (40 en test), ≥50 por tipo de ruido en B**, verificador automático de segundo léxico + muestra del 10% para doble revisión manual, adversarios incluidos.
+3. Componente B: **sí entró en alcance**, medido y parcialmente integrado (solo ordena).
+4. Umbral de confianza: `INTENT_MIN_CONFIDENCE=0.5` por defecto (DISPUTE_WORKFLOW §4); la calibración fina con costo asimétrico (falso auto-resolver 5 : escalar de más 1) corre con la clave LLM del equipo sobre dev.
+5. Set publicado: **sí**, `ml/eval/data/*.jsonl`, sintético, sin PII y sin columnas de fraude.
+6. `fraud_score`: se mantiene **descartado**; la fuga queda documentada en §4.2.
+
+## 12. Evaluación ejecutada de los componentes A y B (2026-10-04)
+
+Set retenido generado por el equipo (`ml/eval/data/`, semilla 20261004,
+reproducible; sin PII, sin `is_fraud`/`fraud_score` — los generadores lo
+verifican). Harness en `ml/eval/eval_intent.py` y `ml/eval/eval_ranker.py`;
+informes con fallos incluidos en `ml/eval/reports/`. El test nunca ajusta
+prompts ni umbrales: la calibración corre solo sobre dev (A) o train (B).
+
+### 12.1 Componente A — intención + idioma (840 mensajes, 552 test)
+
+Candidatos: baseline de producción (palabras clave + substring es/pt), LLM
+estructurado con confianza (OpenRouter, temperatura 0, salida JSON) y
+embeddings locales + regresión logística (opcional). El LLM queda listo y
+pendiente de la clave del equipo; estos son los números del baseline en test:
+
+| métrica | baseline (test, n=552) |
+|---|---|
+| accuracy intención | 0,681 |
+| macro-F1 intención | 0,677 |
+| recall out_of_scope | 0,735 |
+| falsos "dispute" (falso auto-resolver) | 36 (trampas + ambiguos) |
+| manipulación capturada (no dispute) | 0,889 |
+| idioma es / pt / mixto | 1,000 / 0,283 / 0,000 |
+| latencia p50/p95 (ms) | 0,01 / 0,017 |
+
+Lectura: el baseline es perfecto en español de plantilla, **falla en
+portugués real (0,283) y no puede producir "mixto" (0,000)**, y se come las
+trampas con vocabulario de disputa ("¿el cajero cobra comisión?" → dispute).
+Ahí está el valor del componente con confianza: la abstención (`confidence <
+INTENT_MIN_CONFIDENCE`) escala en `decide` por regla de código, siempre
+después del override determinista de fraude.
+
+Integración (`agent/app/intents.py`, `agent/app/graph.py`): `classify_detailed`
+devuelve {intent, language, confidence, source, abstain}; la traza registra
+componente, versión del prompt, confianza, latencia del clasificador y latencia
+agregada del nodo; sin clave o sin JSON válido cae al baseline con el
+comportamiento de siempre (sin abstención); un "sí" de confirmación anula la
+abstención. Tests: `agent/tests/test_intents.py` (11, sin LLM).
+
+### 12.2 Componente B — transacción disputada (399 casos, 193 test)
+
+Pool de candidatas sintético con las distribuciones medidas (§3 de
+DISPUTE_WORKFLOW: estados 92/5/2/1, comercio nulo 76,7%, USD efectivo nulo
+~57%). Candidatos: baseline de producción (`narrow_candidates` + orden por
+fecha), suma ponderada interpretable (difflib + monto + fecha + canal) y
+GBM ligero entrenado en train (split por cliente).
+
+| métrica (test, n=193) | baseline | weighted | GBM |
+|---|---|---|---|
+| top-1 (etiquetados) | 0,259 | 0,559 | **0,729** |
+| top-3 (etiquetados) | 0,277 | 0,900 | 0,900 |
+| "no encuentra" correcto (unrelated) | **0,870** | 0,000 | 0,609 |
+| vacíos falsos (etiquetados) | 0,582 | 0,006 | 0,059 |
+| reordenando el pool del baseline: pool 2+ (n=25) | 0,040 (fecha) | **0,600** | 0,600 |
+| reordenando el pool: pool 1 (n=46) | 0,935 | 0,935 (igual por construcción) | 0,935 |
+
+Lecturas clave:
+
+- El baseline es **conservador por diseño**: ante un monto desviado ±10-20%
+  reduce a vacío el 58% de los casos con etiqueta (pide aclarar: seguro,
+  pero no identifica) y acierta el 93% cuando deja exactamente una candidata.
+- **Decisión de integración (condicional, cumplida)**: el ranker weighted
+  (stdlib, `agent/app/ranking.py`) entra **solo para ordenar** el pool con
+  2+ candidatas en `decide` (`graph.py`), donde el orden por fecha acierta
+  4% y el ranker 60%; la decisión 0/1/2+ sigue siendo `narrow_candidates`,
+  `is_corroborated` no cambia y el "no encuentra" es idéntico al baseline
+  por construcción. **El ranker ordena, no autoriza.**
+- El GBM (0,729 top-1 global) **no se integra**: necesita scikit-learn en la
+  imagen del agente y su "no encuentra" independiente (0,609) degrada el
+  0,870 del baseline. Queda documentado como resultado: mejor ranking
+  global, peor defensa contra reclamos de transacciones inexistentes.
+- El weighted standalone no sirve como sustituto del narrowing (su
+  "no encuentra" es 0,000): por eso la integración es solo de ordenamiento.
+
+Limitaciones honestas: el pool es sintético (este entorno no tenía
+credenciales de la base; `gen_dispute_set.py` acepta `--source duckdb:` o
+`--source postgres` para regenerarlo con transacciones reales de `gold`);
+el piso de "no encuentra" del ranker se calibró en train; el costo LLM se
+calcula desde `usage.cost` o tarifas configuradas por millón para un modelo
+fijado, pero sigue N/A sin clave/tarifas; el set de intención tiene la muestra
+de doble revisión marcada y pendiente del pase humano; los fallos completos
+están en `ml/eval/reports/*_failures_*.jsonl`.

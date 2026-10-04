@@ -1,5 +1,7 @@
-from copy import deepcopy
+"""Build the banking customer-service conversation graph and policy flow."""
+
 import time
+from copy import deepcopy
 from typing import TypedDict
 
 try:
@@ -9,21 +11,24 @@ except ImportError:  # pragma: no cover
 
 from langgraph.graph import END, START, StateGraph
 
-import app.guardrail as guardrail
-import app.intents as intents
-import app.replies as replies
+from app import guardrail, intents, ranking, replies
 from app.tools import ToolError
 
 REASON_CODE = "unrecognized_charge"
 
 
 class AgentState(TypedDict, total=False):
+    """Store graph inputs and per-turn decision, candidate, and reply state."""
+
     session_token: str
     message: str
     conversation_id: str
     run_id: str
     language: str
     intent: str
+    intent_confidence: float | None
+    intent_source: str | None
+    intent_abstain: bool
     entities: dict
     route: str
     reason: str | None
@@ -45,27 +50,43 @@ def _elapsed(start: float) -> int:
 
 
 def build_graph(tools, tracer, llm=None):
-    """understand -> decide (deterministic guardrail) -> act -> verify ->
-    escalate/respond. Control flow lives in code; the LLM only drafts the
-    final reply from verified facts."""
+    """Build and compile the customer-service conversation graph.
+
+    The deterministic guardrail controls understand, decide, act, and verify;
+    the LLM only drafts the final response from verified facts.
+    """
 
     async def understand(state: AgentState) -> dict:
         start = time.monotonic()
         message = state["message"]
-        language = "pt" if any(w in message.lower() for w in ("não", "você", "obrigado", "obrigada", "bom dia", "boa tarde", "boa noite", "não reconheço", "cobrança", "estorno")) else "es"
-        intent = await intents.classify(message, llm)
+        classification = await intents.classify_detailed(message, llm)
+        intent = classification["intent"]
+        language = classification["language"]
         # A short "yes" answers the candidate proposed in the previous turn: it is part of the
         # dispute, whatever the classifier makes of two words.
         if state.get("proposed_id") and guardrail.is_affirmation(message):
             intent = "dispute"
+            classification["abstain"] = False
         await tracer.log(
             state["run_id"], state["conversation_id"], "understand",
-            intent=intent, params={"language": language}, latency_ms=_elapsed(start),
+            intent=intent,
+            params={
+                "language": language,
+                "intent_source": classification["source"],
+                "intent_confidence": classification["confidence"],
+                "intent_abstain": classification["abstain"],
+                "intent_prompt_version": classification["prompt_version"],
+                "classifier_latency_ms": classification["classifier_latency_ms"],
+            },
+            latency_ms=_elapsed(start),
         )
         continuing_dispute = intent == "dispute"
         return {
             "language": language,
             "intent": intent,
+            "intent_confidence": classification["confidence"],
+            "intent_source": classification["source"],
+            "intent_abstain": classification["abstain"],
             "entities": guardrail.extract_entities(message),
             # Clear per-turn results from the previous checkpoint. Only case-status
             # requests intentionally reuse the last case; dispute clarification keeps
@@ -85,8 +106,10 @@ def build_graph(tools, tracer, llm=None):
         }
 
     async def fetch_candidates(state: AgentState, entities: dict) -> list:
-        """Every status, not only Declined/Reversed: a charge that was approved is exactly the
-        one a customer disputes as unrecognized, and it must never be invisible to the agent."""
+        """List all statuses so disputed posted charges remain visible.
+
+        An approved charge may be the exact transaction the customer disputes.
+        """
         token = state["session_token"]
         days = entities.get("days")
         merged: list = []
@@ -103,6 +126,12 @@ def build_graph(tools, tracer, llm=None):
         if intent == "fraud_report":
             await tracer.log(state["run_id"], state["conversation_id"], "decide", intent=intent, result_status="escalate", params={"reason": "fraud_suspected"}, latency_ms=_elapsed(start))
             return {"intent": intent, "route": "escalate", "reason": "fraud_suspected", "outcome": "escalated"}
+
+        # El clasificador se abstuvo (confianza bajo INTENT_MIN_CONFIDENCE):
+        # regla de código, nunca del modelo. Siempre después del override de fraude.
+        if state.get("intent_abstain"):
+            await tracer.log(state["run_id"], state["conversation_id"], "decide", intent=intent, result_status="escalate", params={"reason": "intent_low_confidence", "confidence": state.get("intent_confidence")}, latency_ms=_elapsed(start))
+            return {"intent": intent, "route": "escalate", "reason": "intent_low_confidence", "outcome": "escalated"}
 
         if intent == "out_of_scope":
             await tracer.log(state["run_id"], state["conversation_id"], "decide", intent=intent, result_status="escalate", params={"reason": "out_of_scope"}, latency_ms=_elapsed(start))
@@ -136,9 +165,13 @@ def build_graph(tools, tracer, llm=None):
             pool = [tx for tx in candidates if tx.get("transaction_id") == proposed]
         else:
             pool = guardrail.narrow_candidates(candidates, message, entities)
+            # El ranker SOLO ORDENA el pool ambiguo (qué opciones se proponen
+            # primero); 0/1/2+ y toda la política siguen siendo narrow_candidates.
+            if len(pool) > 1:
+                pool = ranking.rank_candidates(message, pool)
 
         if len(pool) != 1:
-            await tracer.log(state["run_id"], state["conversation_id"], "decide", intent=intent, result_status="clarify", params={"candidates": len(pool)}, latency_ms=_elapsed(start))
+            await tracer.log(state["run_id"], state["conversation_id"], "decide", intent=intent, result_status="clarify", params={"candidates": len(pool), "ranked_by": "weighted_v1" if len(pool) > 1 else None}, latency_ms=_elapsed(start))
             return {
                 "intent": intent,
                 "route": "respond",
@@ -268,6 +301,7 @@ def build_graph(tools, tracer, llm=None):
             "amount_unknown",
             "posted_charge_disputed",
             "ambiguity_unresolved",
+            "intent_low_confidence",
         }:
             candidate = state.get("candidate") or {}
             transaction_id = candidate.get("transaction_id")
