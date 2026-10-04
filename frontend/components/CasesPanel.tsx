@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { tr } from "@/lib/i18n";
+import { caseStatusLabel, tr } from "@/lib/i18n";
 import type { CaseListItem, DisputeCase, Language } from "@/lib/types";
 import { formatDate } from "@/lib/types";
 
@@ -99,7 +99,7 @@ export default function CasesPanel({
               <div className="case-row-static">
                 <div className="top">
                   <code className="mono">{selected.case_id}</code>
-                  <span className={`badge badge-${selected.status}`}>{selected.status}</span>
+                  <span className={`badge badge-${selected.status}`}>{caseStatusLabel(selected.status, language)}</span>
                 </div>
                 <div className="sub">
                   {tr(language, "transaction")}: <span className="mono">{selected.transaction_id || tr(language, "unlinkedTransaction")}</span>
@@ -139,7 +139,7 @@ export default function CasesPanel({
             <button className="case-row" type="button" key={item.case_id} onClick={() => void openCase(item.case_id)}>
               <span className="top">
                 <code className="mono">{item.case_id}</code>
-                <span className={`badge badge-${item.status}`}>{item.status}</span>
+                <span className={`badge badge-${item.status}`}>{caseStatusLabel(item.status, language)}</span>
               </span>
               <span className="sub">
                 {tr(language, "transaction")}: {item.transaction_id || tr(language, "unlinkedTransaction")} · {formatDate(item.created_at, language)}

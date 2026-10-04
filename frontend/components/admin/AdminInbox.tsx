@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { reasonLabel, tr } from "@/lib/i18n";
+import { caseStatusLabel, reasonLabel, tr } from "@/lib/i18n";
 import type { AdminCaseItem } from "@/lib/types";
 import { formatDate } from "@/lib/types";
 
@@ -134,7 +134,7 @@ export default function AdminInbox({
                       {item.customer_language && <span className="language-chip">{item.customer_language.toUpperCase()}</span>}
                     </td>
                     <td>{reasonLabel(item.handoff_reason, "es")}</td>
-                    <td><span className={`badge badge-${item.status}`}>{item.status}</span></td>
+                    <td><span className={`badge badge-${item.status}`}>{caseStatusLabel(item.status, "es")}</span></td>
                     <td className="tnum">{formatDate(item.created_at, "es")}</td>
                   </tr>
                 ))}
@@ -146,7 +146,7 @@ export default function AdminInbox({
               <button className="inbox-card" type="button" key={item.case_id} onClick={() => onOpenCase(item.case_id)}>
                 <span className="inbox-card-top">
                   <span className="mono">{item.case_id.slice(0, 8)}…</span>
-                  <span className={`badge badge-${item.status}`}>{item.status}</span>
+                  <span className={`badge badge-${item.status}`}>{caseStatusLabel(item.status, "es")}</span>
                 </span>
                 <strong>{[item.first_name, item.last_name].filter(Boolean).join(" ") || item.customer_id}</strong>
                 <span className="inbox-card-reason">{reasonLabel(item.handoff_reason, "es")}</span>

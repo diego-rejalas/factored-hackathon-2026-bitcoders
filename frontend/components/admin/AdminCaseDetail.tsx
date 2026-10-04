@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { reasonLabel, tr } from "@/lib/i18n";
+import { caseStatusLabel, reasonLabel, tr } from "@/lib/i18n";
 import type { CaseEvent, DisputeCase, Handoff, TraceRow } from "@/lib/types";
 import { formatAmount, formatDate } from "@/lib/types";
 
@@ -165,7 +165,7 @@ export default function AdminCaseDetail({
             {handoff?.customer_language ? <span className="language-chip">{handoff.customer_language.toUpperCase()}</span> : null}
           </p>
         </div>
-        <span className={`badge badge-${caseData.status}`}>{caseData.status}</span>
+        <span className={`badge badge-${caseData.status}`}>{caseStatusLabel(caseData.status, "es")}</span>
       </header>
 
       {notice && <div className="alert alert-success" role="status">{notice}</div>}
