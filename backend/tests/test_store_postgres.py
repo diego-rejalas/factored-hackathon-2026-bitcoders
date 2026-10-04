@@ -350,3 +350,68 @@ async def test_transactions_carry_the_meaning_of_their_response_code_in_sql(stor
     assert (await store.get_transaction("C1", "T1"))["response_meaning"] == expected
     assert (await store.list_transactions("C1"))[0]["response_meaning"] == expected
     assert (await store.list_transactions_page("C1"))[0][0]["response_meaning"] == expected
+
+
+# ------------------------------------------------------------------ the specialist console's SQL, on a real database
+# Its routes and logic are tested in memory (test_admin.py); these run its queries, which a fake cannot check.
+
+
+@pytest.mark.anyio
+async def test_admin_inbox_detail_transitions_and_metrics_in_sql(store):
+    await add_customer(store)
+    await add_tx(store, "T1")
+    await add_tx(store, "T2", when=datetime(2026, 7, 2, 10, 0))
+    escalated = await store.create_dispute("C1", "T1", "x", "over the threshold", {"transaction": {}})
+    await store.escalate_dispute("C1", str(escalated["case_id"]), {"reason": "amount_threshold", "customer_language": "es", "conversation_id": "conv-1"})
+    resolved = await store.create_dispute("C1", "T2", "x", "declined", {})
+    await store.resolve_dispute("C1", str(resolved["case_id"]), "no_charge_confirmed")
+    unlinked = await store.create_dispute("C1", None, "x", "no transaction identified", {})
+    await store.escalate_dispute("C1", str(unlinked["case_id"]), {"reason": "fraud_suspected", "customer_language": "pt"})
+
+    inbox = await store.admin_list_disputes("active")
+    assert {row["status"] for row in inbox} == {"escalated"} and len(inbox) == 2
+    assert {row["handoff_reason"] for row in inbox} == {"amount_threshold", "fraud_suspected"}
+    assert all(row["first_name"] == "Ana" for row in inbox)  # the customer's name comes from gold
+    assert await store.admin_count_disputes("active") == 2
+    assert await store.admin_count_disputes("auto_resolved") == 1
+    assert await store.admin_count_disputes(None, customer_id="OTHER") == 0
+    page = await store.admin_list_disputes(None, limit=1, offset=1)
+    assert len(page) == 1
+
+    detail = await store.admin_get_dispute(str(escalated["case_id"]))
+    assert detail["status"] == "escalated" and detail["evidence"]["handoff"]["reason"] == "amount_threshold"
+    assert await store.admin_get_dispute("00000000-0000-0000-0000-000000000000") is None
+
+    claimed = await store.admin_transition(str(escalated["case_id"]), "in_progress", ("open", "escalated"), "claimed", {"by": "ops", "note": "mine"})
+    assert claimed["status"] == "in_progress"
+    assert await store.admin_transition(str(escalated["case_id"]), "in_progress", ("open", "escalated"), "claimed", {}) is None  # no longer in a state it can be claimed from
+    assert await store.admin_count_disputes("active") == 2  # in_progress still counts as active
+    closed = await store.admin_transition(str(escalated["case_id"]), "closed", ("in_progress",), "closed", {"note": "done", "resolution": "resolved_customer"})
+    assert closed["status"] == "closed" and closed["resolved_at"] is not None
+    assert await store.admin_count_disputes("active") == 1
+
+    metrics = await store.admin_metrics()
+    assert metrics["total_cases"] == 3
+    assert metrics["by_status"]["auto_resolved"] == 1 and metrics["by_status"]["closed"] == 1 and metrics["by_status"]["escalated"] == 1
+    assert metrics["safe_automated_resolution"]["resolved"] == 1
+    assert (await store.admin_metrics(window_hours=1))["total_cases"] == 3  # created just now
+
+
+@pytest.mark.anyio
+async def test_admin_metrics_without_cases_have_no_rate_instead_of_a_division_by_zero(store):
+    metrics = await store.admin_metrics()
+    assert metrics["total_cases"] == 0
+    assert metrics["safe_automated_resolution"]["rate_percent"] is None
+
+
+@pytest.mark.anyio
+async def test_data_freshness_and_demo_scenarios_in_sql(store):
+    await add_customer(store)
+    await add_tx(store, "T1", status="Declined", amount=256)
+    await put(store, "create schema ops")
+    await put(store, "create table ops.etl_runs (run_id text primary key, started_at timestamptz, finished_at timestamptz, status text, detail text)")
+    await put(store, "insert into ops.etl_runs values ('r1', '2026-10-01 10:00+00', '2026-10-01 10:20+00', 'success', '{}')")
+    fresh = await store.data_freshness()
+    assert fresh["gold"]["customers"] == 1 and fresh["gold"]["transactions"] == 1
+    assert fresh["last_etl_run"]["run_id"] == "r1"
+    assert isinstance(await store.demo_scenarios(), list)

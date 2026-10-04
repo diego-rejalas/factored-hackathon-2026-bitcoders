@@ -37,6 +37,10 @@ services:
       # The demonstration accounts, listed on the sign-in page. Local password, public.
       DEMO_ACCOUNTS_ENABLED: "true"
       DEMO_PASSWORD: Demo-Local-2026
+      # The specialist console (/admin in the frontend). user:bcrypt_hash, here for the password Admin-Local-2026;
+      # "$$" is how a literal "$" is written in a compose file. Local only: production reads it from Secret Manager.
+      ADMIN_USERS: "ops-demo:$$2b$$10$$2cs6ZKCA8b7PQs.mQr.2YurpSuA4Fv5UQit7hxvArfjPYaESRR1Y."
+      GUARDRAIL_MAX_USD: "500"
     ports:
       - "8000:8000"
     depends_on:

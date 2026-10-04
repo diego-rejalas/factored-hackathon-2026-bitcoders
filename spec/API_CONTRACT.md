@@ -1,48 +1,47 @@
 # Contrato de las APIs
 
-Contrato del workflow A (disputas de transacciones) entre las tres capas: **el backend**, **el agente** y **el servidor de la aplicación web (BFF)**. Fecha: 2026-10-03.
+Contrato del workflow A (disputas de transacciones) entre **la interfaz web**, **el agente** y **el backend**, incluida la consola del especialista. Fecha: 2026-10-04, ya con el trabajo de Felix (consola y casos del cliente) fusionado.
 
 ## Cómo se mantiene este contrato
-
-Hay dos fuentes y se complementan:
 
 | Fuente | Qué dice | Quién la hace cumplir |
 |---|---|---|
 | `backend/tests/contract/openapi.json` y `agent/tests/contract/openapi.json` | Rutas, parámetros, cuerpos y esquemas de respuesta. **Lo genera el código** | Una prueba falla si el código genera algo distinto. Cambiar el contrato es una decisión que se revisa en el diff (`UPDATE_CONTRACT=1 python -m pytest tests/test_openapi_contract.py` lo regenera) |
 | **Este documento** | Lo que un esquema no puede decir: reglas, estados, orden de las llamadas, seguridad, límites y supuestos | Revisión |
 
-Si este documento y un OpenAPI se contradicen, **gana el OpenAPI**: es el que ejecutan las pruebas. Avísalo y se corrige aquí.
+Si este documento y un OpenAPI se contradicen, **gana el OpenAPI**: es el que ejecutan las pruebas.
 
-Lo que el contrato hace cumplir con pruebas (no con buena voluntad):
-- el conjunto de operaciones que **no** piden sesión es exactamente: `GET /health`, `GET /ready`, `POST /session`, `POST /v1/auth/login`, `GET /v1/auth/demo-accounts`. Se comprobó haciendo público `/v1/me` y viendo fallar la prueba;
-- ninguna ruta recibe un `customer_id` del que llama (ni por parámetro, ni por ruta, ni en el cuerpo);
+Lo que el contrato del backend hace cumplir con pruebas:
+- las operaciones que **no** piden sesión son exactamente: `GET /health`, `GET /ready`, `POST /session`, `POST /admin/session`, `POST /v1/auth/login`, `GET /v1/auth/demo-accounts` y `GET /meta/demo-scenarios`. Se comprobó haciendo público `/v1/me` y viendo fallar la prueba;
+- ninguna ruta de cliente recibe un `customer_id` del que llama (las de administrador pueden filtrar por cliente: el rol es lo que las autoriza);
 - ningún esquema tiene un campo para `is_fraud`, `fraud_score`, `password_hash`, `credit_score` ni `estimated_monthly_income`;
 - el cuerpo de `POST /chat` no puede nombrar a un cliente.
 
 ## 1. Quién llama a quién
 
 ```
-Navegador ──► ALB + Cloud Armor ──► Frontend (Next.js) = BFF  ── /api/* ──┬──► Backend  /v1     (ID token de Cloud Run)
-                                                                           └──► Agente   /chat   (token de sesión del cliente)
-                                                                                    └──► Backend (raíz, ID token)  ──► Cloud SQL
+Navegador ─► ALB + Cloud Armor ─┬─► Frontend (Next.js)   páginas: / (cliente) y /admin (especialista)
+                                └─► Agente  (/agent/*)   ◄── el navegador lo llama directo, con el token de sesión
+                                         │
+                                         └─► Backend (privado, ID token de Cloud Run) ─► Cloud SQL
 ```
 
-- **El navegador solo habla con el BFF.** No conoce la dirección del backend ni del agente, y nunca ve el token de sesión.
-- **El backend es privado:** solo cuentas de servicio con `run.invoker` lo llaman, con su ID token en `X-Serverless-Authorization`. `Authorization` queda libre para el token de sesión del cliente.
-- **El agente** lee datos solo a través del backend (nunca toca la base). Usa las rutas de la **raíz** del backend; la web usa `/v1`.
+- **La interfaz web llama al agente desde el navegador** (`/session`, `/chat`, `/me/disputes`, `/disputes/{id}`, `/meta/demo-scenarios`, y `/admin/*` para la consola). El agente reenvía al backend lo que no es suyo.
+- **El backend es privado:** solo cuentas de servicio con `run.invoker` lo llaman, con su ID token en `X-Serverless-Authorization`. `Authorization` queda libre para el token de sesión.
+- **El agente** lee datos solo a través del backend; nunca toca la base de los clientes. Solo escribe su propia traza (`agent.trace_log`).
 
 ## 2. Convenciones comunes
 
 | Tema | Regla |
 |---|---|
-| Formato | JSON en UTF-8. Fechas en ISO 8601 (`2026-06-19T15:45:00`; las marcas con zona terminan en `Z`) |
+| Formato | JSON en UTF-8. Fechas en ISO 8601 (las marcas con zona terminan en `Z`) |
 | Dinero | **Número** más `currency` aparte. `amount_usd_effective` es `amount_usd` o, si falta y la moneda es USD, `amount`. Es `null` si no se conoce: **nunca se trata como cero** |
 | Identificadores | Opacos. `case_id` es un UUID; los de transacción y producto son texto del dataset |
-| Sesión | `Authorization: Bearer <token>`. JWT HS256, emisor `backend-sandbox`, vigencia de 2 horas (`expires_in` en segundos). El `sub` es el `customer_id`. **La identidad sale siempre del token** |
-| Trazabilidad | Toda respuesta lleva `X-Request-ID`. Si la solicitud trae uno válido (8 a 100 caracteres de `A-Za-z0-9._-`) se conserva; si no, se crea. El BFF lo genera y lo reenvía; el agente lo reenvía al backend. Cada solicitud escribe una línea de registro JSON con `severity`; **no** se registra `Authorization`, la cadena de consulta ni ningún cuerpo |
-| Paginación | Por **cursor**, no por posición: `?limit=` (1 a 100, 20 por defecto) y `?cursor=` con el `next_cursor` de la página anterior. `next_cursor` es `null` en la última. Un cursor que el servicio no emitió da `422` |
-| Idempotencia | `POST /disputes` es idempotente **por (cliente, transacción)**: repetirlo devuelve el mismo caso con `200` (la primera vez, `201`). Acepta además `Idempotency-Key` |
-| Versiones | `/v1` solo admite cambios que no rompen: campos nuevos opcionales, rutas nuevas. Lo que rompa va en `/v2`. Las rutas de la **raíz** son las del agente y están congeladas en su forma |
+| Sesión | `Authorization: Bearer <token>`. JWT HS256, emisor `backend-sandbox`. **Dos roles:** `customer` (`sub` = `customer_id`, 2 horas) y `admin` (`sub` = usuario, `role=admin`, 8 horas por defecto). **Un token de un rol no abre las rutas del otro** (`403`). La identidad sale siempre del token |
+| Trazabilidad | Toda respuesta del backend y del agente lleva `X-Request-ID`. Si la solicitud trae uno válido (8 a 100 caracteres de `A-Za-z0-9._-`) se conserva; si no, se crea. El agente lo reenvía al backend. Cada solicitud escribe una línea de registro JSON con `severity`; **no** se registra `Authorization`, la cadena de consulta ni ningún cuerpo |
+| Paginación | La API `/v1` pagina por **cursor** (`?limit=` de 1 a 100 y `?cursor=`); un cursor que el servicio no emitió da `422`. La bandeja del administrador usa `limit` y `offset` |
+| Un caso por transacción | Reportar de nuevo una transacción que ya tiene un caso (no `closed`) **devuelve ese caso**: la ruta responde `201` y el cuerpo es el caso que ya existía. Dos solicitudes simultáneas crean uno solo. Un caso **sin** transacción nunca es duplicado de otro |
+| Versiones | `/v1` solo admite cambios que no rompen. Las rutas de la raíz son las de la interfaz y el agente y están congeladas en su forma |
 
 ### Errores
 
@@ -51,80 +50,100 @@ El cuerpo es `{"detail": "<texto>"}`. Los errores de validación (`422`) traen `
 | Código | Cuándo |
 |---|---|
 | `401` | Falta el token, está mal formado o venció. También el login con credenciales erróneas (**la misma respuesta si el usuario no existe**) |
+| `403` | El token es de otro rol |
 | `404` | No existe **o no es del cliente**. Las dos cosas son indistinguibles a propósito |
-| `422` | Parámetro o cuerpo inválido, `from` posterior a `to`, cursor inválido |
-| `429` | Cinco intentos de login fallidos (por defecto; `LOGIN_MAX_FAILED_ATTEMPTS`): la cuenta se bloquea 15 minutos (`LOGIN_LOCK_MINUTES`). Trae `Retry-After` (segundos) |
-| `503` | `GET /ready` cuando no se alcanza la base |
+| `409` | `resolve` sobre un caso que no está `open`, o que cambió de estado mientras tanto |
+| `422` | Parámetro o cuerpo inválido |
+| `429` | Cinco intentos de login fallidos (`LOGIN_MAX_FAILED_ATTEMPTS`): la cuenta se bloquea 15 minutos. Trae `Retry-After` |
+| `503` | `GET /ready` sin base; el login de administrador si `ADMIN_USERS` está vacío |
 
 ## 3. Backend
 
-El esquema exacto de cada cuerpo está en `backend/tests/contract/openapi.json`. Aquí, lo que hace cada ruta y lo que el esquema no dice.
+El esquema exacto está en `backend/tests/contract/openapi.json`. Aquí, lo que cada ruta hace y lo que el esquema no dice.
 
-### 3.1 `/v1` (la usa el BFF)
+### 3.1 Raíz, la que usan la interfaz y el agente
 
 | Ruta | Sesión | Hace |
 |---|---|---|
-| `POST /v1/auth/login` `{username, password}` | no | Devuelve `{session_token, token_type, expires_in, customer}`. La clave se compara con argon2id. Cinco fallos bloquean la cuenta; un acceso correcto reinicia la cuenta |
-| `GET /v1/auth/demo-accounts` | no | `{accounts: [{username, label, hint, first_name, country}], password}`. **`404` salvo `DEMO_ACCOUNTS_ENABLED=true`.** La clave compartida es pública a propósito: los datos son sintéticos |
-| `GET /v1/me` | sí | `{customer_id, first_name, last_name, country}`. Nunca ingresos, puntaje ni documento |
-| `GET /v1/me/summary` | sí | `{balances, recent_transactions, disputes}`. Los saldos son por moneda y **separan depósitos de crédito** (nunca se netean); `disputes` cuenta los casos activos por estado |
-| `GET /v1/me/products` y `/{product_id}` | sí | Productos con el número **enmascarado** (`****1234`), `kind` (`deposit`, `credit`, `other`), saldo, límite y estado. Los activos primero |
-| `GET /v1/me/transactions` | sí | `{items, next_cursor}`, de más nueva a más vieja. Filtros: `product_id`, `status`, `merchant` (mínimo 2 caracteres), `from`, `to` (fechas, `to` inclusivo). **Cada fila trae `case_id` y `dispute_status`** si ya tiene un caso, y `response_meaning` |
-| `GET /v1/me/transactions/{id}` | sí | Una transacción, con las mismas columnas |
-| `GET /v1/meta/data` | sí | `{gold: [{table, rows}], last_successful_run}`: cuándo corrió por última vez el pipeline con éxito. **`last_successful_run: null` significa "no se sabe"**, no "hoy" |
-| `GET /v1/disputes` | sí | Mis casos, de más nuevo a más viejo. `?status=` es `open`, `auto_resolved` o `escalated`. No incluye los `closed` |
-| `GET /v1/disputes/{case_id}` | sí | El caso con su línea de tiempo (`events`) |
-| `POST /v1/disputes` `{transaction_id, reason_code, summary}` | sí | Abre el caso. **La web no debe llamarlo** (ver §5): la política decide en el agente |
-| `POST /v1/disputes/{case_id}/escalate` `{handoff}` | sí | Lo llama el agente. Ver §4 |
-| `POST /v1/disputes/{case_id}/resolve` `{resolution}` | sí | Lo llama el agente. Ver §4 |
+| `POST /session` `{customer_id, document_number}` | no | Login de **sandbox** del cliente: valida contra `gold.customers`. No hay proveedor de identidad detrás |
+| `POST /admin/session` `{username, password}` | no | Login del especialista con `ADMIN_USERS` (hashes bcrypt, en Secret Manager). Cinco fallos por IP y usuario bloquean 60 s |
+| `GET /me`, `GET /me/transactions`, `GET /me/transactions/{id}` | cliente | Perfil mínimo y movimientos propios (lista simple). Cada movimiento trae `response_meaning` |
+| `GET /me/disputes` | cliente | Mis casos, más nuevos primero (incluye los cerrados y los que no tienen transacción) |
+| `POST /disputes` `{transaction_id?, reason_code, summary}` | cliente | Abre el caso. `transaction_id` es **opcional**: una escalada que no pudo atarse a una transacción es un caso sin transacción |
+| `GET /disputes/{case_id}` | cliente | El caso con su línea de tiempo (`events`) |
+| `POST /disputes/{case_id}/escalate` `{handoff}` | cliente | Lo llama el agente. Marca `escalated` y guarda el traspaso. **No se guarda por estado**: se puede llamar sobre cualquier caso del cliente |
+| `POST /disputes/{case_id}/resolve` `{resolution}` | cliente | Lo llama el agente. `resolution` es `no_charge_confirmed` o `reversal_confirmed`. Pasa `open` a `auto_resolved`; repetirlo sobre uno ya `auto_resolved` lo devuelve igual; sobre cualquier otro estado, `409`. **Los humanos nunca ponen `auto_resolved`** |
+| `GET /meta/demo-scenarios` | no | Hasta cuatro escenarios deterministas para la demo, calculados de los datos (umbral, fraude, auto-resuelto…). Público a propósito: solo expone lo que el login de prueba ya pide |
 | `GET /health`, `GET /ready` | no | El proceso vive / alcanza la base |
 
-**`response_meaning`** (`{es, pt}` o `null`) es el significado estándar (ISO 8583) del `response_code`. **Es un supuesto:** el organizador no define los códigos. El dataset solo trae `00`, `05`, `14`, `51` y `54` (y vacío en ~5%). Un código vacío o desconocido da `null`: no se inventa un motivo.
+### 3.2 Administrador (`role=admin`)
 
-**`kind` y los saldos:** el diccionario del organizador tampoco define `current_balance`. En un depósito es lo que el cliente tiene; **en crédito se infiere que es lo que debe** (hay 7.510 productos de crédito con saldo mayor que su límite, lo que solo tiene sentido si el saldo es lo usado). Por eso la pantalla debe rotularlos distinto.
+| Ruta | Hace |
+|---|---|
+| `GET /admin/disputes?status=&customer_id=&limit=&offset=` | Bandeja con cliente, idioma y motivo del traspaso. `status=active` incluye `escalated` e `in_progress` |
+| `GET /admin/disputes/{case_id}` | Detalle: traspaso, `conversation_id` y eventos auditados |
+| `POST /admin/disputes/{case_id}/transition` `{action, note, resolution?}` | `claim`: `open` o `escalated` → `in_progress`. `close`: `in_progress` → `closed`, con **nota obligatoria y resolución obligatoria**. Cada transición agrega un evento |
+| `GET /admin/metrics?window=<horas>` | Totales por estado, resolución automática segura **con su denominador**, escalamientos, cierres humanos, idioma y motivo. Sin casos la tasa es `null` ("no definida"), no cero |
+| `GET /meta/data` | Frescura: conteos de `gold.*`, el borde del snapshot y la última corrida de `ops.etl_runs` |
 
-### 3.2 Raíz (la usa el agente)
+### 3.3 `/v1`, la superficie para una aplicación web que no usa el agente directo
 
-Misma lógica y mismas reglas, con la forma de siempre: `POST /session` (`{customer_id, document_number}`), `GET /me`, `GET /me/transactions` (lista simple, no paginada) y `GET /me/transactions/{id}`, más las mismas rutas de disputas que bajo `/v1`. No se usa desde el navegador.
+La interfaz actual **no la usa**; se conserva porque está cubierta por pruebas y por este contrato, y es el camino para un BFF futuro.
+
+| Ruta | Hace |
+|---|---|
+| `POST /v1/auth/login` `{username, password}` | Usuario y clave (argon2id). Cinco fallos bloquean la cuenta; un acceso correcto la reinicia. La misma respuesta si el usuario no existe |
+| `GET /v1/auth/demo-accounts` | Cuentas de demostración y su clave compartida (pública a propósito). **`404` salvo `DEMO_ACCOUNTS_ENABLED=true`** |
+| `GET /v1/me`, `/v1/me/summary` | Perfil, y saldos por moneda (**depósitos y crédito separados, nunca neteados**) con los últimos movimientos y los casos activos |
+| `GET /v1/me/products` y `/{id}` | Productos con el número **enmascarado** (`****1234`) y `kind` (`deposit`, `credit`, `other`) |
+| `GET /v1/me/transactions` y `/{id}` | `{items, next_cursor}` con filtros `product_id`, `status`, `merchant`, `from`, `to`. Cada fila trae `case_id`, `dispute_status` y `response_meaning` |
+| `GET /v1/disputes`, `/v1/disputes/{id}`, `POST /v1/disputes…` | Las mismas rutas de disputas de la raíz |
+
+**`response_meaning`** (`{es, pt}` o `null`) es el significado estándar (ISO 8583) del `response_code`. **Es un supuesto:** el organizador no define los códigos; el dataset solo trae `00`, `05`, `14`, `51` y `54` (y vacío en ~5 %). Un código vacío o desconocido da `null`: no se inventa un motivo.
+
+**`kind` y los saldos:** el diccionario del organizador tampoco define `current_balance`. En un depósito es lo que el cliente tiene; **en crédito se infiere que es lo que debe** (hay 7.510 productos de crédito con saldo mayor que su límite, lo que solo tiene sentido si el saldo es lo usado).
 
 ## 4. Estados del caso y quién los cambia
 
 ```
-            ┌──────────── resolve (el agente) ───────────► auto_resolved ─┐
-  open ─────┤                                                              ├─ escalate (el agente) ─► escalated
-            └──────────────────── escalate (el agente) ───────────────────┘
-  closed: lo cierra una persona (operación futura, fuera de alcance). Un caso cerrado no cuenta: se puede reportar de nuevo.
+              ┌─── resolve (agente) ──► auto_resolved ──┐
+   open ──────┤                                          ├── escalate (agente) ──► escalated ── claim (especialista) ──► in_progress ── close ──► closed
+              └──────────── escalate (agente) ──────────┘
 ```
 
-| Operación | Transición | Si ya no aplica |
+| Estado | Significa | Lo pone |
 |---|---|---|
-| Abrir | → `open` | Si la transacción ya tiene un caso que no está `closed`, **devuelve ese** (`200`) |
-| `resolve` | `open` → `auto_resolved` (guarda `evidence.resolution`) | Devuelve el caso sin cambiarlo. **No deshace una escalada** |
-| `escalate` | `open` o `auto_resolved` → `escalated` (guarda `evidence.handoff`) | `escalated` y `closed` son finales: devuelve el caso sin cambiarlo ni reescribir el traspaso |
+| `open` | Recién abierto, en proceso | `POST /disputes` |
+| `auto_resolved` | La política lo resolvió **y quedó registrado** (`no_charge_confirmed` o `reversal_confirmed`) | solo el agente, por `resolve` |
+| `escalated` | Espera a un especialista, con su traspaso | el agente, por `escalate` |
+| `in_progress` | Un especialista lo tomó | el especialista, por `claim` |
+| `closed` | El especialista lo cerró, con nota y resolución | el especialista, por `close`. **Un caso `closed` no cuenta**: la transacción se puede reportar de nuevo |
 
-Repetir una operación **no es un error**. La línea de tiempo (`events`) solo crece: `created`, y luego `resolved` o `escalated`.
+Las escaladas **sin transacción** (fraude sin una transacción elegida, ambigüedad que no se resolvió) son casos con `transaction_id` nulo: así llegan igual a la bandeja del especialista. Un caso escalado no tiene `resolved_at`: eso es solo para lo que se resolvió.
 
-Por qué existe `resolve`: hasta entonces nada marcaba `auto_resolved`, y los casos que la política resolvía quedaban `open` para siempre en la lista del cliente.
+La línea de tiempo (`events`) solo crece: `created`, y luego `auto_resolved`, `escalated`, `claimed`, `closed`.
 
 ## 5. Agente
 
-Esquema exacto en `agent/tests/contract/openapi.json`.
+El esquema exacto está en `agent/tests/contract/openapi.json`.
 
 ### `POST /chat`
 
 Pide: `{session_token, message, conversation_id?, transaction_id?}`. El token va en el cuerpo, no en una cabecera.
 
-- **`transaction_id`** es el movimiento que el cliente eligió en la pantalla. Identifica la transacción mejor que cualquier texto: no se busca ni se pide confirmar. **Todo lo demás sigue aplicando** (umbral de USD 500, cobro ya aprobado, monto desconocido). El backend verifica que sea del cliente; **uno ajeno se ignora** como si no se hubiera elegido (nunca un error y nunca datos ajenos). **No se hereda al siguiente turno** de la conversación.
-- **`conversation_id`** continúa una conversación. Si falta, se crea y se devuelve.
+- **`transaction_id`** es el movimiento que el cliente eligió. Identifica la transacción mejor que cualquier texto: no se busca ni se pide confirmar. **Todo lo demás sigue aplicando** (umbral de USD 500, cobro ya aprobado, monto desconocido). El backend verifica que sea del cliente; **uno ajeno se ignora** como si no se hubiera elegido, sin error y sin datos ajenos. No se hereda al siguiente turno. *La interfaz actual no lo usa: arma una frase ("Fue el cobro de X en Y") al elegir un candidato.*
+- **`conversation_id`** continúa una conversación; si falta, se crea y se devuelve.
 
-Responde: `{reply, conversation_id, outcome, handoff, case_id, case_status}`.
+Responde: `{reply, conversation_id, outcome, handoff, case_id, case_status, case, candidates, reason, language}`. `case_id` y `case_status` son el caso que este turno abrió o encontró; `case`, `candidates`, `reason` y `language` son los que la interfaz usa para sus tarjetas.
 
-| `outcome` | Significa | `case_id` |
+| `outcome` | Significa | Caso |
 |---|---|---|
-| `resolved` | La política resolvió o el agente respondió (saludo, estado de un caso) | el caso, `auto_resolved`, si hubo disputa |
-| `clarify` | Hay 0 o varias transacciones candidatas, o falta el dato clave. Una sola pregunta por turno, máximo 2 turnos; luego escala | `null` |
-| `escalated` | Pasa a una persona | **el caso, `escalated`**, si la escalada es sobre una transacción; `null` si no hay transacción (fraude sin elegir una, fuera de alcance, ambigüedad) |
-| `unavailable` | **No se pudo verificar** por un fallo del servicio bancario tras los reintentos. No se cambió nada y no hay caso: el cliente puede reintentar | `null` |
+| `resolved` | La política resolvió, o el agente respondió (saludo, estado de un caso) | `auto_resolved` si hubo disputa |
+| `clarify` | Hay 0 o varias transacciones candidatas, o falta el dato clave (con `candidates` si hay). Una pregunta por turno, máximo 2; luego escala | ninguno |
+| `escalated` | Pasa a una persona | **el caso, `escalated`**, atado a la transacción si se pudo; sin transacción si no |
+| `unavailable` | **No se pudo verificar** por un fallo del servicio bancario tras los reintentos. No se cambió nada: el cliente puede reintentar | ninguno |
+
+**La resolución automática se cierra o escala.** Después de abrir el caso, el agente lo relee y lo marca `auto_resolved` por `resolve`, y lo relee de nuevo. **Si no se puede marcar, el turno se vuelve una escalada con motivo `verify_failed`**: "resuelto" nunca es una promesa que nadie registró.
 
 `unavailable` llega con `200` y un texto simple en el idioma del cliente (es o pt), no con un `502`. Una sesión vencida sigue siendo `401`.
 
@@ -132,67 +151,27 @@ Responde: `{reply, conversation_id, outcome, handoff, case_id, case_status}`.
 
 **Motivo del rechazo:** si la transacción está `Declined` y su código es conocido, la respuesta lo dice con el código y aclarando que es el significado estándar. Con un código vacío o desconocido no agrega nada.
 
-**Reintentos del agente al backend:** hasta 3 intentos, con esperas cortas, ante fallo de conexión o `502`, `503`, `504`; **nunca** ante un `4xx`. Es seguro repetir todo porque las escrituras son idempotentes. La conexión tiene su propio límite de 2 s; **el peor caso medido, con el backend caído, fue 6,9 s** hasta responder `unavailable`.
+**Reintentos del agente al backend:** hasta 3 intentos con esperas cortas, ante fallo de conexión o `502`, `503`, `504`; **nunca** ante un `4xx`. Es seguro repetir todo porque las escrituras son idempotentes. La conexión tiene su propio límite de 2 s; **el peor caso medido, con el backend caído, fue 6,9 s** hasta responder `unavailable`.
 
-### `POST /session` y `GET /health`
+### El resto de las rutas del agente
 
-`/session` reenvía el login del backend por `customer_id` y documento; la web no lo usa (entra por `/v1/auth/login`: el token que emite sirve igual para `/chat`).
+Son reenvíos delgados al backend con la misma sesión, con comprobaciones previas que fallan rápido: `GET /me/disputes`, `GET /disputes/{id}`, `GET /meta/demo-scenarios`, `GET /meta/data` y, para el especialista, `POST /admin/session`, `GET /admin/disputes`, `GET /admin/disputes/{id}` y `POST /admin/disputes/{id}/transition`, más `GET /admin/metrics`. **Dos rutas son del propio agente**: `GET /admin/agent-metrics` (resultados, contención, latencia p50 y p95, intenciones e idiomas, de `agent.trace_log`) y `GET /admin/conversations/{id}/trace` (los pasos de una conversación). `POST /session` reenvía el login del backend.
 
-## 6. BFF (el servidor de Next.js) — contrato a implementar
+## 6. Flujos de punta a punta
 
-Aún **no existe**: el frontend actual es el chat viejo, que llama directo al agente. Esto es lo que debe cumplir el nuevo.
+**Cliente:** `POST /session` → `POST /chat` (con `message` y, si lo eligió, `transaction_id`) → `resolved` con su caso, o `escalated` con su caso y su traspaso → `GET /me/disputes` para "Mis casos".
 
-| Ruta del BFF | Reenvía a | Notas |
-|---|---|---|
-| `POST /api/auth/login` | `POST /v1/auth/login` | Pone la cookie y devuelve `{customer}`. **El token no va en el cuerpo de la respuesta** |
-| `POST /api/auth/logout` | — | Borra la cookie. `204` |
-| `GET /api/auth/demo-accounts` | `GET /v1/auth/demo-accounts` | Sin sesión. Para la pantalla de entrada |
-| `GET /api/me`, `/api/me/summary`, `/api/me/products`, `/api/me/products/{id}`, `/api/me/transactions`, `/api/me/transactions/{id}`, `/api/meta/data` | la misma ruta bajo `/v1` | Reenvío tal cual (cuerpo y consulta). Tipos generados del OpenAPI del backend |
-| `GET /api/disputes`, `GET /api/disputes/{id}` | `GET /v1/disputes…` | Solo lectura |
-| `POST /api/chat` `{message, conversation_id?, transaction_id?}` | `POST /chat` del agente | Pone el token de la cookie en `session_token` |
+**Especialista:** `POST /admin/session` → `GET /admin/disputes?status=active` → detalle (traspaso y eventos) → `claim` → `close` con nota y resolución → `GET /admin/metrics`.
 
-**Lo que el BFF no debe exponer jamás:** `POST /disputes`, `escalate` ni `resolve`. Abrir, resolver y escalar es política y vive en el agente: un botón "Disputar" en un movimiento **abre el asistente con `transaction_id` elegido**, no crea el caso desde el navegador. Tampoco debe aceptar un `customer_id` del navegador ni devolver el token.
+## 7. Evolución posible: un servidor intermedio (BFF) para la web
 
-**Sesión:** cookie `__Host-session` (`Secure`, `HttpOnly`, `SameSite=Strict`, `Path=/`, sin `Domain`), con la vigencia de `expires_in`. En desarrollo local sin HTTPS, `session`. Ante un `401` de cualquier capa, el BFF borra la cookie y responde `401`: la pantalla vuelve al login.
+No existe, y no hace falta para la entrega. Si la interfaz dejara de llamar al agente desde el navegador, el servidor de Next sería quien guardara el token en una cookie `httpOnly` y llamara a `/v1` y a `/chat`. Eso **forzaría cambios de infraestructura**: hoy el agente solo acepta tráfico del balanceador, así que el servidor de Next no podría llamarlo; el agente tendría que volverse privado como el backend, con el frontend como invocador. Por eso `/v1` se mantiene.
 
-**CSRF:** además de `SameSite=Strict`, las rutas `POST` exigen `Content-Type: application/json` y un `Origin` igual al del propio sitio; si no, `403`.
-
-**Errores:** el mismo código de estado y `{"detail": "...", "request_id": "..."}`. Un fallo de conexión con el backend o el agente es `502` con un texto genérico, sin direcciones internas.
-
-**Tiempos:** 10 s hacia el backend; **60 s hacia el agente** (cubre sus reintentos y al modelo de lenguaje).
-
-**Trazabilidad:** genera `X-Request-ID` si el navegador no trae uno, lo reenvía a ambas capas y lo devuelve.
-
-**Tipos:** se generan de los dos OpenAPI (`openapi-typescript`), de modo que un cambio en una capa rompe la compilación del frontend en lugar de romper la pantalla en producción.
-
-### Lo que el BFF obliga a cambiar en la infraestructura
-
-Hoy, en prod, el frontend y el agente aceptan tráfico **solo del balanceador** (`edge_lockdown`) y el navegador llama al agente por `/agent/*`. Con el BFF eso cambia, y sin estos cambios **el BFF no podría llamar al agente**:
-
-1. **El agente pasa a ser privado como el backend:** ingreso abierto pero **sin `allUsers`**, solo con `roles/run.invoker` para la cuenta de servicio del frontend, que le manda su ID token (en `X-Serverless-Authorization`, igual que hace hoy el agente con el backend). Deja de existir la ruta `/agent/*` del balanceador y la variable `agent_public_url`.
-2. **El frontend recibe `run.invoker` sobre el backend** (hoy solo lo tiene el agente) y las direcciones `BACKEND_URL` y `AGENT_URL` como variables **del servidor**, no `NEXT_PUBLIC_*`.
-3. **El agente deja de necesitar CORS:** el navegador ya no lo llama. `CORS_ALLOWED_ORIGINS` se puede vaciar.
-4. **La cuenta de servicio del frontend necesita poder pedir el ID token** (por el servidor de metadatos, como en `agent/app/gcp_auth.py`).
-
-Esto se aplica con el despliegue del BFF, no antes: mientras el frontend viejo siga llamando al agente desde el navegador, el estado actual es el correcto.
-
-## 7. Flujos de punta a punta
-
-**Entrar:** `POST /api/auth/login` → cookie → `GET /api/me/summary`. Con 5 fallos, `429` con `Retry-After`.
-
-**Ver la cuenta:** `GET /api/me/products`, `GET /api/me/transactions` (con `next_cursor` para más), `GET /api/meta/data` para "datos al…".
-
-**Reportar un cargo desde un movimiento:** `POST /api/chat` con `message` y el `transaction_id` de la fila. Respuesta: `resolved` con su `case_id`, o `escalated` con su `case_id` y el traspaso. La fila se actualiza porque `GET /api/me/transactions` ya trae `case_id` y `dispute_status`.
-
-**Reportar describiendo el cargo:** `POST /api/chat` solo con el texto. Puede responder `clarify` (hasta 2 veces), `resolved`, `escalated` o `unavailable`.
-
-**Seguir un caso:** `GET /api/disputes` y `GET /api/disputes/{id}` (con `events`).
-
-## 8. Límites y supuestos de este contrato
+## 8. Límites y supuestos
 
 - **El motivo del rechazo (`response_meaning`) es el estándar ISO 8583**, no una definición del organizador. Se dice así en la respuesta.
 - **El saldo de un producto de crédito se interpreta como lo adeudado** (inferido). El dataset no tiene MXN aunque la mitad de los clientes es mexicana: la moneda se muestra como está guardada.
-- **No hay un servicio de identidad real:** el login es de demostración, con cuentas de demostración de clave pública. El contrato lo declara; no lo disimula.
-- **El estado de la conversación del agente vive en la memoria de cada instancia.** Si hay más de una instancia, un turno puede caer en otra y perder el hilo (pierde el contexto de la aclaración, no los casos, que están en la base). Para producción real se necesita un almacén compartido.
-- **Un caso `closed` no se puede crear desde ninguna ruta:** lo cierra una persona, y esa operación no existe todavía.
-- **La vista del agente humano que recibe las escaladas no está en el alcance:** el traspaso queda guardado en el caso (`evidence.handoff`) y en su línea de tiempo.
+- **No hay un servicio de identidad real.** El login del cliente (`customer_id` y documento) y el del especialista son de demostración, El del especialista tiene un límite de intentos por proceso. El contrato lo declara; no lo disimula.
+- **`escalate` no se guarda por estado**: se puede volver a llamar sobre un caso ya escalado o cerrado y reescribe el traspaso. Es lo que hace la implementación de la consola; conviene protegerlo antes de producción.
+- **El estado de la conversación del agente vive en la memoria de cada instancia.** Con más de una instancia, un turno puede caer en otra y perder el hilo (se pierde el contexto de la aclaración, no los casos, que están en la base). Producción real necesita un almacén compartido.
+- **El límite de intentos del login del especialista vive en la memoria de cada proceso** (con varias instancias, cada una cuenta aparte). El de `POST /v1/auth/login` está en la base, por cuenta. `POST /session` (cliente y documento) no tiene límite de intentos.
