@@ -126,10 +126,13 @@ module "backend" {
   location   = var.region
   image      = "${module.foundation.image_base}/backend:${var.image_tag}"
 
-  env = merge(local.db_env, var.service_db_users ? { PG_USER = module.cloudsql.service_user_names["backend"] } : {})
+  env = merge(local.db_env, var.service_db_users ? { PG_USER = module.cloudsql.service_user_names["backend"] } : {}, {
+    GUARDRAIL_MAX_USD = var.guardrail_max_usd
+  })
   secret_env = {
     PG_PASSWORD        = module.secrets.secret_ids[var.service_db_users ? "backend-db-password" : "db-password"]
     SESSION_JWT_SECRET = module.secrets.secret_ids["session-jwt"]
+    ADMIN_USERS        = module.secrets.secret_ids["admin-users"]
   }
 
   enable_cloudsql          = local.use_connector

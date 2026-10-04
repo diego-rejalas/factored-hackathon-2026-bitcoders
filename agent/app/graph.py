@@ -1,3 +1,4 @@
+from copy import deepcopy
 import time
 from typing import TypedDict
 
@@ -27,6 +28,7 @@ class AgentState(TypedDict, total=False):
     route: str
     reason: str | None
     candidates: list
+    candidate_options: list
     candidate: dict | None
     case: dict | None
     facts: list
@@ -60,7 +62,27 @@ def build_graph(tools, tracer, llm=None):
             state["run_id"], state["conversation_id"], "understand",
             intent=intent, params={"language": language}, latency_ms=_elapsed(start),
         )
-        return {"language": language, "intent": intent, "entities": guardrail.extract_entities(message)}
+        continuing_dispute = intent == "dispute"
+        return {
+            "language": language,
+            "intent": intent,
+            "entities": guardrail.extract_entities(message),
+            # Clear per-turn results from the previous checkpoint. Only case-status
+            # requests intentionally reuse the last case; dispute clarification keeps
+            # its proposal and round count across turns.
+            "route": None,
+            "reason": None,
+            "candidates": [],
+            "candidate_options": state.get("candidate_options", []) if continuing_dispute else [],
+            "candidate": None,
+            "case": state.get("case") if intent == "case_status" else None,
+            "facts": [],
+            "outcome": None,
+            "handoff": None,
+            "reply": None,
+            "proposed_id": state.get("proposed_id") if continuing_dispute else None,
+            "clarify_rounds": state.get("clarify_rounds", 0) if continuing_dispute else 0,
+        }
 
     async def fetch_candidates(state: AgentState, entities: dict) -> list:
         """Every status, not only Declined/Reversed: a charge that was approved is exactly the
@@ -123,6 +145,7 @@ def build_graph(tools, tracer, llm=None):
                 "outcome": "clarify",
                 "reason": "no_case_yet" if len(pool) == 0 else "multiple_candidates",
                 "candidates": pool,
+                "candidate_options": pool,
                 "proposed_id": None,
                 "clarify_rounds": state.get("clarify_rounds", 0) + 1,
             }
@@ -145,6 +168,7 @@ def build_graph(tools, tracer, llm=None):
                 "outcome": "clarify",
                 "reason": "unconfirmed_candidate",
                 "candidates": pool,
+                "candidate_options": pool,
                 "proposed_id": candidate["transaction_id"],
                 "clarify_rounds": state.get("clarify_rounds", 0) + 1,
             }
@@ -182,18 +206,38 @@ def build_graph(tools, tracer, llm=None):
         if fresh.get("status") not in ("open", "auto_resolved", "escalated"):
             await tracer.log(state["run_id"], state["conversation_id"], "verify", intent=state["intent"], tool="get_dispute", result_status="failed", latency_ms=_elapsed(start))
             return {"route": "escalate", "reason": "verify_failed", "outcome": "escalated", "case": fresh}
+        # The safe path closes the case itself: a Declined/Reversed charge under the
+        # threshold is documented and marked auto_resolved by the backend (never by the
+        # LLM), so "resolved" means a verified terminal state, not a promise.
+        if fresh.get("status") == "open":
+            candidate = state.get("candidate") or {}
+            resolution = (
+                "reversal_confirmed"
+                if candidate.get("transaction_status") == "Reversed"
+                else "no_charge_confirmed"
+            )
+            try:
+                fresh = await tools.resolve_dispute(
+                    state["session_token"], case["case_id"], resolution
+                )
+            except ToolError as error:
+                await tracer.log(state["run_id"], state["conversation_id"], "verify", intent=state["intent"], tool="resolve_dispute", result_status="failed", params={"error": error.status_code}, latency_ms=_elapsed(start))
+                return {"route": "escalate", "reason": "verify_failed", "outcome": "escalated", "case": case}
+            await tracer.log(state["run_id"], state["conversation_id"], "verify", intent=state["intent"], tool="resolve_dispute", params={"resolution": resolution}, result_status=fresh.get("status"), latency_ms=_elapsed(start))
+            if fresh.get("status") != "auto_resolved":
+                return {"route": "escalate", "reason": "verify_failed", "outcome": "escalated", "case": fresh}
         candidate = state.get("candidate") or {}
         facts = [
             f"transacción {candidate.get('transaction_id')} ({replies.describe(candidate)}) estado {candidate.get('transaction_status')}",
             f"monto efectivo {guardrail.effective_usd(candidate):.2f} USD",
             f"caso {fresh['case_id']} verificado en estado {fresh['status']}",
         ]
-        await tracer.log(state["run_id"], state["conversation_id"], "verify", intent=state["intent"], tool="get_dispute", result_status=fresh.get("status"), latency_ms=_elapsed(start))
         return {"case": fresh, "facts": facts, "outcome": "resolved", "route": "respond"}
 
     def build_handoff(state: AgentState) -> dict:
         candidate = state.get("candidate")
         case = state.get("case")
+        case_id = case.get("case_id") if case else None
         handoff = {
             "reason": state.get("reason") or "unspecified",
             "limitation": guardrail.GUARDRAIL_LIMITATIONS.get(state.get("reason") or "", "human review required"),
@@ -204,31 +248,73 @@ def build_graph(tools, tracer, llm=None):
             "customer_language": state.get("language", "es"),
             "conversation_id": state.get("conversation_id"),
             "verified_facts": state.get("facts") or [],
-            "actions_taken": (
-                [{"action": "create_dispute", "case_id": case["case_id"]}] if case else []
-            ),
+            "actions_taken": ([{"action": "create_dispute", "case_id": case_id}] if case_id else []),
             "evidence": (
                 [{"candidate_transaction": candidate}] if candidate else []
-            ) + ([{"dispute": case}] if case else []),
+            ),
             "open_questions": ["Confirmar con el cliente el comercio/monto/fecha exactos."],
         }
-        if case:
-            handoff["case_id"] = case["case_id"]
+        if case_id:
+            handoff["case_id"] = case_id
         return handoff
 
     async def escalate(state: AgentState) -> dict:
         start = time.monotonic()
-        handoff = build_handoff(state)
         case = state.get("case")
+        creation_error: ToolError | None = None
+        if case is None and state.get("reason") in {
+            "fraud_suspected",
+            "amount_threshold",
+            "amount_unknown",
+            "posted_charge_disputed",
+            "ambiguity_unresolved",
+        }:
+            candidate = state.get("candidate") or {}
+            transaction_id = candidate.get("transaction_id")
+            summary = (
+                f"Cliente solicita revisión humana ({state.get('reason')}); "
+                + (
+                    f"transacción {transaction_id} figura como {candidate.get('transaction_status')}."
+                    if transaction_id
+                    else "no se identificó una transacción única."
+                )
+            )
+            try:
+                case = await tools.create_dispute(
+                    state["session_token"], transaction_id, REASON_CODE, summary
+                )
+                await tracer.log(
+                    state["run_id"], state["conversation_id"], "escalate",
+                    intent=state["intent"], tool="create_dispute",
+                    params={"transaction_id": transaction_id},
+                    result_status=case.get("status"), latency_ms=_elapsed(start),
+                )
+            except ToolError as error:
+                creation_error = error
+                await tracer.log(
+                    state["run_id"], state["conversation_id"], "escalate",
+                    intent=state["intent"], tool="create_dispute",
+                    result_status="failed", params={"error": error.status_code},
+                    latency_ms=_elapsed(start),
+                )
+        handoff_state = {**state, "case": case}
+        handoff = build_handoff(handoff_state)
+        if state.get("candidate_options") and not state.get("candidate"):
+            handoff["evidence"].append({"candidate_options": deepcopy(state["candidate_options"])})
+        if creation_error:
+            handoff["case_creation_failed"] = True
         if case:
             try:
-                await tools.escalate_dispute(state["session_token"], case["case_id"], handoff)
-                handoff["escalated_in_backend"] = True
+                escalated_case = await tools.escalate_dispute(
+                    state["session_token"], case["case_id"], handoff
+                )
+                case = escalated_case or case
+                handoff["escalated_in_backend"] = escalated_case is not None
             except ToolError as error:
                 handoff["escalated_in_backend"] = False
                 handoff["backend_error"] = error.detail
         await tracer.log(state["run_id"], state["conversation_id"], "escalate", intent=state["intent"], tool="escalate_dispute" if case else None, result_status="escalated", latency_ms=_elapsed(start))
-        return {"handoff": handoff, "outcome": "escalated"}
+        return {"case": case, "handoff": handoff, "outcome": "escalated"}
 
     async def respond(state: AgentState) -> dict:
         start = time.monotonic()

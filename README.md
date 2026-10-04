@@ -17,9 +17,9 @@ Prototipo de sistema de atención al cliente bancario AI-first para el Factored 
 | `infra/airflow/`, `data/dags/` | Pipeline A (Railway): Airflow orquesta; DuckDB extrae de S3 y carga a `bronze.*` | Desplegado en Railway |
 | `infra/dbt/`, `data/dbt/` | Lógica — dbt sobre Postgres (`bronze.*` → `silver.*` → `gold.*`), 133 pruebas más 37 de valores aceptados | Implementado |
 | `infra/gcp/etl/` | Pipeline B (GCP, del PR): un Cloud Run Job con DuckDB y `dbt-duckdb` en RAM; publica solo `gold.*` | Definido, sin validar |
-| `backend/` | Backend — microservicio de banca (tool layer, sesión por JWT, permisos por titularidad) | Implementado (PR #1) |
-| `agent/` | AI engineer — agente + guardrail (LangGraph) | Implementado (PR #1); en revisión, ver `spec/PR1_REVIEW.md` |
-| `frontend/` | Chat UI — Next.js (Cloud Run standalone con `AGENT_URL`); documentación de datos en `/data-docs` | Implementado |
+| `backend/` | Backend — microservicio de banca (tool layer, sesión por JWT, permisos por titularidad, API admin de disputas) | Implementado (PR #1) |
+| `agent/` | AI engineer — agente + guardrail (LangGraph); proxies admin y métricas/traza desde `agent.trace_log` | Implementado (PR #1); en revisión, ver `spec/PR1_REVIEW.md` |
+| `frontend/` | Next.js (Cloud Run standalone con `AGENT_URL`): chat cliente (`/`), consola de especialistas (`/admin`), documentación de datos en `/data-docs` | Implementado |
 | `.railway/railway.ts` | Infra Railway: pipeline A y servicios actuales | Vigente hasta decidir la migración |
 | `infra/gcp/` | Infra GCP en Terraform, en tres ambientes (`envs/dev|qa|prod`) con módulos compartidos | Definido, `validate` y `plan` verificados; sin `apply` |
 | `spec/` | Documentación de diseño y decisiones | — |
@@ -36,6 +36,7 @@ Workflow confirmado: **Opción A — disputas de transacciones**, con umbral de 
 - **Pipeline ETL Ultraligero**: Cloud Run Job (`etl`) ejecutando DuckDB + `dbt-duckdb` en RAM (procesa 23.5M filas en ~2.5 min, ejecuta 121 tests de calidad y publica exclusivamente las tablas `gold.*`). Sin microservicios dbt sueltos.
 - **Data Lakehouse (GCS + Parquet)**: Capas Bronze y Silver preservadas en Parquet comprimido (ZSTD) particionado por Hive en Google Cloud Storage (`gs://factored-lakehouse-*`) por ~$0.03 USD/mes, manteniendo Cloud SQL libre de tablas crudas intermedias.
 - **Base de Datos Serving**: Cloud SQL PostgreSQL 16 con **Hibernación Just-in-Time** (`./infra/gcp/scripts/manage_db.sh pause/resume`), reduciendo el costo en reposo a ~$0.05 USD/día.
+- **Consola de especialistas (`/admin`)**: bandeja de casos escalados con handoff estructurado, traza del agente, transiciones auditadas (`claim → close`) y métricas backend+agente con denominadores explícitos. Login sandbox con `ADMIN_USERS` (bcrypt en Secret Manager).
 
 Railway queda como referencia histórica (`.railway/railway.ts` legacy).
 
