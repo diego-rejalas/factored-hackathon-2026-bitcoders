@@ -1,6 +1,6 @@
 # agent/ — agente + guardrail
 
-Vertical 4 de `../spec/ARCHITECTURE.md`. Servicio FastAPI con LangGraph adentro. **Nunca toca `gold.*` directo** — todos los datos viajan por las tools HTTP de `../backend/`, siempre reenviando el token del usuario (enforcement doble). **Implementado** (workflow Opción A: disputas de transacciones).
+Vertical 4 de `../docs/ARCHITECTURE.md`. Servicio FastAPI con LangGraph adentro. **Nunca toca `gold.*` directo** — todos los datos viajan por las tools HTTP de `../backend/`, siempre reenviando el token del usuario (enforcement doble). **Implementado** (workflow Opción A: disputas de transacciones).
 
 ## Contrato
 

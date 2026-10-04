@@ -93,7 +93,7 @@ def create_app(store: BankStore | None = None) -> FastAPI:
         store=Depends(get_store),
     ) -> dict:
         """Outcome metrics from app.disputes, with denominators always reported.
-        Definitions follow spec/CRITERIA.md; rates are null ("not defined") without data."""
+        Definitions follow docs/CRITERIA.md; rates are null ("not defined") without data."""
         return await store.admin_metrics(window_hours)
 
     return app

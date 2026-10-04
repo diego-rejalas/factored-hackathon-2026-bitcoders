@@ -1,5 +1,5 @@
 -- Digital events (15,620,994 rows). Anonymous sessions: customer_id is empty in ~24%. ip_country is conformed to 'México'.
--- Silver: real types, '' -> NULL, no business logic. See spec/DATA_FINDINGS.md.
+-- Silver: real types, '' -> NULL, no business logic. See docs/DATA.md.
 with source as (
     select * from {{ source('bronze', 'digital_events') }}
 )

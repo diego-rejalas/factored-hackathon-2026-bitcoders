@@ -157,7 +157,7 @@ variable "guardrail_max_usd" {
 }
 
 variable "enable_airflow" {
-  description = "Deploy Airflow on its own VM (see spec/AIRFLOW_GCP.md). Needs db_connectivity = private_ip, and turns on Cloud NAT."
+  description = "Deploy Airflow on its own VM (see docs/ARCHITECTURE.md). Needs db_connectivity = private_ip, and turns on Cloud NAT."
   type        = bool
   default     = true
 }

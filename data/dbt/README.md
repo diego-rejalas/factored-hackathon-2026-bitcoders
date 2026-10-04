@@ -1,6 +1,6 @@
 # data/dbt/ — dbt (bronze. → silver. → gold.)
 
-Vertical 2 de `../../spec/ARCHITECTURE.md`. Transforma `bronze.*` (que carga el DAG con DuckDB, ver `../dags/`) en `silver.*` y `gold.*` (lo que lee `../../backend/`), dentro de la base `data` de Postgres.
+Vertical 2 de `../../docs/ARCHITECTURE.md`. Transforma `bronze.*` (que carga el DAG con DuckDB, ver `../dags/`) en `silver.*` y `gold.*` (lo que lee `../../backend/`), dentro de la base `data` de Postgres.
 
 Contenido de datos, no de infraestructura: cómo se despliega dbt vive en `../../infra/airflow-gcp/` (VM) y `../../infra/gcp/etl/` (Cloud Run Job).
 
@@ -9,7 +9,7 @@ Contenido de datos, no de infraestructura: cómo se despliega dbt vive en `../..
 ## Estructura
 
 - `models/staging/stg_*.sql` — una vista por cada una de las 13 tablas de bronze: cast de tipos reales, `''` → `NULL`, sin lógica de negocio salvo conformar valores (`macros/normalize_country.sql` unifica 'Mexico' y 'México'). Vistas en el schema `silver`.
-- `models/staging/sources.yml` — declara las 13 tablas de `bronze.*` como fuente, con los hallazgos de `../../spec/DATA_FINDINGS.md` documentados por tabla.
+- `models/staging/sources.yml` — declara las 13 tablas de `bronze.*` como fuente, con los hallazgos de `../../docs/DATA.md` documentados por tabla.
 - `models/staging/schema.yml` — tests (`not_null`, `unique`, `accepted_values`, `relationships`, `accepted_range`, `unique_combination`) — son los "contratos de datos" que pide el reto. Los defectos conocidos de los datos corren con `severity: warn`: no frenan la corrida, pero aparecen con su conteo en cada build.
 - `tests/generic/` — tests genéricos propios (`accepted_range`, `unique_combination`); `tests/*.sql` — reglas de negocio (titularidad transacción-producto, defectos medidos de quejas, saldo sobre límite, etc.).
 - `models/gold/<entidad>.sql` — tablas materializadas en el schema `gold`, lo que lee el tool layer (`backend/`). Sin prefijo `clean_`: medallion reserva la limpieza (casts, nulls) para silver — gold nombra por entidad/consumidor de negocio. Por ahora son pass-through de silver (sin joins todavía) — los joins/agregaciones específicos de workflow se agregan cuando el equipo vote entre las opciones A/B/C/D.
@@ -18,7 +18,7 @@ Contenido de datos, no de infraestructura: cómo se despliega dbt vive en `../..
 ## Decisiones de calidad de datos ya tomadas (no reinventar al escribir modelos nuevos)
 
 - **`gold.transactions` excluye `is_fraud`/`fraud_score`** — son ground truth de evaluación, nunca input del agente (leakage). Si un modelo nuevo necesita fraude como feature, es un bug.
-- **`currency` nunca corrige la ausencia de MXN** — se documenta como limitación de datos real (ver `../../spec/DATA_FINDINGS.md`), no se inventa una conversión.
+- **`currency` nunca corrige la ausencia de MXN** — se documenta como limitación de datos real (ver `../../docs/DATA.md`), no se inventa una conversión.
 - **`contact_reason`/`reason_category`** en `call_center_interactions` son el mismo campo en la práctica — no asumir que dan más granularidad de la real.
 
 ## Correr localmente

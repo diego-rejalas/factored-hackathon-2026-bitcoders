@@ -1,6 +1,6 @@
 """What a card response code means, for explaining a declined transaction to the customer.
 
-The dataset only carries 00, 05, 14, 51 and 54 (and an empty value in about 5% of rows; DATA_FINDINGS.md). The
+The dataset only carries 00, 05, 14, 51 and 54 (and an empty value in about 5% of rows; docs/DATA.md). The
 organizer's documents do not define them: these are the standard meanings of the ISO 8583 response codes that card
 networks use. That is an assumption, and the text says so ("segun el estandar") instead of presenting it as the bank's
 own reason. An unknown or empty code gets no explanation: the agent never invents one.

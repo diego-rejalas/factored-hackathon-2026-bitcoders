@@ -117,7 +117,7 @@ Los clientes son filas del dataset sintético del organizador; las expectativas 
 
 ## Seguridad
 
-Los hallazgos de Checkov y Trivy, lo que se corrigió, lo que se acepta y cómo se repite están en `spec/SECURITY_SCANS.md`. Resumen de lo que aplica a esta carpeta: SSL obligatorio y registro en Cloud SQL, base sin IP pública en los tres ambientes, registro de flujo en la subred, y el plan de cada despliegue se escanea con Checkov antes de aplicarse.
+Los hallazgos de Checkov y Trivy, lo que se corrigió, lo que se acepta y cómo se repite están en `docs/SECURITY.md`. Resumen de lo que aplica a esta carpeta: SSL obligatorio y registro en Cloud SQL, base sin IP pública en los tres ambientes, registro de flujo en la subred, y el plan de cada despliegue se escanea con Checkov antes de aplicarse.
 
 ## Ahorro de costos
 

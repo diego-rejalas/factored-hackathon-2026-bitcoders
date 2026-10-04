@@ -38,7 +38,7 @@ def percentile(values: list[int], q: float) -> float | None:
 def aggregate_metrics(rows: list[dict]) -> dict:
     """Aggregate raw trace_log rows into the agent side of the admin metrics.
     Only structured step metadata is ever aggregated: no user text exists in
-    trace_log by design. Definitions follow spec/CRITERIA.md; rates are None
+    trace_log by design. Definitions follow docs/CRITERIA.md; rates are None
     ("not defined") when there is no data."""
     runs_by_outcome: dict[str, int] = {}
     conversations: dict[str, dict] = {}

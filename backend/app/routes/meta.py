@@ -12,7 +12,7 @@ async def meta_data(
     store=Depends(get_store),
 ) -> dict:
     """Data freshness for the admin console: gold.* counts plus the last pipeline run
-    (ops.etl_runs). The snapshot is static by design — see spec/ARCHITECTURE.md."""
+    (ops.etl_runs). The snapshot is static by design — see docs/ARCHITECTURE.md."""
     return await store.data_freshness()
 
 

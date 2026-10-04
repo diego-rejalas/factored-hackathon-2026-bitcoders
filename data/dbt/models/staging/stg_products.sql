@@ -1,5 +1,5 @@
 -- Currency gap (products.currency has zero MXN despite ~50% of customers
--- being Mexican) is NOT corrected here — documented in spec/DATA_FINDINGS.md
+-- being Mexican) is NOT corrected here — documented in docs/DATA.md
 -- as a limitation to report, not silently patched.
 with source as (
     select * from {{ source('bronze', 'products') }}

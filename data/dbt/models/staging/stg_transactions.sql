@@ -1,5 +1,5 @@
 -- is_fraud/fraud_score are ground truth for evaluation only — see
--- spec/DATA_FINDINGS.md. Kept here (silver mirrors bronze with real types);
+-- docs/DATA.md. Kept here (silver mirrors bronze with real types);
 -- any model the agent/tool layer reads from must NOT expose these as
 -- input signal, only gold./eval-set consumers should.
 with source as (

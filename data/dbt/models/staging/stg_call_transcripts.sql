@@ -1,5 +1,5 @@
 -- Call transcripts (171,321). Templated, 100% Spanish text: not usable to train an intent classifier.
--- Silver: real types, '' -> NULL, no business logic. See spec/DATA_FINDINGS.md.
+-- Silver: real types, '' -> NULL, no business logic. See docs/DATA.md.
 with source as (
     select * from {{ source('bronze', 'call_transcripts') }}
 )

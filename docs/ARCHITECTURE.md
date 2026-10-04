@@ -1,6 +1,8 @@
 # Arquitectura
 
-El asistente de disputas de transacciones de LATAM Bank (workflow A, `WORKFLOW_DECISION.md`) corre en GCP. Este documento describe lo que está desplegado y por qué, por verticales. Lo que se descartó por el camino está al final.
+[Índice](README.md) · [Workflow](WORKFLOW.md) · [Arquitectura](ARCHITECTURE.md) · [Datos](DATA.md) · [API](API.md)
+
+El asistente de disputas de transacciones de LATAM Bank (workflow A, ver [Workflow](WORKFLOW.md)) corre en GCP. Este documento describe lo que está desplegado y por qué, por verticales. Lo que se descartó por el camino está al final.
 
 ## Panorama
 
@@ -70,7 +72,7 @@ Las etapas compartidas viven en `data/pipeline/` y las prueba su propia suite. E
 
 ## 2. Calidad de datos: dbt
 
-**Responsabilidad:** resolver lo que se encontró en `DATA_FINDINGS.md` (nulos, MXN ausente, tipos, valores inconsistentes) y dejar `gold` en el contrato que consume el backend. Proyecto en `data/dbt/`.
+**Responsabilidad:** resolver lo que se encontró en [Datos](DATA.md) (nulos, MXN ausente, tipos, valores inconsistentes) y dejar `gold` en el contrato que consume el backend. Proyecto en `data/dbt/`.
 
 - Modelos `stg_*` en silver para las 13 tablas y un modelo por entidad en gold (sin prefijo `clean_`: la limpieza es de silver).
 - Las pruebas son los contratos: claves, claves foráneas entre todas las tablas, valores aceptados, rangos y reglas de negocio. Los defectos conocidos del dataset corren como advertencias con su conteo, para que aparezcan en cada corrida sin bloquearla.
@@ -78,7 +80,7 @@ Las etapas compartidas viven en `data/pipeline/` y las prueba su propia suite. E
 
 ## 3. Capa de herramientas: backend
 
-**Responsabilidad:** es el "service/tool layer" que el reto pide: los permisos se hacen cumplir aquí, no en el prompt. FastAPI con asyncpg, en `backend/`. El contrato endpoint por endpoint está en `API_CONTRACT.md` y el de OpenAPI está versionado, con una prueba que falla si el código se desvía.
+**Responsabilidad:** es el "service/tool layer" que el reto pide: los permisos se hacen cumplir aquí, no en el prompt. FastAPI con asyncpg, en `backend/`. El contrato endpoint por endpoint está en [API](API.md) y el de OpenAPI está versionado, con una prueba que falla si el código se desvía.
 
 - **Sesión:** JWT firmado (HS256, emisor `backend-sandbox`) con vencimiento y rol `customer` o `admin`. Las cuentas de demostración usan contraseña con bcrypt y bloqueo por intentos. Es un sandbox y se presenta como tal.
 - **Titularidad:** toda consulta se filtra por el cliente del token. Pedir una transacción o un caso ajeno devuelve 404, no 403, para no confirmar que existe.
@@ -111,8 +113,8 @@ El reto pide ser honesto aquí. Los controles que hoy son de sandbox y lo que se
 
 ## Lo que se descartó
 
-- **Railway y Vercel.** Se empezó ahí y se migró todo a GCP; el proyecto de Railway se eliminó. El código y las especificaciones viejas están en el historial de git y en `spec/archive/`.
+- **Railway y Vercel.** Se empezó ahí y se migró todo a GCP; el proyecto de Railway se eliminó. El código y las especificaciones viejas están en el historial de git.
 - **Airbyte.** Se intentó autoalojar Airbyte OSS para la extracción. Exigía Temporal, Elasticsearch y un Postgres aparte, y su único camino oficial hoy es un clúster de Kubernetes. Se reemplazó por DuckDB, que lee S3 y escribe en una sola sentencia.
 - **PydanticAI.** El agente se implementó con LangGraph; el flujo `understand → decide → act → verify` es un grafo explícito.
-- **TypeSafe (Jev).** Se evaluó como clasificador hospedado (`ML_FINDINGS.md`, sección 8). Nunca hubo clave y se quitó el código que lo llamaba.
-- **Workflow de crédito.** Descartado a favor de disputas (`spec/archive/CREDIT_WORKFLOW_PROPOSAL.md`).
+- **TypeSafe (Jev).** Se evaluó como clasificador hospedado (la investigación de componentes). Nunca hubo clave y se quitó el código que lo llamaba.
+- **Workflow de crédito.** Descartado a favor de disputas (ver [Workflow](WORKFLOW.md)).
