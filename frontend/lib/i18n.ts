@@ -267,3 +267,33 @@ export function reasonLabel(reason: string | null | undefined, language: Languag
   };
   return labels[reason]?.[language] ?? reason.replaceAll("_", " ");
 }
+
+const CASE_STATUS: Record<string, Record<Language, string>> = {
+  auto_resolved: { es: "Resuelto", pt: "Resolvido" },
+  closed: { es: "Cerrado", pt: "Encerrado" },
+  escalated: { es: "En revisión humana", pt: "Em revisão humana" },
+  in_progress: { es: "En atención", pt: "Em atendimento" },
+  open: { es: "Abierto", pt: "Aberto" },
+};
+
+export function caseStatusLabel(status: string | null | undefined, language: Language): string {
+  return (status && CASE_STATUS[status]?.[language]) || status || "-";
+}
+
+const TX_STATUS: Record<string, Record<Language, string>> = {
+  Declined: { es: "Rechazada", pt: "Recusada" },
+  Reversed: { es: "Revertida", pt: "Estornada" },
+  Approved: { es: "Aprobada", pt: "Aprovada" },
+  Pending: { es: "Pendiente", pt: "Pendente" },
+  Posted: { es: "Aprobada", pt: "Aprovada" },
+};
+
+export function transactionStatusLabel(status: string | null | undefined, language: Language): string {
+  return (status && TX_STATUS[status]?.[language]) || status || "-";
+}
+
+export function suggestions(language: Language): string[] {
+  return language === "pt"
+    ? ["Não reconheço uma cobrança", "Minha compra foi recusada", "Como está o meu caso?"]
+    : ["No reconozco un cobro", "Mi compra fue rechazada", "¿Cómo va mi caso?"];
+}

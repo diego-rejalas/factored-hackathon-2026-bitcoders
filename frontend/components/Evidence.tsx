@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useId } from "react";
 import type { ReactNode } from "react";
-import { reasonLabel } from "@/lib/i18n";
+import { caseStatusLabel, reasonLabel, transactionStatusLabel } from "@/lib/i18n";
 import type { DisputeCase, Language } from "@/lib/types";
 import { formatAmount, formatDate } from "@/lib/types";
 
@@ -37,7 +37,7 @@ export function EvidenceList({
 }) {
   return (
     <VariantContext.Provider value={variant}>
-      <ul className={`evidence evidence-${variant}`} aria-label={label}>
+      <ul className={`ev ev-${variant}`} aria-label={label}>
         {children}
       </ul>
     </VariantContext.Provider>
@@ -49,11 +49,11 @@ export function EvidenceItem({ data, language }: { data: EvidenceData; language:
   const cardId = useId();
   const hasDetails = Boolean(data.details && data.details.length > 0);
   return (
-    <li className={`evidence-item evidence-item-${variant} kind-${data.kind}`}>
+    <li className={`ev-item ev-item-${variant} kind-${data.kind}`}>
       {/* The card is focusable so the hover card also opens with the keyboard and on touch. */}
       <button
         type="button"
-        className="evidence-trigger"
+        className="ev-trigger"
         aria-describedby={hasDetails ? cardId : undefined}
         aria-label={`${data.title}${data.subtitle ? `, ${data.subtitle}` : ""}`}
       >
@@ -61,7 +61,7 @@ export function EvidenceItem({ data, language }: { data: EvidenceData; language:
         <EvidenceInfo title={data.title} subtitle={data.subtitle} showSubtitle={variant !== "inline"} />
       </button>
       {hasDetails && (
-        <div className="evidence-hover" id={cardId} role="tooltip" lang={language}>
+        <div className="ev-hover" id={cardId} role="tooltip" lang={language}>
           <strong>{data.title}</strong>
           <dl>
             {data.details!.map(([term, value]) => (
@@ -79,7 +79,7 @@ export function EvidenceItem({ data, language }: { data: EvidenceData; language:
 
 function EvidencePreview({ kind }: { kind: EvidenceKind }) {
   return (
-    <span className="evidence-preview" aria-hidden="true">
+    <span className="ev-preview" aria-hidden="true">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         {kind === "transaction" && (
           <>
@@ -112,9 +112,9 @@ function EvidencePreview({ kind }: { kind: EvidenceKind }) {
 
 function EvidenceInfo({ title, subtitle, showSubtitle }: { title: string; subtitle?: string; showSubtitle: boolean }) {
   return (
-    <span className="evidence-info">
-      <span className="evidence-title">{title}</span>
-      {showSubtitle && subtitle && <span className="evidence-subtitle">{subtitle}</span>}
+    <span className="ev-info">
+      <span className="ev-title">{title}</span>
+      {showSubtitle && subtitle && <span className="ev-subtitle">{subtitle}</span>}
     </span>
   );
 }
@@ -156,11 +156,11 @@ export function evidenceFromCase(caseData: DisputeCase, language: Language): Evi
       id: "transaction",
       kind: "transaction",
       title: text(tx.merchant_name) || t.transaction,
-      subtitle: `${amount} · ${text(tx.transaction_status)}`,
+      subtitle: `${amount} · ${transactionStatusLabel(text(tx.transaction_status), language)}`,
       details: [
         [t.id, text(tx.transaction_id)],
         [t.amount, amount],
-        [t.status, text(tx.transaction_status)],
+        [t.status, transactionStatusLabel(text(tx.transaction_status), language)],
         [t.date, formatDate(text(tx.transaction_date), language)],
         [t.channel, text(tx.channel)],
         [t.place, place],
@@ -177,7 +177,7 @@ export function evidenceFromCase(caseData: DisputeCase, language: Language): Evi
       title: t.resolved,
       subtitle: `${t.by} ${t.agent}`,
       details: [
-        [t.decision, "auto_resolved"],
+        [t.decision, caseStatusLabel("auto_resolved", language)],
         [t.resolution, text(closing?.payload?.resolution)],
         [t.date, formatDate(closing?.ts ?? caseData.resolved_at, language)],
       ].filter(([, value]) => value && value !== "-") as Array<[string, string]>,
@@ -191,7 +191,7 @@ export function evidenceFromCase(caseData: DisputeCase, language: Language): Evi
       subtitle: handoff?.reason ? reasonLabel(String(handoff.reason), language) : undefined,
       details: [
         [t.reason, text(handoff?.reason)],
-        [t.decision, caseData.status],
+        [t.decision, caseStatusLabel(caseData.status, language)],
       ].filter(([, value]) => value) as Array<[string, string]>,
     });
   }
