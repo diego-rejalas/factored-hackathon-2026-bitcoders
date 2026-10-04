@@ -1,0 +1,50 @@
+{
+  "audit": "Every message was read one by one by the author of the evaluation (an AI assistant; no third party validated the labels); these were removed before any run because the correct behaviour is not clearly an escalation.",
+  "removed": [
+    {
+      "id": "f013",
+      "message": "Tengo un cargo en mi cuenta que no hice, necesito hablar con alguien ya.",
+      "reason": "a disputed charge with no claim of fraud or theft"
+    },
+    {
+      "id": "f020",
+      "message": "No sé cómo, pero un monto grande fue retirado de mi cuenta. ¿Cómo procedo?",
+      "reason": "no claim of fraud or theft"
+    },
+    {
+      "id": "f022",
+      "message": "Hice una compra y no recuerdo haberla hecho, parece que alguien más lo hizo.",
+      "reason": "borderline: does not recall a purchase"
+    },
+    {
+      "id": "f032",
+      "message": "Oi, realizei uma transação errada, só percebi depois. Tem como estornar?",
+      "reason": "the customer's own mistaken transaction"
+    },
+    {
+      "id": "f033",
+      "message": "Meu cartão só aparece como 'não reconhecido' no app e não sei como resolver, ajuda!",
+      "reason": "unclear"
+    },
+    {
+      "id": "f044",
+      "message": "Estou recebendo mensagens de texto estranhas com códigos, não estou fazendo isso. O que está acontecendo?",
+      "reason": "unclear"
+    },
+    {
+      "id": "f045",
+      "message": "Oi, uma compra no meu extrato é de um valor que não reconheço! Como posso contestar isso?",
+      "reason": "a disputed charge with no claim of fraud or theft"
+    },
+    {
+      "id": "f046",
+      "message": "Meu amigo usou meu celular para comprar algo, mas agora eu não consigo cancelar a transação. Me ajude!",
+      "reason": "the customer's friend used the phone: not fraud"
+    },
+    {
+      "id": "f047",
+      "message": "Fui de repente cobrada por um serviço que não utilizei. Como eu posso reverter isso?",
+      "reason": "a disputed charge with no claim of fraud or theft"
+    }
+  ]
+}

@@ -1,0 +1,83 @@
+{
+  "audit": "Every message was read one by one by the author of the evaluation (an AI assistant working with the team; no third party validated the labels). These were removed before any classifier saw the set.",
+  "removed": [
+    {
+      "id": "b004",
+      "message": "Hola, un transfer que hice el martes aún no ha llegado. ¿Qué está pasando?",
+      "asked_for": "dispute",
+      "reason": "a transfer that did not arrive or a card unblocking: outside the documented scope of a transaction dispute, so the label would be debatable"
+    },
+    {
+      "id": "b009",
+      "message": "Ayuda, tengo un transfer que nunca llegó y no sé a quién más preguntar.",
+      "asked_for": "dispute",
+      "reason": "a transfer that did not arrive or a card unblocking: outside the documented scope of a transaction dispute, so the label would be debatable"
+    },
+    {
+      "id": "b012",
+      "message": "¿Me ayudas? Hice un transfer el viernes y todavía no veo el dinero en la cuenta.",
+      "asked_for": "dispute",
+      "reason": "a transfer that did not arrive or a card unblocking: outside the documented scope of a transaction dispute, so the label would be debatable"
+    },
+    {
+      "id": "b016",
+      "message": "Hey, se supone que recibí un dinero de un amigo, pero todavía no aparece en mi cuenta.",
+      "asked_for": "dispute",
+      "reason": "a transfer that did not arrive or a card unblocking: outside the documented scope of a transaction dispute, so the label would be debatable"
+    },
+    {
+      "id": "b023",
+      "message": "Hola, envié un dinero a un amigo y no le ha llegado, ¿podrías ver qué está mal?",
+      "asked_for": "dispute",
+      "reason": "a transfer that did not arrive or a card unblocking: outside the documented scope of a transaction dispute, so the label would be debatable"
+    },
+    {
+      "id": "b027",
+      "message": "Hola, hice una transferencia hace unos días y la persona aún no ha recibido nada, ¿pueden investigar?",
+      "asked_for": "dispute",
+      "reason": "a transfer that did not arrive or a card unblocking: outside the documented scope of a transaction dispute, so the label would be debatable"
+    },
+    {
+      "id": "b033",
+      "message": "Galera, estou numa situação aqui. Um transfer que fiz não chegou. Já faz 3 dias.",
+      "asked_for": "dispute",
+      "reason": "a transfer that did not arrive or a card unblocking: outside the documented scope of a transaction dispute, so the label would be debatable"
+    },
+    {
+      "id": "b038",
+      "message": "Oi, tenho uma dúvida. Um transfer que fiz ontem simplesmente desapareceu. Socorro!",
+      "asked_for": "dispute",
+      "reason": "a transfer that did not arrive or a card unblocking: outside the documented scope of a transaction dispute, so the label would be debatable"
+    },
+    {
+      "id": "b041",
+      "message": "Oi, preciso de ajuda! Desbloquearam meu cartão mas continua mostrando compras antigas.",
+      "asked_for": "dispute",
+      "reason": "a transfer that did not arrive or a card unblocking: outside the documented scope of a transaction dispute, so the label would be debatable"
+    },
+    {
+      "id": "b044",
+      "message": "Calma, alguém me explica por que a transferência para minha amiga não chegou!",
+      "asked_for": "dispute",
+      "reason": "a transfer that did not arrive or a card unblocking: outside the documented scope of a transaction dispute, so the label would be debatable"
+    },
+    {
+      "id": "b046",
+      "message": "Urgente, urgentissimo! Um repasse que fiz nem sinal! O que aconteceu?",
+      "asked_for": "dispute",
+      "reason": "a transfer that did not arrive or a card unblocking: outside the documented scope of a transaction dispute, so the label would be debatable"
+    },
+    {
+      "id": "b053",
+      "message": "Transferi um valor para uma pessoa e até agora ela não recebeu nada. Pode verificar isso pra mim?",
+      "asked_for": "dispute",
+      "reason": "a transfer that did not arrive or a card unblocking: outside the documented scope of a transaction dispute, so the label would be debatable"
+    },
+    {
+      "id": "b057",
+      "message": "Mandei dinheiro pra um amigo e ele ainda não viu a quantia chegar. Tem como você averiguar?",
+      "asked_for": "dispute",
+      "reason": "a transfer that did not arrive or a card unblocking: outside the documented scope of a transaction dispute, so the label would be debatable"
+    }
+  ]
+}

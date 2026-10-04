@@ -1,0 +1,804 @@
+{
+  "model": "anthropic/claude-haiku-4.5",
+  "sets": {
+    "blind": {
+      "n": 228,
+      "accuracy": {
+        "baseline": {
+          "n": 228,
+          "k": 112,
+          "value": 0.4912,
+          "ci95": [
+            0.427,
+            0.5557
+          ]
+        },
+        "system": {
+          "n": 228,
+          "k": 228,
+          "value": 1.0,
+          "ci95": [
+            0.9834,
+            1.0
+          ]
+        }
+      },
+      "macro_f1": {
+        "baseline": 0.4791,
+        "system": 1.0
+      },
+      "by_language": {
+        "es": {
+          "n": 115,
+          "baseline": {
+            "n": 115,
+            "k": 62,
+            "value": 0.5391,
+            "ci95": [
+              0.4482,
+              0.6275
+            ]
+          },
+          "system": {
+            "n": 115,
+            "k": 115,
+            "value": 1.0,
+            "ci95": [
+              0.9677,
+              1.0
+            ]
+          }
+        },
+        "pt": {
+          "n": 113,
+          "baseline": {
+            "n": 113,
+            "k": 50,
+            "value": 0.4425,
+            "ci95": [
+              0.3543,
+              0.5344
+            ]
+          },
+          "system": {
+            "n": 113,
+            "k": 113,
+            "value": 1.0,
+            "ci95": [
+              0.9671,
+              1.0
+            ]
+          }
+        }
+      },
+      "by_style_or_kind": {
+        "natural": {
+          "n": 153,
+          "baseline": {
+            "n": 153,
+            "k": 80,
+            "value": 0.5229,
+            "ci95": [
+              0.4441,
+              0.6005
+            ]
+          },
+          "system": {
+            "n": 153,
+            "k": 153,
+            "value": 1.0,
+            "ci95": [
+              0.9755,
+              1.0
+            ]
+          }
+        },
+        "no_jargon": {
+          "n": 75,
+          "baseline": {
+            "n": 75,
+            "k": 32,
+            "value": 0.4267,
+            "ci95": [
+              0.321,
+              0.5395
+            ]
+          },
+          "system": {
+            "n": 75,
+            "k": 75,
+            "value": 1.0,
+            "ci95": [
+              0.9513,
+              1.0
+            ]
+          }
+        }
+      },
+      "by_label": {
+        "dispute": {
+          "n": 47,
+          "baseline": {
+            "n": 47,
+            "k": 29,
+            "value": 0.617,
+            "ci95": [
+              0.4743,
+              0.7421
+            ]
+          },
+          "system": {
+            "n": 47,
+            "k": 47,
+            "value": 1.0,
+            "ci95": [
+              0.9244,
+              1.0
+            ]
+          }
+        },
+        "case_status": {
+          "n": 60,
+          "baseline": {
+            "n": 60,
+            "k": 8,
+            "value": 0.1333,
+            "ci95": [
+              0.0691,
+              0.2417
+            ]
+          },
+          "system": {
+            "n": 60,
+            "k": 60,
+            "value": 1.0,
+            "ci95": [
+              0.9398,
+              1.0
+            ]
+          }
+        },
+        "greeting": {
+          "n": 61,
+          "baseline": {
+            "n": 61,
+            "k": 36,
+            "value": 0.5902,
+            "ci95": [
+              0.465,
+              0.7046
+            ]
+          },
+          "system": {
+            "n": 61,
+            "k": 61,
+            "value": 1.0,
+            "ci95": [
+              0.9408,
+              1.0
+            ]
+          }
+        },
+        "out_of_scope": {
+          "n": 60,
+          "baseline": {
+            "n": 60,
+            "k": 39,
+            "value": 0.65,
+            "ci95": [
+              0.5236,
+              0.7583
+            ]
+          },
+          "system": {
+            "n": 60,
+            "k": 60,
+            "value": 1.0,
+            "ci95": [
+              0.9398,
+              1.0
+            ]
+          }
+        }
+      },
+      "confusion": {
+        "baseline": {
+          "dispute": {
+            "dispute": 29,
+            "greeting": 9,
+            "out_of_scope": 9
+          },
+          "case_status": {
+            "greeting": 32,
+            "case_status": 8,
+            "dispute": 8,
+            "out_of_scope": 12
+          },
+          "greeting": {
+            "greeting": 36,
+            "out_of_scope": 25
+          },
+          "out_of_scope": {
+            "out_of_scope": 39,
+            "greeting": 21
+          }
+        },
+        "system": {
+          "dispute": {
+            "dispute": 47
+          },
+          "case_status": {
+            "case_status": 60
+          },
+          "greeting": {
+            "greeting": 61
+          },
+          "out_of_scope": {
+            "out_of_scope": 60
+          }
+        }
+      },
+      "paired": {
+        "only_baseline_right": 0,
+        "only_system_right": 116,
+        "mcnemar_exact_p": 0.0
+      },
+      "model_returned_no_valid_label": 0,
+      "model_latency_ms": {
+        "p50": 1222.15,
+        "p95": 1717.205
+      },
+      "tokens": {
+        "prompt": 67140,
+        "completion": 1272
+      },
+      "cost_usd_total": 0.0735,
+      "cost_usd_per_message": 0.000322
+    },
+    "adversarial": {
+      "n": 40,
+      "accuracy": {
+        "baseline": {
+          "n": 40,
+          "k": 35,
+          "value": 0.875,
+          "ci95": [
+            0.7389,
+            0.9454
+          ]
+        },
+        "system": {
+          "n": 40,
+          "k": 39,
+          "value": 0.975,
+          "ci95": [
+            0.8712,
+            0.9956
+          ]
+        }
+      },
+      "macro_f1": {
+        "baseline": 0.856,
+        "system": 0.9575
+      },
+      "by_language": {
+        "en": {
+          "n": 1,
+          "baseline": {
+            "n": 1,
+            "k": 0,
+            "value": 0.0,
+            "ci95": [
+              0.0,
+              0.7935
+            ]
+          },
+          "system": {
+            "n": 1,
+            "k": 1,
+            "value": 1.0,
+            "ci95": [
+              0.2065,
+              1.0
+            ]
+          }
+        },
+        "es": {
+          "n": 28,
+          "baseline": {
+            "n": 28,
+            "k": 25,
+            "value": 0.8929,
+            "ci95": [
+              0.728,
+              0.9629
+            ]
+          },
+          "system": {
+            "n": 28,
+            "k": 27,
+            "value": 0.9643,
+            "ci95": [
+              0.8229,
+              0.9937
+            ]
+          }
+        },
+        "mixed": {
+          "n": 1,
+          "baseline": {
+            "n": 1,
+            "k": 1,
+            "value": 1.0,
+            "ci95": [
+              0.2065,
+              1.0
+            ]
+          },
+          "system": {
+            "n": 1,
+            "k": 1,
+            "value": 1.0,
+            "ci95": [
+              0.2065,
+              1.0
+            ]
+          }
+        },
+        "pt": {
+          "n": 10,
+          "baseline": {
+            "n": 10,
+            "k": 9,
+            "value": 0.9,
+            "ci95": [
+              0.5958,
+              0.9821
+            ]
+          },
+          "system": {
+            "n": 10,
+            "k": 10,
+            "value": 1.0,
+            "ci95": [
+              0.7225,
+              1.0
+            ]
+          }
+        }
+      },
+      "by_style_or_kind": {
+        "fraud": {
+          "n": 2,
+          "baseline": {
+            "n": 2,
+            "k": 0,
+            "value": 0.0,
+            "ci95": [
+              0.0,
+              0.6576
+            ]
+          },
+          "system": {
+            "n": 2,
+            "k": 2,
+            "value": 1.0,
+            "ci95": [
+              0.3424,
+              1.0
+            ]
+          }
+        },
+        "injection": {
+          "n": 5,
+          "baseline": {
+            "n": 5,
+            "k": 4,
+            "value": 0.8,
+            "ci95": [
+              0.3755,
+              0.9638
+            ]
+          },
+          "system": {
+            "n": 5,
+            "k": 5,
+            "value": 1.0,
+            "ci95": [
+              0.5655,
+              1.0
+            ]
+          }
+        },
+        "minimal": {
+          "n": 3,
+          "baseline": {
+            "n": 3,
+            "k": 3,
+            "value": 1.0,
+            "ci95": [
+              0.4385,
+              1.0
+            ]
+          },
+          "system": {
+            "n": 3,
+            "k": 3,
+            "value": 1.0,
+            "ci95": [
+              0.4385,
+              1.0
+            ]
+          }
+        },
+        "mixed_intent": {
+          "n": 4,
+          "baseline": {
+            "n": 4,
+            "k": 3,
+            "value": 0.75,
+            "ci95": [
+              0.3006,
+              0.9544
+            ]
+          },
+          "system": {
+            "n": 4,
+            "k": 4,
+            "value": 1.0,
+            "ci95": [
+              0.5101,
+              1.0
+            ]
+          }
+        },
+        "mixed_language": {
+          "n": 1,
+          "baseline": {
+            "n": 1,
+            "k": 1,
+            "value": 1.0,
+            "ci95": [
+              0.2065,
+              1.0
+            ]
+          },
+          "system": {
+            "n": 1,
+            "k": 1,
+            "value": 1.0,
+            "ci95": [
+              0.2065,
+              1.0
+            ]
+          }
+        },
+        "natural": {
+          "n": 10,
+          "baseline": {
+            "n": 10,
+            "k": 10,
+            "value": 1.0,
+            "ci95": [
+              0.7225,
+              1.0
+            ]
+          },
+          "system": {
+            "n": 10,
+            "k": 10,
+            "value": 1.0,
+            "ci95": [
+              0.7225,
+              1.0
+            ]
+          }
+        },
+        "noise": {
+          "n": 2,
+          "baseline": {
+            "n": 2,
+            "k": 2,
+            "value": 1.0,
+            "ci95": [
+              0.3424,
+              1.0
+            ]
+          },
+          "system": {
+            "n": 2,
+            "k": 1,
+            "value": 0.5,
+            "ci95": [
+              0.0945,
+              0.9055
+            ]
+          }
+        },
+        "off_topic": {
+          "n": 3,
+          "baseline": {
+            "n": 3,
+            "k": 3,
+            "value": 1.0,
+            "ci95": [
+              0.4385,
+              1.0
+            ]
+          },
+          "system": {
+            "n": 3,
+            "k": 3,
+            "value": 1.0,
+            "ci95": [
+              0.4385,
+              1.0
+            ]
+          }
+        },
+        "other_language": {
+          "n": 1,
+          "baseline": {
+            "n": 1,
+            "k": 0,
+            "value": 0.0,
+            "ci95": [
+              0.0,
+              0.7935
+            ]
+          },
+          "system": {
+            "n": 1,
+            "k": 1,
+            "value": 1.0,
+            "ci95": [
+              0.2065,
+              1.0
+            ]
+          }
+        },
+        "scope_edge": {
+          "n": 2,
+          "baseline": {
+            "n": 2,
+            "k": 2,
+            "value": 1.0,
+            "ci95": [
+              0.3424,
+              1.0
+            ]
+          },
+          "system": {
+            "n": 2,
+            "k": 2,
+            "value": 1.0,
+            "ci95": [
+              0.3424,
+              1.0
+            ]
+          }
+        },
+        "shouting": {
+          "n": 1,
+          "baseline": {
+            "n": 1,
+            "k": 1,
+            "value": 1.0,
+            "ci95": [
+              0.2065,
+              1.0
+            ]
+          },
+          "system": {
+            "n": 1,
+            "k": 1,
+            "value": 1.0,
+            "ci95": [
+              0.2065,
+              1.0
+            ]
+          }
+        },
+        "slang": {
+          "n": 2,
+          "baseline": {
+            "n": 2,
+            "k": 2,
+            "value": 1.0,
+            "ci95": [
+              0.3424,
+              1.0
+            ]
+          },
+          "system": {
+            "n": 2,
+            "k": 2,
+            "value": 1.0,
+            "ci95": [
+              0.3424,
+              1.0
+            ]
+          }
+        },
+        "typos": {
+          "n": 1,
+          "baseline": {
+            "n": 1,
+            "k": 1,
+            "value": 1.0,
+            "ci95": [
+              0.2065,
+              1.0
+            ]
+          },
+          "system": {
+            "n": 1,
+            "k": 1,
+            "value": 1.0,
+            "ci95": [
+              0.2065,
+              1.0
+            ]
+          }
+        },
+        "unauthorized": {
+          "n": 3,
+          "baseline": {
+            "n": 3,
+            "k": 3,
+            "value": 1.0,
+            "ci95": [
+              0.4385,
+              1.0
+            ]
+          },
+          "system": {
+            "n": 3,
+            "k": 3,
+            "value": 1.0,
+            "ci95": [
+              0.4385,
+              1.0
+            ]
+          }
+        }
+      },
+      "by_label": {
+        "dispute": {
+          "n": 15,
+          "baseline": {
+            "n": 15,
+            "k": 12,
+            "value": 0.8,
+            "ci95": [
+              0.5481,
+              0.9295
+            ]
+          },
+          "system": {
+            "n": 15,
+            "k": 15,
+            "value": 1.0,
+            "ci95": [
+              0.7961,
+              1.0
+            ]
+          }
+        },
+        "case_status": {
+          "n": 3,
+          "baseline": {
+            "n": 3,
+            "k": 2,
+            "value": 0.6667,
+            "ci95": [
+              0.2077,
+              0.9385
+            ]
+          },
+          "system": {
+            "n": 3,
+            "k": 3,
+            "value": 1.0,
+            "ci95": [
+              0.4385,
+              1.0
+            ]
+          }
+        },
+        "greeting": {
+          "n": 3,
+          "baseline": {
+            "n": 3,
+            "k": 3,
+            "value": 1.0,
+            "ci95": [
+              0.4385,
+              1.0
+            ]
+          },
+          "system": {
+            "n": 3,
+            "k": 3,
+            "value": 1.0,
+            "ci95": [
+              0.4385,
+              1.0
+            ]
+          }
+        },
+        "out_of_scope": {
+          "n": 19,
+          "baseline": {
+            "n": 19,
+            "k": 18,
+            "value": 0.9474,
+            "ci95": [
+              0.7536,
+              0.9906
+            ]
+          },
+          "system": {
+            "n": 19,
+            "k": 18,
+            "value": 0.9474,
+            "ci95": [
+              0.7536,
+              0.9906
+            ]
+          }
+        }
+      },
+      "confusion": {
+        "baseline": {
+          "dispute": {
+            "dispute": 12,
+            "out_of_scope": 3
+          },
+          "case_status": {
+            "dispute": 1,
+            "case_status": 2
+          },
+          "greeting": {
+            "greeting": 3
+          },
+          "out_of_scope": {
+            "out_of_scope": 18,
+            "case_status": 1
+          }
+        },
+        "system": {
+          "dispute": {
+            "dispute": 15
+          },
+          "case_status": {
+            "case_status": 3
+          },
+          "greeting": {
+            "greeting": 3
+          },
+          "out_of_scope": {
+            "out_of_scope": 18,
+            "greeting": 1
+          }
+        }
+      },
+      "paired": {
+        "only_baseline_right": 1,
+        "only_system_right": 5,
+        "mcnemar_exact_p": 0.21875
+      },
+      "model_returned_no_valid_label": 0,
+      "model_latency_ms": {
+        "p50": 1236.35,
+        "p95": 1498.75
+      },
+      "tokens": {
+        "prompt": 11483,
+        "completion": 238
+      },
+      "cost_usd_total": 0.012673,
+      "cost_usd_per_message": 0.000317
+    }
+  }
+}

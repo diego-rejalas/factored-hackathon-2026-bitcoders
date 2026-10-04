@@ -267,6 +267,26 @@ def build_graph(tools, tracer, llm=None):
             facts.append(replies.decline_reason(candidate, "es").strip())
         return {"case": fresh, "facts": facts, "outcome": "resolved", "route": "respond"}
 
+    def handoff_facts(state: AgentState) -> list[str]:
+        facts = list(state.get("facts") or [])
+        candidate = state.get("candidate")
+        if candidate:
+            known = guardrail.amount_known(candidate)
+            facts.append(
+                f"transacción {candidate.get('transaction_id')} ({candidate.get('merchant_name') or 'sin comercio'}), "
+                f"estado {candidate.get('transaction_status')}, del cliente (titularidad verificada por el backend)"
+            )
+            facts.append(f"monto efectivo {guardrail.effective_usd(candidate):.2f} USD" if known else "monto efectivo en USD desconocido")
+            if candidate.get("transaction_date"):
+                facts.append(f"fecha {str(candidate['transaction_date'])[:10]}")
+            if candidate.get("response_code"):
+                facts.append(f"código de respuesta {candidate['response_code']}")
+        else:
+            total = len(state.get("candidates") or [])
+            facts.append("no se identificó una única transacción" + (f" ({total} candidatas en la ventana de búsqueda)" if total else ""))
+        facts.append(f"regla aplicada: {guardrail.GUARDRAIL_LIMITATIONS.get(state.get('reason') or '', 'revisión humana requerida')}")
+        return facts
+
     def build_handoff(state: AgentState) -> dict:
         candidate = state.get("candidate")
         case = state.get("case")
@@ -280,7 +300,11 @@ def build_graph(tools, tracer, llm=None):
             },
             "customer_language": state.get("language", "es"),
             "conversation_id": state.get("conversation_id"),
-            "verified_facts": state.get("facts") or [],
+            # What the person taking the case can rely on without asking again: what the backend confirmed about the
+            # transaction and which rule sent it to them. (Before the held-out evaluation this was empty on every
+            # escalation, because facts were only collected on the path that resolves.)
+            "verified_facts": handoff_facts(state),
+            "customer_message": " ".join((state.get("message") or "").split())[:300],
             "actions_taken": ([{"action": "create_dispute", "case_id": case_id}] if case_id else []),
             "evidence": (
                 [{"candidate_transaction": candidate}] if candidate else []

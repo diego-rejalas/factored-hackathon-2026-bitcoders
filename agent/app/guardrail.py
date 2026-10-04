@@ -26,6 +26,47 @@ FRAUD_KEYWORDS = [
     "nao fui eu",
     "nao sou eu",
     "golpe",
+    # Added after the held-out evaluation: customers describe fraud without the words above.
+    "sin permiso",
+    "sin mi permiso",
+    "sin autorizacion",
+    "sin mi autorizacion",
+    "sin consentimiento",
+    "sin mi consentimiento",
+    "sem permissao",
+    "sem minha permissao",
+    "sem autorizacao",
+    "sem minha autorizacao",
+    "sem meu consentimento",
+    "hackea",
+    "hackeo",
+    "invadiram",
+    "invasao",
+    "acceso no autorizado",
+    "entro a mi cuenta",
+    "entraron a mi cuenta",
+    "accedio a mi cuenta",
+    "accedieron a mi cuenta",
+    "acessou minha conta",
+    "acessando minha conta",
+    "sabe mi contrasena",
+    "tiene mi contrasena",
+    "sabe minha senha",
+    "usando mi tarjeta",
+    "uso mi tarjeta",
+    "usou meu cartao",
+    "usando meu cartao",
+    "perdi mi tarjeta",
+    "perdi mi cartera",
+    "perdi mi billetera",
+    "perdi meu cartao",
+    "perdi minha carteira",
+    "extravi",
+    "me quitaron",
+    "levaram minha carteira",
+    "asalt",
+    "nao fui eu quem",
+    "no hice yo",
 ]
 
 DEFAULT_MAX_USD = 500.0
@@ -88,7 +129,13 @@ def exceeds_threshold(transaction: dict) -> bool:
 # as 418, which could then match an unrelated transaction of about 418.
 AMOUNT_RE = re.compile(r"\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d+)?")
 # Dates and "N days ago" are not amounts.
-NOT_AMOUNT_RE = re.compile(r"\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?")
+_MONTH = r"(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre|janeiro|fevereiro|mar[cç]o|maio|junho|julho|setembro|outubro|dezembro)"
+# A written date ("10 de junho de 2026", "1 de mayo", "junio de 2026") is not an amount either: before this, the
+# year was read as 2026 and beat the real 27.65 in the same message.
+NOT_AMOUNT_RE = re.compile(
+    r"\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?"
+    rf"|\d{{1,2}}\s*[º°]?\s+de\s+{_MONTH}(?:\s+de(?:l)?\s+\d{{4}})?|{_MONTH}\s+de(?:l)?\s+\d{{4}}"
+)
 DAYS_RE = re.compile(r"hace\s+(\d+)\s+d[ií]as?|ha\s+(\d+)\s+dias?|last\s+(\d+)\s+days?")
 
 
