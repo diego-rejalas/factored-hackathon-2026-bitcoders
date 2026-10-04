@@ -26,7 +26,7 @@ La base se crea la primera vez desde `backend/dev/gold_fixture.sql`. `docker com
 cd frontend
 cp -n .env.example .env.local        # NEXT_PUBLIC_AGENT_URL=http://localhost:8001
 PNPM_MANAGE_PACKAGE_MANAGER_VERSIONS=false pnpm install
-PNPM_MANAGE_PACKAGE_MANAGER_VERSIONS=false pnpm dev
+PNPM_MANAGE_PACKAGE_MANAGER_VERSIONS=false pnpm dev      # o: pnpm build && pnpm start
 ```
 
 Abre http://localhost:3000. Debe ser el puerto **3000**: el agente solo acepta ese origen (`CORS_ALLOWED_ORIGINS`). Si Next elige otro porque está ocupado, el navegador bloqueará las llamadas.
@@ -46,7 +46,7 @@ Abre http://localhost:3000. Debe ser el puerto **3000**: el agente solo acepta e
 | Bruno | `CLI-0064RNKCVQCN` | `0863503738` | `No reconozco el cobro de 256.10` | **Se resuelve** (rechazado; dice el motivo, código 51) |
 | Carla | `CLI-00232W4ZDQPP` | `57064351` | `No reconozco el cobro de 389.87` | **Se resuelve** (revertido) |
 
-Cualquiera: `Me robaron la tarjeta, no fui yo` → escala por sospecha de fraude. **Mis casos** muestra los casos del cliente.
+Cualquiera: `Me robaron la tarjeta, no fui yo` → escala por sospecha de fraude. **Mis casos** muestra los casos del cliente, y la barra lateral (**Recientes**) las conversaciones anteriores, que se guardan en la base local y se reabren.
 
 **Especialista (`/admin`).** Usuario `ops-demo`, clave `Admin-Local-2026` (solo local). La bandeja muestra lo escalado; se puede **tomar** un caso y **cerrarlo** (nota y resolución obligatorias), y ver las **métricas**. Haz primero una escalada como cliente para que haya algo en la bandeja.
 

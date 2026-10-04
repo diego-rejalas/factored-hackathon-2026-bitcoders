@@ -13,7 +13,7 @@
 | La política (umbral, fraude, ambigüedad) es código determinista, no un prompt | `agent/app/guardrail.py` |
 | El borrador de un modelo pasa por comprobaciones antes de enviarse | `agent/app/grounding.py` |
 | `is_fraud` y `fraud_score` no existen en `gold` ni en ningún esquema de respuesta (lo comprueba una prueba del contrato) | backend |
-| Contraseñas con bcrypt, bloqueo tras intentos fallidos y misma respuesta para usuario inexistente y clave errónea | backend |
+| Contraseñas con argon2id (cuentas de demostración) y bcrypt (consola del especialista), bloqueo tras intentos fallidos y misma respuesta para usuario inexistente y clave errónea | backend |
 | El backend es privado: solo cuentas de servicio con `run.invoker` lo llaman, con su ID token | infraestructura |
 | Cada servicio tiene su cuenta de servicio, sus propios secretos y su propio rol en la base | infraestructura |
 | Cloud Armor con reglas WAF y límite de tasa delante del frontend y del agente | infraestructura |

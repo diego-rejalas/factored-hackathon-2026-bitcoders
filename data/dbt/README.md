@@ -1,6 +1,6 @@
 # data/dbt/ — dbt (bronze. → silver. → gold.)
 
-Vertical 2 de `../../docs/ARCHITECTURE.md`. Transforma `bronze.*` (que carga el DAG con DuckDB, ver `../dags/`) en `silver.*` y `gold.*` (lo que lee `../../backend/`), dentro de la base `data` de Postgres.
+Vertical 2 de `../../docs/ARCHITECTURE.md`. Transforma `bronze.*` (que carga el DAG `latam_bank_gcp` con DuckDB, ver `../../infra/airflow-gcp/`) en `silver.*` y `gold.*` (lo que lee `../../backend/`), dentro de la base `data` de Postgres.
 
 Contenido de datos, no de infraestructura: cómo se despliega dbt vive en `../../infra/airflow-gcp/` (VM) y `../../infra/gcp/etl/` (Cloud Run Job).
 
@@ -30,7 +30,7 @@ export $(cat .env | xargs)
 dbt build   # modelos + tests, cada modelo se prueba antes de construir lo que depende de él
 ```
 
-Necesita que `bronze.*` ya esté cargado (lo hace el DAG `latam_bank_pipeline`).
+Con el destino `postgres` necesita que `bronze.*` ya esté cargado en esa base. En GCP no hace falta: el DAG construye todo en memoria con `dbt-duckdb` y solo publica `gold.*`.
 
 ## Great Expectations
 

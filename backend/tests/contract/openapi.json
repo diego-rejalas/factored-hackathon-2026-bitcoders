@@ -1167,7 +1167,7 @@
     },
     "/admin/metrics": {
       "get": {
-        "description": "Outcome metrics from app.disputes, with denominators always reported.\nDefinitions follow spec/CRITERIA.md; rates are null (\"not defined\") without data.",
+        "description": "Outcome metrics from app.disputes, with denominators always reported.\nDefinitions follow docs/CRITERIA.md; rates are null (\"not defined\") without data.",
         "operationId": "admin_metrics_admin_metrics_get",
         "parameters": [
           {
@@ -1779,7 +1779,7 @@
     },
     "/meta/data": {
       "get": {
-        "description": "Data freshness for the admin console: gold.* counts plus the last pipeline run\n(ops.etl_runs). The snapshot is static by design — see spec/ARCHITECTURE.md.",
+        "description": "Data freshness for the admin console: gold.* counts plus the last pipeline run\n(ops.etl_runs). The snapshot is static by design — see docs/ARCHITECTURE.md.",
         "operationId": "meta_data_meta_data_get",
         "responses": {
           "200": {

@@ -2,7 +2,7 @@ version: 2
 sources:
 - name: bronze
   description: Raw copy of the organizer-provided synthetic LATAM Bank dataset, loaded from S3 by the Airflow DAG
-    `latam_bank_pipeline` with DuckDB. Every column is text as it arrives, plus `_source_key` (S3 object of origin)
+    `latam_bank_gcp` with DuckDB. Every column is text as it arrives, plus `_source_key` (S3 object of origin)
     and `_ingested_at` (load time); tables are reloaded in full on every run and read only by dbt. The data is a
     static snapshot, so there is no freshness to monitor (see the project overview).
   schema: bronze
@@ -243,5 +243,5 @@ sources:
       description: '{{ doc("bronze_ingested_at") }}'
   meta:
     layer: bronze
-    loaded_by: Airflow DAG latam_bank_pipeline (DuckDB)
+    loaded_by: Airflow DAG latam_bank_gcp (DuckDB)
     refresh: on-demand full reload

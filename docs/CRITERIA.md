@@ -2,7 +2,23 @@
 
 [Índice](README.md) · [Workflow](WORKFLOW.md) · [Arquitectura](ARCHITECTURE.md) · [Datos](DATA.md) · [API](API.md)
 
-Extraído de `doc/Factored AI & Data Hackathon 2026.md` y `doc/Datathon_2026_Kickoff.pdf`. Esto es la checklist de lo que el sistema DEBE cumplir, no ideas — para no perderla de vista mientras se investiga y se construye.
+Lo que el reto exige, extraído de `doc/Factored AI & Data Hackathon 2026.md` y `doc/Datathon_2026_Kickoff.pdf`, y en qué estado está cada ítem. Cada ítem cumplido dice dónde está la evidencia. **Se actualizó el 2026-10-04 contra el código y los documentos de esta carpeta.**
+
+## De un vistazo
+
+| Sección | Cumplidos | Abiertos |
+|---|---:|---:|
+| Alcance obligatorio | 6 | 0 |
+| Sistema funcional (requisitos mínimos) | 5 | 0 |
+| Automatización controlada | 4 | 0 |
+| Datos y ML | 1 | 3 |
+| Medición de calidad y manejo de fallas | 0 | 3 |
+| Ruta a producción (honestidad, no implementación real) | 3 | 1 |
+| Fronteras de datos y ejecución | 6 | 1 |
+| Entrega (submission, antes de Oct 5) | 0 | 6 |
+| **Total** | **25** | **14** |
+
+Lo abierto, en orden de impacto: la **evaluación** (componente aprendido contra una línea base, casos retenidos y el reporte de resultados), el **documento de ruta a producción**, el **despliegue** de esta versión y la **entrega** (repositorio público, diapositivas, video y envío).
 
 ## Alcance obligatorio
 
@@ -25,13 +41,13 @@ Extraído de `doc/Factored AI & Data Hackathon 2026.md` y `doc/Datathon_2026_Kic
 
 - [x] Define explícitamente qué puede responder solo, qué requiere confirmación, y cuándo debe abstenerse o transferir a humano. (`docs/WORKFLOW.md`, tabla de autonomía.)
 - [x] Permisos y políticas se hacen cumplir **fuera** del texto generado por el modelo (código determinista, no el prompt). (Guardrail determinista en `agent/app/guardrail.py`; titularidad en el backend; el modelo no decide la política.)
-- [x] El handoff a humano entrega: la solicitud, hechos verificados, acciones tomadas, evidencia de soporte, preguntas sin resolver — no un dump crudo de transcript. (Estructura en `Handoff`; la consola `/admin` la muestra.)
+- [x] El handoff a humano entrega: la solicitud, hechos verificados, acciones tomadas, evidencia de soporte, preguntas sin resolver — no un dump crudo de transcript. (Estructura en [Workflow](WORKFLOW.md); la consola `/admin` la muestra.)
 - [x] **No aplica:** el workflow es disputas y no toca crédito. Si el workflow tocara crédito: separar conversación / riesgo predictivo / política de elegibilidad. El modelo conversacional NUNCA inventa reglas de elegibilidad ni aprueba crédito por su cuenta.
 
 ## Datos y ML
 
-- [x] Pipeline de datos repetible: contratos de esquema, checks de calidad, linaje, política de actualización/frescura. (DAG de Airflow con DuckDB: reconstruye bronze desde S3 en cada corrida; 121 tests dbt, y si un test de silver falla `gold` no se reconstruye; linaje por fila en `_source_key`; política de frescura explícita en `ARCHITECTURE.md` (snapshot estático, recarga a demanda). Falta endurecer los contratos de `gold` a tipados con `contract: enforced`)
-- [ ] Al menos un componente aprendido evaluado contra un baseline apropiado.
+- [x] Pipeline de datos repetible: contratos de esquema, checks de calidad, linaje, política de actualización/frescura. (DAG de Airflow con DuckDB: reconstruye bronze desde S3 en cada corrida; los tests de dbt (claves, relaciones, valores aceptados, rangos y reglas de negocio) y, si falla uno de silver, no se publica `gold`; linaje por fila en `_source_key`; política de frescura explícita en [Arquitectura](ARCHITECTURE.md) (snapshot estático, recarga a demanda). Falta endurecer los contratos de `gold` a tipados con `contract: enforced`)
+- [ ] Al menos un componente aprendido evaluado contra un baseline apropiado. **Pendiente.** El candidato es el clasificador de intención por modelo contra las palabras clave en es y pt (el texto histórico es plantilla, ver [Datos](DATA.md); se evalúa sobre texto vivo generado por el equipo y rotulado como tal). Hoy `classify_intent` no tiene prueba directa.
 - [ ] Labels o juicios de relevancia válidos, sin leakage (ej. no usar `is_fraud` como input si se supone que el sistema lo "detecta").
 - [ ] Justificar representaciones, métricas, umbrales, y splits de evaluación.
 
@@ -55,8 +71,8 @@ Extraído de `doc/Factored AI & Data Hackathon 2026.md` y `doc/Datathon_2026_Kic
 
 - [x] Tracing / trazabilidad de cada decisión (evidencia de auditoría = fuentes + reglas de política + registros de ejecución; el chain-of-thought oculto del modelo NO cuenta como evidencia). (`agent.trace_log` por paso, sin texto de usuario ni razonamiento del modelo; el caso guarda sus eventos y evidencia.)
 - [x] Reintentos acotados (bounded retries) y fallback seguro. (Pipeline: las cargas reintentan 2 veces y `gold` conserva el último dato válido. Agente: 3 intentos con tiempo de conexión de 2 s y peor caso de 6.9 s; si el backend no responde, `outcome: unavailable` con un mensaje seguro y sin cambios.)
-- [x] Setup reproducible. (Todo como código: Terraform en `infra/gcp/`, Dockerfiles, CI que construye las imágenes y corre las pruebas; los pasos están en `infra/gcp/README.md`. El agente se suma a la misma IaC)
-- [ ] **Falta el documento.** Explicar límites de capacidad, monitoreo, controles de acceso, retención de datos, y qué falta para producción real. (Capacidad y camino de escalamiento: `ARCHITECTURE.md`; monitoreo del pipeline: Airflow + `ops.etl_runs`; control de acceso: rol de solo lectura del backend. Faltan la política de retención y el resto cuando exista el agente)
+- [x] Setup reproducible. (Todo como código: Terraform en `infra/gcp/`, Dockerfiles, CI que construye las imágenes y corre las pruebas; los pasos están en `infra/gcp/README.md`.)
+- [ ] **Falta el documento.** Explicar límites de capacidad, monitoreo, controles de acceso, retención de datos, y qué falta para producción real. Hay piezas sueltas: capacidad y camino de escalamiento en [Arquitectura](ARCHITECTURE.md), monitoreo del pipeline en Airflow y `ops.etl_runs`, controles de acceso en [Seguridad](SECURITY.md). Falta reunirlas en un solo documento con la política de retención (`agent.conversation_messages` es la tabla a la que aplica), el monitoreo de los servicios y la separación de la base de datos de la aplicación y la del pipeline)
 
 ## Libertad de arquitectura (lo que NO es obligatorio)
 
@@ -72,9 +88,9 @@ Extraído de `doc/Factored AI & Data Hackathon 2026.md` y `doc/Datathon_2026_Kic
 
 - [x] Solo el dataset organizador-aprobado (LATAM Bank sintético) y recursos externos permitidos.
 - [x] Identificar qué inputs son reales, de-identificados, sintéticos, o generados por el equipo. (`DATA.md`, "Procedencia de los datos": todo es sintético del organizador; lo que genere el equipo se rotulará aparte)
-- [x] No incluir registros privados reales, credenciales, o datos restringidos en la entrega pública ni en requests a modelos externos. (PDF con AWS keys sacado del repo y de la historia de git — ver commits de purge)
-- [x] Servicios sandbox / tools de banca simulados son aceptables si sus contratos y límites están documentados. (`docs/API.md` y `docs/API.md`; el contrato OpenAPI está versionado y una prueba falla si se desvía.)
-- [ ] Autenticación con sesión de prueba confiable o servicio de identidad — un ID/número de cliente solo NO prueba identidad. **Parcial:** hay sesión JWT firmada con vencimiento y rol, y cuentas de demostración con contraseña en bcrypt y bloqueo por intentos; pero el ingreso del chat sigue aceptando cliente + número de documento. Es un sandbox, hay que decirlo así en la entrega y no presentarlo como identidad real.
+- [x] No incluir registros privados reales, credenciales, o datos restringidos en la entrega pública ni en requests a modelos externos. (Un PDF con llaves de AWS se sacó del repo y de la historia. El 2026-10-04 se buscaron en los 130 commits los patrones de credenciales (AWS, OpenRouter, GitHub, llaves privadas) y los valores reales del `.env` local: 0 coincidencias. Los `.env` no están versionados. Conviene repetir la búsqueda justo antes de hacer público el repositorio.)
+- [x] Servicios sandbox / tools de banca simulados son aceptables si sus contratos y límites están documentados. (`docs/API.md`; el contrato OpenAPI está versionado y una prueba falla si se desvía.)
+- [ ] Autenticación con sesión de prueba confiable o servicio de identidad — un ID/número de cliente solo NO prueba identidad. **Parcial:** hay sesión JWT firmada con vencimiento y rol, y cuentas de demostración con contraseña (argon2id) y bloqueo por intentos; pero el ingreso del chat sigue aceptando cliente + número de documento. Es un sandbox, hay que decirlo así en la entrega y no presentarlo como identidad real.
 - [x] Permisos de acceso a registros de cada cliente enforced en la capa de servicio/tool, no en el prompt. (Cada consulta del backend se filtra por el cliente del token; hay pruebas de acceso cruzado en backend y agente.)
 - [x] No se requiere ni autoriza mover dinero real ni decisiones de crédito en vivo. (Nada en el sistema mueve dinero; el backend es de solo lectura)
 
@@ -96,10 +112,6 @@ Extraído de `doc/Factored AI & Data Hackathon 2026.md` y `doc/Datathon_2026_Kic
 - **Data Analytics:** calidad de datos, insights relevantes que la solución entrega.
 - **Machine Learning:** selección de modelo, optimización, implementación, tracking.
 
-## Hallazgos de investigación que afectan estos criterios (ver también el plan principal)
+## Datos que condicionan la evaluación
 
-- `call_transcripts.customer_text` y `detected_intents` son mayormente plantillas repetidas (32 variantes únicas en 151 filas de un día, 141/151 con la misma intención "consulta_general"). El texto libre histórico NO tiene la riqueza necesaria para entrenar/evaluar un clasificador de intención serio directamente sobre esos campos.
-- Implicación para "Machine Learning" y "Data Analytics" (criterios de evaluación arriba): si se documenta esta limitación de calidad de datos como hallazgo (Data Analytics) y se compensa con un enfoque híbrido, cuenta a favor — el reto pide explícitamente reportar limitaciones de datos.
-- Enfoque a considerar: usar un LLM/clasificador para el **input conversacional en vivo del usuario** (que sí será texto real generado en la demo, no el histórico plantilla), y usar los campos estructurados (`category`, `subcategory`, `transaction_type`) del histórico como baseline determinista y como fuente de datos de entrenamiento/evaluación para el componente aprendido — no el texto plantilla de `call_transcripts`/`complaints.description`.
-- `transactions`: 0 duplicados exactos de `transaction_id` y 0 grupos cliente+monto+comercio repetidos en una muestra de 5,342 filas de un día — la regla de "duplicado auto-resolvible" para Opción A necesita más muestreo (varios días) antes de asumir que existe suficiente volumen de este caso.
-- `is_fraud`/`fraud_score` en `transactions` es ground truth sintético — usarlo como señal de entrada al agente sería leakage; solo debe usarse para evaluación.
+El texto histórico es plantilla y `is_fraud` es verdad de referencia, no entrada: por eso la evaluación del componente aprendido usa texto vivo rotulado por el equipo y los campos estructurados como línea base. El detalle está en [Datos](DATA.md).
