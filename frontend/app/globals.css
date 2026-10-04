@@ -1611,3 +1611,151 @@ table.metrics-table tbody th {
     grid-template-columns: 1fr;
   }
 }
+
+/* --- evidence items (the Attachments pattern: grid | inline | list, preview + info + hover card) ------- */
+
+.evidence {
+  list-style: none;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  display: flex;
+  gap: 0.45rem;
+}
+
+.evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+}
+
+.evidence-inline {
+  flex-wrap: wrap;
+}
+
+.evidence-list {
+  flex-direction: column;
+}
+
+.evidence-item {
+  position: relative;
+  min-width: 0;
+}
+
+.evidence-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.6rem;
+  cursor: pointer;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+.evidence-item-inline .evidence-trigger {
+  width: auto;
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem 0.25rem 0.4rem;
+}
+
+.evidence-trigger:hover,
+.evidence-trigger:focus-visible {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.evidence-preview {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--primary);
+}
+
+.kind-decision .evidence-preview {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.kind-handoff .evidence-preview {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.evidence-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 0.82rem;
+  line-height: 1.3;
+}
+
+.evidence-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.evidence-subtitle {
+  color: var(--muted);
+  font-size: 0.76rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.evidence-hover {
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  top: calc(100% + 0.35rem);
+  width: min(18rem, 80vw);
+  padding: 0.7rem 0.8rem;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+  font-size: 0.8rem;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-2px);
+  transition: opacity 160ms ease, transform 160ms ease, visibility 160ms;
+}
+
+.evidence-item:hover .evidence-hover,
+.evidence-item:focus-within .evidence-hover {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+}
+
+.evidence-hover dl {
+  margin: 0.4rem 0 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.evidence-hover dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.evidence-hover dt {
+  color: var(--muted);
+}
+
+.evidence-hover dd {
+  margin: 0;
+  text-align: right;
+  word-break: break-word;
+}
