@@ -8,7 +8,6 @@ Prototipo de sistema de atención al cliente bancario AI-first para el Factored 
 2. `spec/CRITERIA.md` — checklist de todo lo que hay que cumplir para la entrega.
 3. `spec/DATA_FINDINGS.md` — hallazgos reales del dataset (S3), antes de asumir nada de los datos.
 4. `spec/ARCHITECTURE.md` — arquitectura por verticales, diagramas, decisiones tomadas y por qué.
-5. `spec/ENTERPRISE_ARCHITECTURE_EVALUATION.md` — evaluación de viabilidad para empresas reales, modelado de costos TCO y roadmap de madurez.
 
 ## Estructura del repo
 

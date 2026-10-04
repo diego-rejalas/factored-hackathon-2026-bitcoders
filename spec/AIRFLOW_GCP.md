@@ -1,6 +1,6 @@
 # Airflow en GCP: comparativa de opciones y decisión
 
-Estado: decisión tomada para el diseño del módulo `modules/airflow_vm`; el módulo está en construcción. Las cifras de precio son de fuentes públicas citadas abajo o estimaciones propias marcadas como tales; deben verificarse en la calculadora de Google Cloud antes de comprometer presupuesto.
+Estado: decisión tomada e implementada en `modules/airflow_vm`; desplegada en prod. Las cifras de precio son de fuentes públicas citadas abajo o estimaciones propias marcadas como tales; deben verificarse en la calculadora de Google Cloud antes de comprometer presupuesto.
 
 ## 1. Las opciones
 

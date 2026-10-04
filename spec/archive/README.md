@@ -9,3 +9,5 @@ Documentos superados que se conservan porque registran decisiones y su contexto.
 | `PR1_REVIEW.md` | Revisión del PR #1; sus hallazgos ya se corrigieron. |
 | `PIPELINE_REVIEW.md` | Revisión del pipeline original en Railway, previa a la migración. |
 | `CLAUDE_CODE_VERIFICATION_AND_FIX_PLAN.md` | Plan de verificación ya ejecutado. |
+| `ENTERPRISE_ARCHITECTURE_EVALUATION.md` | Informe de viabilidad y costos con veredictos que no se midieron; no respalda la entrega. |
+| `2026-09-28-static-audit.md` | Auditoría estática del 28 de septiembre, anterior a las correcciones. |

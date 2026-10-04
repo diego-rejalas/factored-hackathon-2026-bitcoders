@@ -1,246 +1,118 @@
-# Arquitectura por verticales
+# Arquitectura
 
-Versión reducida del pizarrón original (ver `arquitecture-bp.png`), recortada para 8 días con 3 personas y deploy en Railway (datos, backend, agente) + Vercel (frontend). Se organiza en 5 verticales para trabajar en paralelo. Workflow-agnóstica — no depende de cuál de las 4 opciones (A/B/C/D) gane el voto del equipo.
+El asistente de disputas de transacciones de LATAM Bank (workflow A, `WORKFLOW_DECISION.md`) corre en GCP. Este documento describe lo que está desplegado y por qué, por verticales. Lo que se descartó por el camino está al final.
 
-Se cae del pizarrón original: k8s/VMs, Kubeflow, Kafka, Temporal, streaming, blob storage. Razón: el reto no exige streaming ni multi-agente ni entrenar modelo propio, y cada una de esas piezas es días de setup que no hay.
-
-## Big picture
+## Panorama
 
 ```mermaid
 flowchart LR
-    subgraph client["Cliente"]
-        FE[Frontend chat<br/>Next.js en Vercel]
+    USER((Cliente)) --> FE[frontend<br/>Next.js, Cloud Run]
+    SPEC((Especialista)) --> FE
+    FE -->|HTTPS, por el borde| AGENT
+
+    subgraph app["Aplicación (Cloud Run)"]
+        AGENT[agent<br/>FastAPI + LangGraph<br/>guardrail determinista]
+        BANK[backend<br/>FastAPI, privado<br/>capa de herramientas]
+        AGENT -->|HTTP con ID token| BANK
     end
 
-    subgraph agentv["agent/ — Agente + Guardrail"]
-        AGENT[Agente<br/>FastAPI + PydanticAI]
-        GUARD[Guardrail determinista<br/>tabla intent→permiso]
-        AGENT --> GUARD
-        GUARD --> AGENT
-    end
-
-    subgraph bankv["backend/ — Microservicio de banca"]
-        BANK[Banking Mock API<br/>FastAPI, rol de solo lectura]
-    end
-
-    subgraph etlv["Pipeline de datos (Railway)"]
-        AF[Airflow<br/>DAG latam_bank_pipeline]
-        DBT[dbt<br/>servicio HTTP]
-    end
-
-    subgraph data["Postgres: database data"]
-        BRONZE[(bronze.*)]
-        SILVER[(silver.*)]
+    subgraph db["Cloud SQL PostgreSQL 18 (IP privada)"]
         GOLD[(gold.*)]
+        APP[(app.disputes, app.credentials)]
         OPS[(ops.etl_runs)]
-        TRACE[(trace_log)]
+        AG[(agent.trace_log<br/>agent.conversation_messages)]
     end
 
-    S3[(S3<br/>LATAM Bank dataset)] -->|DuckDB read_csv| AF
-    AF -->|DuckDB escribe| BRONZE
-    AF -->|POST /run| DBT
-    BRONZE --> DBT
-    DBT --> SILVER
-    SILVER --> GOLD
-    AF --> OPS
+    BANK -->|rol backend_app| GOLD
+    BANK --> APP
+    BANK --> OPS
+    AGENT -->|rol agent_app| AG
+    AGENT -.->|opcional| OR[OpenRouter]
 
-    FE -->|chat| AGENT
-    AGENT -->|logs cada paso| TRACE
-    AGENT -->|HTTP tools| BANK
-    BANK -->|SQL solo lectura| GOLD
-    AGENT -.->|LLM calls| OR[OpenRouter]
-    GUARD -.->|clasificación/verificación semántica| TS[TypeSafe]
+    S3[(S3 del organizador)] -->|DuckDB| VM[VM de Compute Engine<br/>Airflow 3 + dbt-duckdb]
+    VM -->|Parquet bronze y silver| LAKE[(Cloud Storage<br/>lakehouse)]
+    VM -->|publica gold| GOLD
+    VM --> OPS
 ```
 
-## Diagrama de despliegue
+## Despliegue
 
-```mermaid
-flowchart TB
-    subgraph vercel["Vercel"]
-        FE[frontend/<br/>Next.js]
-    end
+Todo es Terraform en `infra/gcp/`, en tres ambientes (`dev`, `qa`, `prod`) con módulos compartidos. El detalle por módulo y por ambiente está en `infra/gcp/README.md`; aquí solo lo que importa para entender el diseño.
 
-    subgraph railway["Railway project: factored-hackathon (.railway/railway.ts)"]
-        AGENT[agent/<br/>servicio, pendiente]
-        BANK[backend/<br/>servicio]
-        AIRFLOW[infra/airflow/<br/>servicio]
-        AFDB[(airflow-db<br/>Postgres de metadatos)]
-        DBT[infra/dbt/<br/>servicio]
-        PG[(Postgres<br/>bronze, silver, gold, ops)]
-    end
+- **Borde.** Un Application Load Balancer con Cloud Armor (reglas WAF antes del límite de tasa) está delante del frontend y del agente. El backend no es público: el agente lo llama con un ID token de su cuenta de servicio.
+- **Red.** Una VPC por ambiente. Cloud Run sale por Direct VPC egress y Cloud SQL solo tiene IP privada (Private Service Access). La VM de Airflow no tiene IP externa y se entra por IAP.
+- **Identidades.** Cada servicio tiene su cuenta de servicio y lee solo los secretos que necesita. En la base cada servicio tiene su propio rol (`backend_app`, `agent_app`). El despliegue desde GitHub Actions usa federación de identidad, sin llaves guardadas.
+- **Imágenes y secretos.** Artifact Registry y Secret Manager. Las llaves del S3 del organizador y la de OpenRouter se cargan a mano; un `apply` no las pisa.
+- **Costo.** La VM de Airflow se apaga sola de noche y se enciende a demanda (`scripts/airflow_vm.sh`). Cloud SQL se puede pausar (`scripts/manage_db.sh`).
 
-    subgraph external["Externo"]
-        OR[OpenRouter API]
-        TS[TypeSafe API<br/>decisión/verificación]
-        S3[S3 bucket<br/>read-only]
-    end
+## 1. Extracción y carga
 
-    USER((Usuario)) --> FE
-    FE -->|HTTPS| AGENT
-    AGENT -->|HTTP interno| BANK
-    AGENT -->|HTTPS| OR
-    AGENT -->|HTTPS| TS
-    BANK -->|SQL solo lectura| PG
-    AGENT -->|trace_log| PG
+**Responsabilidad:** llevar los CSV del organizador (S3) hasta tablas consultables, sin perder lo crudo, y dejar `gold` listo para el backend.
 
-    AIRFLOW --> AFDB
-    AIRFLOW -.->|DuckDB: S3 a bronze| PG
-    AIRFLOW -.->|lee| S3
-    AIRFLOW -->|HTTP interno| DBT
-    DBT -->|SQL| PG
-```
+Airflow 3 corre en la VM (`infra/airflow-gcp/`, DAG `latam_bank_gcp`). Cada corrida:
 
-Hoy el frontend llama al backend directamente (el backend tiene URL pública temporal); cuando exista el agente, el frontend hablará con el agente y el backend volverá a ser privado.
+1. DuckDB lee los CSV de S3 en paralelo, sin bajar archivos, y escribe **bronze** como Parquet en el lakehouse, con el objeto de origen (`_source_key`) y la hora de carga como linaje.
+2. dbt (`dbt-duckdb`, en la misma VM) construye **silver** y **gold** en RAM: tipos reales, vacío a nulo, países conformados, y las pruebas de datos.
+3. Si las pruebas de silver pasan, publica solo `gold.*` en Cloud SQL y deja una fila en `ops.etl_runs`. Si fallan, `gold` conserva el último dato válido.
+4. Publica la documentación de dbt con el grafo de linaje (`scripts/lineage.sh`).
 
-## 1. Extracción y carga: DuckDB, orquestado por Airflow
+Las etapas compartidas viven en `data/pipeline/` y las prueba su propia suite. El mismo código corre como Cloud Run Job (`infra/gcp/etl/`), el camino de respaldo si la VM no está.
 
-**Responsabilidad:** llevar los CSV del organizador (S3) hasta tablas `bronze` en Postgres, sin transformarlos, y disparar la transformación.
+**Por qué DuckDB y Parquet:** el dato son 23,5 millones de filas en 13 tablas. Procesarlas en memoria y guardar lo intermedio como Parquet en Cloud Storage cuesta centavos al mes, mantiene Cloud SQL libre de tablas crudas y deja bronze y silver auditables. Con el job en Cloud Run se midieron ~2,5 minutos para leer y procesar todo.
 
-El DAG `latam_bank_pipeline` (`data/dags/`) corre en Airflow:
+**Política de actualización y frescura.**
+- El dato es un snapshot cerrado: las tablas transaccionales van del 2023-06-17 al 2026-06-18 y no llega nada nuevo. Se verificó que no hay llegadas tardías ni cambios de esquema entre fechas.
+- La actualización es una recarga completa a demanda. Cada corrida reconstruye bronze desde S3.
+- "Fresco" significa la hora de la última corrida exitosa: queda en `ops.etl_runs`, la devuelve `GET /meta/data` y la muestra la consola. No hay umbral de antigüedad que vigilar porque la fuente no cambia.
+- Si el dato empezara a llegar: programar el DAG, pasar `transactions` y `digital_events` a incrementales por partición, y declarar `loaded_at_field: _ingested_at` en las fuentes para que `dbt source freshness` avise cuando una tabla se atrase.
 
-```
-bootstrap -> extract_load x 13 (en paralelo, máx. 6) -> dbt_build -> record_run
-```
+**Escalabilidad.** La carga completa cabe en una VM de 4 CPU y 16 GB. Si el volumen creciera 10 veces, los puntos de extensión son filtrar por partición (`year/month/day` ya es una columna) y los modelos incrementales. Está documentado como camino, no implementado.
 
-- **Extraer y cargar en una sola sentencia.** Por cada tabla, DuckDB lee los CSV de S3 (`read_csv` con `hive_partitioning` y `filename`) y los escribe en Postgres con su extensión `postgres`: `CREATE TABLE pg.bronze.<tabla> AS SELECT ... FROM read_csv('s3://...')`. No hay un cargador aparte. Cada tabla queda como copia fiel (todo texto) más dos columnas de linaje: `_source_key` (el objeto de S3 del que salió la fila) y `_ingested_at`.
-- **Recarga completa en cada corrida** (`DROP ... CASCADE` y `CREATE`): el dataset es un snapshot estático, así que recargar todo es lo más simple y siempre correcto. Nada lee bronze salvo dbt, y el backend solo lee gold, por eso la ventana de recarga es inocua.
-- **Reintentos:** las cargas reintentan 2 veces; `dbt_build` no reintenta (un test fallido no debe repetirse durante minutos).
-- **`record_run`** deja una fila por corrida exitosa en `ops.etl_runs` (cuándo corrió y qué movió).
+## 2. Calidad de datos: dbt
 
-**Por qué DuckDB para extraer y cargar:** lee S3 en paralelo sin bajar los archivos y escribe a Postgres en la misma sentencia. Reemplazó a un cargador en Python de ~290 líneas (polars, boto3, una tabla de control de archivos). **Medido en Railway (2026-09-30), corrida completa del DAG:** 16 de 16 tareas correctas en ~21 minutos de pared. DuckDB lee las 13 tablas (23,5 millones de filas) desde S3 en ~2,5 minutos cuando solo las lee; el costo está en **escribirlas a Postgres**, y es muy desigual: `digital_events` (15,6M filas) tarda ~15,7 min y es la tarea que fija el total, `transactions` (4,4M) ~7 min, `campaign_sends` ~4 min, el resto menos de 4 min. `dbt build` (133 tests pasados, 6 avisos de defectos conocidos, 0 errores) tarda ~3,3 min. Se validó que el resultado es idéntico a las implementaciones anteriores: conteos exactos en las 13 tablas y 11 sumas de `gold` iguales al centavo.
+**Responsabilidad:** resolver lo que se encontró en `DATA_FINDINGS.md` (nulos, MXN ausente, tipos, valores inconsistentes) y dejar `gold` en el contrato que consume el backend. Proyecto en `data/dbt/`.
 
-**El precio de esta arquitectura:** mantener bronze, silver y gold en Postgres con Airflow cuesta ~21 min, contra ~4,7 min del job único con DuckDB que se probó antes. `digital_events` y `campaign_sends` no los usa ningún workflow candidato y suman ~20 de esos minutos: omitirlas de la carga (o cargarlas aparte) llevaría la corrida a ~8 min, con `transactions` como tarea más larga.
+- Modelos `stg_*` en silver para las 13 tablas y un modelo por entidad en gold (sin prefijo `clean_`: la limpieza es de silver).
+- Las pruebas son los contratos: claves, claves foráneas entre todas las tablas, valores aceptados, rangos y reglas de negocio. Los defectos conocidos del dataset corren como advertencias con su conteo, para que aparezcan en cada corrida sin bloquearla.
+- `dbt build` prueba cada modelo antes de construir los que dependen de él.
 
-### Por qué Airflow
-Orquesta con reintentos por tarea, paralelismo acotado, UI de corridas y programación, y es lo que muestra el orden de las dependencias (dbt solo corre cuando las 13 cargas terminaron). Con datos estáticos no es imprescindible para que el pipeline funcione; es una decisión de observabilidad y de demostrar orquestación. Su metadata vive en un Postgres propio (`airflow-db`), separado del de datos.
+## 3. Capa de herramientas: backend
 
-### Política de actualización y frescura
+**Responsabilidad:** es el "service/tool layer" que el reto pide: los permisos se hacen cumplir aquí, no en el prompt. FastAPI con asyncpg, en `backend/`. El contrato endpoint por endpoint está en `API_CONTRACT.md` y el de OpenAPI está versionado, con una prueba que falla si el código se desvía.
 
-- **El dato es un snapshot estático y cerrado:** los hechos van del 2023-06-17 al 2026-06-18 en las tablas transaccionales, y no llega nada nuevo. Se verificó que no hay llegadas tardías (`process_date - transaction_date` vale 0 o -1 día, nunca positivo) ni cambios de esquema entre fechas (un solo encabezado por tabla en las ~7.700 particiones).
-- **Actualización:** recarga completa a demanda (se dispara el DAG a mano), sin programación. Cada corrida reconstruye bronze desde S3, y `gold` solo se reconstruye si los tests de `silver` pasan.
-- **Qué significa "fresco" acá:** el momento de la última corrida exitosa, que queda registrado en `ops.etl_runs`, se expone en `GET /meta/data` del backend y se muestra en el frontend. No hay un umbral de antigüedad que vigilar porque la fuente no cambia.
-- **Si el dato empezara a llegar:** programar el DAG (diario), pasar `transactions` y `digital_events` a modelos incrementales por partición, y declarar `loaded_at_field: _ingested_at` en las fuentes de dbt para que `dbt source freshness` alerte cuando una tabla se atrase.
+- **Sesión:** JWT firmado (HS256, emisor `backend-sandbox`) con vencimiento y rol `customer` o `admin`. Las cuentas de demostración usan contraseña con bcrypt y bloqueo por intentos. Es un sandbox y se presenta como tal.
+- **Titularidad:** toda consulta se filtra por el cliente del token. Pedir una transacción o un caso ajeno devuelve 404, no 403, para no confirmar que existe.
+- **Casos:** un caso por cliente y transacción (índice único parcial), con estados `open`, `auto_resolved`, `escalated`, `in_progress` y `closed`, sus eventos y la evidencia. Las migraciones están versionadas (`app/migrations/`, con candado de asesoría).
+- **Solo lectura sobre los datos:** el rol `backend_app` lee `gold` y escribe únicamente en `app.*`.
+- **Consola del especialista:** `/admin/*` para tomar, cerrar y resolver casos con transiciones auditadas, más métricas.
 
-### Escalabilidad (cómo se responde sin tener que correrlo)
-La carga completa cabe holgada en un nodo. Si el volumen creciera 10x, los puntos de extensión son filtrar por partición (`year/month/day` ya viene como columna) y pasar `transactions` y `digital_events` a modelos incrementales en dbt; más allá, mover la metadata de Airflow a varios workers (CeleryExecutor). Documentado como camino de escalamiento, no implementado.
+## 4. Agente y guardrail
 
-### Intento fallido con Airbyte (documentado para la entrega — "report limitations")
+**Responsabilidad:** hablar con el cliente, decidir, llamar a las herramientas, verificar y escalar. FastAPI con LangGraph, en `agent/`.
 
-Se intentó self-hostear Airbyte OSS 2.1.1 en Railway (server + worker, sin webapp — la imagen `airbyte/webapp:2.1.1` no existe, Airbyte discontinuó esa línea de versiones para self-host en contenedores sueltos). Requirió Temporal + Elasticsearch + Postgres dedicado además del server/worker, y depuración empírica de variables no documentadas (`WORKSPACE_ROOT`, `DATABASE_USER`, `AIRBYTE_URL`) vía logs de crash. Se abandonó al confirmar que Airbyte eliminó el soporte de Docker Compose y el único camino oficial (`abctl`) requiere un clúster Kubernetes completo. Fork con los fixes queda documentado en `diego-rejalas/railwayapp-airbyte-private` (privado) por si se retoma.
+El flujo es `understand → decide → act → verify → respond | escalate`:
 
-## 2. Transformación y calidad de datos: dbt sobre Postgres
+- **`decide` es código, no un modelo.** El guardrail (`app/guardrail.py`) aplica la política: resuelve solo un cobro `Declined` o `Reversed` por debajo de USD 500; pide aclaración si hay cero o varias candidatas; escala un cobro aprobado, un posible fraude, un monto sobre el umbral, un monto desconocido o algo fuera de alcance.
+- **`verify` relee el caso del backend** antes de decir que se registró. Si no coincide, escala. El agente no reporta lo que no comprobó.
+- **El modelo es opcional y no decide.** Con una clave de OpenRouter clasifica la intención de mensajes que las palabras clave no cubren y redacta la respuesta de un caso ya resuelto. Ese borrador pasa por `app/grounding.py` (sin plazos ni promesas, sin números que no estén en los hechos, sin identificadores) y, si falla, sale la plantilla. Sin clave, el agente es determinista.
+- **Fallas:** tres intentos acotados por herramienta (peor caso ~6,9 s). Si el backend no responde, el resultado es `unavailable` con un mensaje seguro y sin cambios.
+- **Trazabilidad:** `agent.trace_log` guarda cada paso con su resultado y latencia, sin texto del cliente ni razonamiento del modelo. Es la evidencia de auditoría.
+- **Historial:** `agent.conversation_messages` guarda lo que el cliente escribió y lo que se le respondió, para que pueda volver a sus conversaciones. Es la tabla a la que aplicaría la política de retención, y solo la lee su dueño.
+- **Handoff:** entrega la solicitud, los hechos verificados, las acciones tomadas, la evidencia y las preguntas abiertas, no un volcado de la conversación.
+- **Datos de fraude:** `is_fraud` y `fraud_score` son verdad de referencia sintética y no son entrada del agente.
 
-**Responsabilidad:** resolver lo que encontramos en `DATA_FINDINGS.md` (nulos, moneda MXN faltante, tipos, valores inconsistentes) y dejar `gold` listo para consumo. Proyecto en `data/dbt/`, corre como servicio propio (`infra/dbt/`) al que el DAG llama por HTTP.
+## 5. Frontend
 
-- **dbt en su propio servicio:** las dependencias de dbt (`isodate`, `pathspec`) chocan con las versiones exactas que fija el archivo de constraints de Airflow, y además queda visible como pieza propia. El runner ejecuta `dbt build` con un candado para no correr dos a la vez.
-- Modelos `stg_*` en `silver` para las 13 tablas (tipos reales, vacío a nulo, 'Mexico' y 'México' conformados) y modelos por entidad en `gold` (sin prefijo `clean_`: medallion reserva la limpieza para silver). Hoy gold es pass-through de silver; los joins de negocio llegan con el workflow elegido. Bronze, silver y gold quedan visibles en una sola base.
-- 121 tests como contratos de datos: claves, claves foráneas entre todas las tablas, valores aceptados, rangos y reglas de negocio. Los defectos conocidos del dataset corren como advertencias (`severity: warn`) con su conteo, para que aparezcan en cada corrida sin bloquearla.
-- `dbt build` prueba cada modelo antes de construir los que dependen de él: si un test de silver falla, gold no se reconstruye y conserva el último dato válido.
+Next.js 16 en Cloud Run (`output: standalone`, `AGENT_URL` en tiempo de ejecución). Chat del cliente con historial, tarjetas de evidencia y tema claro u oscuro, en español y portugués; consola del especialista en `/admin`; documentación de datos en `/data-docs`.
 
-## 3. Microservicio de banca (mock banking API) — `backend/`
+## Qué falta para producción real
 
-**Responsabilidad:** es el "service/tool layer" que el reto exige explícitamente para enforced de permisos — "Enforce access to each customer's records and action permissions in the service or tool layer", no en el prompt del LLM.
+El reto pide ser honesto aquí. Los controles que hoy son de sandbox y lo que se necesitaría están en `CRITERIA.md` (sección "Ruta a producción"); la falta principal es el documento que cubra capacidad, monitoreo, accesos, retención y separación de la base de datos de la aplicación y la del pipeline.
 
-- Un servicio FastAPI separado (Railway), con endpoints REST deterministas: `GET /customers/{id}`, `GET /customers/{id}/transactions`, `POST /cases`, `POST /cards/{id}/block`, etc. — según el workflow que gane el voto.
-- Cada endpoint valida sesión/permiso **antes** de tocar `data.gold.*` — esto es lo único que de verdad se beneficia de ser un servicio aparte (aísla el enforcement de permisos del código del agente, para que quede claro en la demo/video que la política no vive en el prompt).
-- Lee de `data.gold.*` en Postgres **con un rol de solo lectura** (`backend_ro`: `SELECT` sobre `gold` y `ops`, sin acceso a `silver` ni `bronze`), y cada sesión arranca con `default_transaction_read_only=on` y un `statement_timeout`: aunque un endpoint tuviera un bug, no puede escribir.
-- **Estado hoy (cascarón):** `GET /health`, `GET /health/db` y `GET /meta/data` (conteos de `gold` y última corrida del pipeline, solo agregados). Ningún endpoint devuelve datos de clientes hasta tener la autenticación por sesión de prueba. Tiene URL pública temporal porque el frontend lo consulta directo; con el agente volverá a ser privado.
-- **Por qué sí separarlo (y no meterlo en el mismo proceso del agente):** es la pieza que el reto pide mostrar explícitamente como "fuera del modelo" — tenerla como servicio HTTP propio, con sus propios logs, hace la separación obvia y fácil de explicar en el video pitch. Es el único microservicio real que vale la pena con el tiempo que hay; todo lo demás se queda en un solo proceso.
-- **Contrato:** OpenAPI expuesto por FastAPI (gratis con FastAPI), documentado como "mock banking tool" con sus límites (qué simula, qué no) — cumple el requisito de documentar contratos de sandbox services.
+## Lo que se descartó
 
-## 4. Agente + guardrail — `agent/`
-
-**Responsabilidad:** el orquestador conversacional. Habla con el usuario, decide, llama al microservicio de banca, verifica, escala.
-
-- Servicio FastAPI separado (Railway) con **PydanticAI** adentro. El flujo tiene pasos explícitos: `understand → decide → act → verify → escalate` (con `pydantic-graph` si hace falta un grafo de estados explícito).
-- **Por qué PydanticAI:** las herramientas y las salidas del agente son modelos Pydantic, así que un dato mal formado se rechaza en vez de llegar al usuario; las dependencias (cliente del backend, sesión autenticada) se inyectan en cada herramienta, lo que hace el guardrail testeable sin un LLM; y trae un adaptador para el protocolo del SDK de chat de Vercel (`VercelAIAdapter`, compatible con `useChat`), que conecta directo con un frontend Next.js en Vercel.
-- Las "tools" del agente son clientes HTTP delgados al microservicio de banca (vertical 3), tipadas con los modelos de `backend/app/schemas.py` — el LLM nunca toca Postgres directo.
-- **Guardrail determinista:** vive en el nodo `decide`, ANTES de `act`. Es una tabla/config (no un prompt) que dice qué tool puede invocarse según intent detectado + estado de sesión/autenticación. Si falta permiso o falta info → fuerza camino de aclaración o abstención, no deja que el LLM decida solo.
-- **TypeSafe (`docs.typesafe.ai`)** como capa de decisión/verificación semántica dentro del guardrail — no reemplaza a PydanticAI (que sigue orquestando el flujo), se usa puntual en dos puntos: (1) clasificación de intent en `decide` sin gastar una llamada a LLM completo por cada mensaje, (2) verificación del output del agente en `verify` antes de dejarlo ejecutar la tool. Control de flujo sigue en código (PydanticAI + guardrail), TypeSafe solo aporta el chequeo semántico barato — cumple el mismo principio de "policy fuera del prompt" que ya pedía el reto.
-- Verificación: después de que `act` llama al microservicio de banca, `verify` vuelve a consultar el estado (no confía en que el LLM "diga" que funcionó).
-- LLM vía OpenRouter (flexibilidad de modelo/fallback).
-- Logging estructurado de cada paso a `trace_log` en Postgres — evidencia de auditoría para el handoff a humano y para el reporte de evaluación.
-- **Contrato:** expone el endpoint de chat al frontend (stream compatible con el SDK de Vercel); nunca expone acceso directo a la base de datos ni al microservicio de banca desde el cliente.
-
-## Mapa de servicios a desplegar (mínimo viable)
-
-| Servicio | Carpeta | Plataforma | Contiene | Grupo Railway |
-|---|---|---|---|---|
-| postgres | — (addon) | Railway | base `data`: `bronze.*`, `silver.*`, `gold.*`, `ops.etl_runs`, `trace_log` | Data Pipeline |
-| airflow | `infra/airflow/` (+ `data/dags/`) | Railway | Vertical 1: orquesta; DuckDB extrae y carga a bronze | Data Pipeline |
-| airflow-db | — (addon) | Railway | metadata de Airflow | Data Pipeline |
-| dbt | `infra/dbt/` (+ `data/dbt/`) | Railway | Vertical 2: bronze → silver → gold, 121 tests | Data Pipeline |
-| backend | `backend/` | Railway | Vertical 3 (tool layer, rol de solo lectura) | App |
-| agent | `agent/` | Railway | Vertical 4 (PydanticAI + guardrail), pendiente | App |
-| frontend | `frontend/` | Vercel | UI de chat (Next.js) | — |
-
-Total: 4 servicios de aplicación en Railway (`airflow`, `dbt`, `backend`, `agent`) + 2 Postgres (datos y metadata de Airflow) + 1 frontend en Vercel. Nada de k8s, Kafka, Temporal, Kubeflow.
-
-Externo (SaaS, sin servicio propio en Railway): OpenRouter (LLM calls) y **TypeSafe** (decisión/verificación semántica, consumido por `agent/` vía API — ver Vertical 4).
-
-## Configuración de Railway como código
-
-Lección de la sesión: configurar servicios a mano (dashboard o vía MCP) es rápido pero no queda versionado ni es reproducible por otra persona del equipo — así se armó y desarmó Airbyte sin dejar rastro reproducible.
-
-Railway deprecó `railway.toml`/`railway.json` (Config as Code, corte duro 2026-12-01) a favor de **Infrastructure as Code**: un único archivo `.railway/railway.ts` en la raíz del repo, gestionado con la Railway CLI (`railway config plan` / `railway config apply`). Convención del proyecto:
-
-- **Un solo archivo `.railway/railway.ts`** declara todos los servicios, volúmenes y la base de datos del proyecto — build, healthcheck, restart policy, montajes de volumen, y qué variables se preservan (`preserve()` para secretos que ya viven en Railway, nunca en el repo).
-- Cada servicio (`infra/airflow/`, `infra/dbt/`, `backend/`, `agent/`) sigue teniendo su propio `Dockerfile` y `.env.example` en su carpeta (documentación de qué variables necesita), pero el *despliegue* (qué servicio existe, con qué config) se define en el `.railway/railway.ts` único, no en un `railway.toml` por carpeta.
-- Flujo: `railway config plan` (previsualiza, nunca escribe nada) → revisar → `railway config apply` (confirma antes de aplicar; cambios destructivos requieren confirmación explícita).
-- El repo `railwayapp-airbyte-private` con los fixes de Airbyte queda como referencia local (por si se retoma), no como servicio activo en Railway ni en el IaC.
-
-## Despliegue primario en GCP (migración completa)
-
-Decisión registrada (2026-10-01): el stack se **migra por completo a GCP** en
-la rama `feat/app-layer` — GCP pasa a ser el despliegue primario y Railway
-queda como legacy en transición (`.railway/railway.ts` ya no se aplica; su
-teardown es posterior a la verificación del stack nuevo). Mismo código, mismos
-Dockerfiles; el frontend también vive en GCP (Next.js standalone con
-`AGENT_URL` como env de runtime).
-
-```mermaid
-flowchart TB
-    subgraph gcp["GCP (infra/gcp/, Terraform; CI: gcp-deploy.yml)"]
-        FE[Cloud Run: frontend<br/>Next.js standalone]
-        CR[Cloud Run: backend<br/>FastAPI tool layer]
-        CRA[Cloud Run: agent<br/>LangGraph + Guardrail]
-        JOB[Cloud Run Job: etl<br/>DuckDB + dbt-duckdb en RAM]
-        SQL[(Cloud SQL Postgres<br/>data: gold.*, app.*, ops.etl_runs<br/>Hibernación Just-in-Time)]
-        GCS[(Cloud Storage: lakehouse<br/>gs://factored-lakehouse-*<br/>Bronze & Silver Parquet ZSTD)]
-        SM[Secret Manager<br/>JWT, OpenRouter, S3]
-        FE -->|AGENT_URL runtime| CRA
-        CRA -->|HTTP tools| CR
-        CR -->|SQL| SQL
-        CRA -->|trace_log| SQL
-        JOB -->|S3 a RAM bronze/silver| JOB
-        JOB -->|Preserva Parquet ZSTD| GCS
-        JOB -->|Publica solo gold.*| SQL
-        SM -.-> CR
-        SM -.-> CRA
-        SM -.-> JOB
-    end
-    USER((Usuario)) --> FE
-```
-
-Mapa y decisiones:
-
-| Pieza Railway/Vercel (legacy) | En GCP (primario) | Código |
-|---|---|---|
-| Postgres `data` | Cloud SQL PostgreSQL 16 (solo `gold.*`, `app.*`, `ops.*`) | Modo Just-in-Time (`./manage_db.sh pause/resume`) |
-| Data Lakehouse | Cloud Storage `gs://factored-lakehouse-*` (Bronze & Silver Parquet) | Preservación analítica particionada a ~$0.03 USD/mes |
-| backend / agent | Cloud Run (mismos Dockerfiles) | sin cambios |
-| frontend (Vercel) | Cloud Run `frontend` (Next.js standalone); `AGENT_URL` en runtime | `output: standalone` + URL por prop |
-| pipeline (`etl/` job) | Cloud Run Job `etl`: DuckDB + `dbt-duckdb` en RAM | Procesa 23.5M filas en ~2.5 min; exporta Parquet al Lakehouse y publica solo `gold.*` |
-| `railway.ts` | Terraform (`infra/gcp/`) + `gcp-deploy.yml` | Equivalente declarativo con variable `db_activation_policy` y bucket `lakehouse` |
-| secretos (`preserve()`) | Secret Manager (JWT autogenerado; S3/LLM se copian) | Gestionado con Google Secret Manager |
-
-Decisiones clave de optimización:
-1. **DuckDB y dbt en RAM efímera:** Se eliminó el microservicio independiente `dbt` de Cloud Run. El Job `etl` procesa los 23.5M de filas crudas y ejecuta los 121 tests en la RAM del contenedor (`/tmp/latam.duckdb`) en ~2.5 minutos, publicando únicamente las tablas `gold.*` finales a Cloud SQL.
-2. **Preservación de Bronze y Silver en Data Lakehouse (GCS + Parquet):** Se preservan las capas Bronze y Silver en formato columnar Parquet comprimido (ZSTD) en Cloud Storage (`gs://${google_storage_bucket.lakehouse.name}/bronze/` y `/silver/`), con particionado tipo Hive por fecha para tablas de transacciones y eventos. Esto garantiza 100% de trazabilidad analítica sin sobrecargar el almacenamiento de Cloud SQL.
-3. **Hibernación Just-in-Time:** Cloud SQL soporta apagado de cómputo e IP mediante política `NEVER` cuando no está en uso, reduciendo el costo de operación en reposo a ~$0.05 USD/día y reactivándose en 60 segundos para demostraciones.
-4. **Evaluación de Viabilidad Empresarial y Modelado de Costos TCO:** Para un análisis exhaustivo sobre cómo esta arquitectura se comporta en una FinTech vs. un Banco Corporativo Tier-1, cuellos de botella de cómputo, límites de DuckDB y proyección granular de costos por fases, consultar [`spec/ENTERPRISE_ARCHITECTURE_EVALUATION.md`](ENTERPRISE_ARCHITECTURE_EVALUATION.md).
-
-
-## Próximo paso
-
-Falta definir, una vez el equipo vote el workflow: los endpoints exactos del microservicio de banca, los intents/tools del agente, y las reglas concretas del guardrail (qué se auto-resuelve, qué escala) — eso ya es específico de la Opción A/B/C/D elegida, no de esta arquitectura base.
+- **Railway y Vercel.** Se empezó ahí y se migró todo a GCP; el proyecto de Railway se eliminó. El código y las especificaciones viejas están en el historial de git y en `spec/archive/`.
+- **Airbyte.** Se intentó autoalojar Airbyte OSS para la extracción. Exigía Temporal, Elasticsearch y un Postgres aparte, y su único camino oficial hoy es un clúster de Kubernetes. Se reemplazó por DuckDB, que lee S3 y escribe en una sola sentencia.
+- **PydanticAI.** El agente se implementó con LangGraph; el flujo `understand → decide → act → verify` es un grafo explícito.
+- **TypeSafe (Jev).** Se evaluó como clasificador hospedado (`ML_FINDINGS.md`, sección 8). Nunca hubo clave y se quitó el código que lo llamaba.
+- **Workflow de crédito.** Descartado a favor de disputas (`spec/archive/CREDIT_WORKFLOW_PROPOSAL.md`).

@@ -110,7 +110,7 @@ Opción A.
    (es/pt), montos ≥ umbral, ambigüedad no resuelta e intents fuera de
    alcance. Sin mover dinero.
 4. **Implementado:** `backend/` (tool layer con enforcement de titularidad),
-   `agent/` (LangGraph + guardrail + TypeSafe opcional, ver los README de cada
+   `agent/` (LangGraph + guardrail + modelo opcional, ver los README de cada
    carpeta). Los joins de negocio (disputas + transacciones) viven en las
    queries del backend sobre las 5 gold actuales; los modelos gold siguen
    pass-through — modelarlos queda para el branch de evaluación.
