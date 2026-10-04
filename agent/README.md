@@ -14,7 +14,7 @@ Vertical 4 de `../spec/ARCHITECTURE.md`. Servicio FastAPI con LangGraph adentro.
 | `GET /admin/conversations/{id}/trace` | Timeline estructurado de la conversación asociada a un caso. Nunca contiene texto del cliente. |
 | `GET /me/disputes`, `GET /disputes/{id}` | Proxies para que el cliente consulte sus casos y eventos. |
 | `GET /meta/demo-scenarios`, `GET /meta/data` | Proxy público del selector demo y proxy admin de frescura, respectivamente. |
-| `GET /health` | Liveness para Railway. |
+| `GET /health` | Liveness para Cloud Run. |
 
 ## Grafo (`app/graph.py`)
 
@@ -47,4 +47,4 @@ python -m pytest                # desde agent/, con pytest + httpx instalados
 
 Cubre los 3 caminos obligatorios (normal auto-resuelto con verificación, ambiguo con aclaración, handoff estructurado) más: fraude keyword → escalate, monto ≥ umbral → escalate (borde inclusive), 2 rondas sin resolución → escalate, portugués → respuesta en pt, token inválido/expirado → 401, proxies admin y agregación de percentiles, y que el agente jamás toca datos de otro cliente.
 
-Despliegue: `../.railway/railway.ts` (servicio `agent`, `BANK_URL` = dominio privado del backend, healthcheck `/health`).
+Despliegue: Cloud Run, ver `../infra/gcp/envs/`.

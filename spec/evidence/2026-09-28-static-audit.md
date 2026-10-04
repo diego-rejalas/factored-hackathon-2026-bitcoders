@@ -34,7 +34,7 @@ compilan.
 4. Los documentos del organizador PDF estan versionados. Uno contiene secretos
    de acceso del organizador; su eliminacion/reemplazo y rotacion externa son
    un bloqueo de publicacion, descrito sin reproducir el secreto en
-   `spec/CLAUDE_CODE_VERIFICATION_AND_FIX_PLAN.md`.
+   `spec/archive/CLAUDE_CODE_VERIFICATION_AND_FIX_PLAN.md`.
 5. Backend, agente y frontend solo contienen contratos README. Las secciones de
    arquitectura que los describen como servicios ejecutables deben marcarse
    como planificadas hasta su implementacion y prueba.
@@ -53,4 +53,4 @@ muestra aleatoria.
 Quedan fuera de esta auditoria estatica: compilacion dbt con el adaptador,
 pruebas de loader contra Postgres, reejecucion idempotente, pruebas de
 autorizacion, builds Docker y cualquier accion Railway. La secuencia y criterios
-para esas verificaciones estan en `../CLAUDE_CODE_VERIFICATION_AND_FIX_PLAN.md`.
+para esas verificaciones estan en `../archive/CLAUDE_CODE_VERIFICATION_AND_FIX_PLAN.md`.

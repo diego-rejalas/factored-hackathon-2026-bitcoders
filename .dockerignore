@@ -12,6 +12,5 @@
 doc
 spec
 ml
-agent/poc
 infra/gcp/envs
 infra/gcp/modules

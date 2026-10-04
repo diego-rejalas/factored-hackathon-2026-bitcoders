@@ -2,9 +2,9 @@
 
 Vertical 2 de `../../spec/ARCHITECTURE.md`. Transforma `bronze.*` (que carga el DAG con DuckDB, ver `../dags/`) en `silver.*` y `gold.*` (lo que lee `../../backend/`), dentro de la base `data` de Postgres.
 
-Contenido de datos, no de infraestructura: cómo se despliega dbt vive aparte en `../../infra/dbt/`.
+Contenido de datos, no de infraestructura: cómo se despliega dbt vive en `../../infra/airflow-gcp/` (VM) y `../../infra/gcp/etl/` (Cloud Run Job).
 
-**dbt corre como su propio servicio Railway** (`../../infra/dbt/`, ver su README), no horneado en la imagen de Airflow: los paquetes transitivos de `dbt` (`isodate`, `pathspec`) chocan con las versiones exactas que fija el archivo de constraints de Airflow, y además queda visible como pieza propia en el canvas de Railway. El DAG le pega por HTTP (`POST /run`) después de cargar las 13 tablas de `bronze.*`.
+**dbt corre dentro de la imagen de Airflow en GCP** (`dbt-duckdb`), no como servicio aparte. El proyecto también compila contra Postgres (`--target postgres`) para pruebas locales.
 
 ## Estructura
 
@@ -25,7 +25,7 @@ Contenido de datos, no de infraestructura: cómo se despliega dbt vive aparte en
 
 ```bash
 cd data/dbt
-cp .env.example .env   # completar con las credenciales del Postgres de Railway
+cp .env.example .env   # completar con las credenciales del Postgres local
 export $(cat .env | xargs)
 dbt build   # modelos + tests, cada modelo se prueba antes de construir lo que depende de él
 ```

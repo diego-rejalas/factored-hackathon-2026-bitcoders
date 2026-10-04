@@ -171,7 +171,7 @@ Las secciones anteriores salen de muestras de 1 a 5 días. Todo lo de abajo se m
 - **Reglas de negocio rotas:** 7.510 productos de crédito con saldo mayor al límite; 772 quejas Resolved o Closed sin `resolution_date`; 52.454 interacciones a la vez escaladas y resueltas.
 - Las fechas de hechos cubren 2023-06-17 a 2026-06-18 en transacciones, quejas e interacciones: es un snapshot estático.
 
-Detalle de la revisión y plan de corrección en `PIPELINE_REVIEW.md`.
+Detalle de la revisión y plan de corrección en `archive/PIPELINE_REVIEW.md`.
 
 ### Calidad de tipos en la carga
 

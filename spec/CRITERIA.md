@@ -53,7 +53,7 @@ Extraído de `doc/Factored AI & Data Hackathon 2026.md` y `doc/Datathon_2026_Kic
 
 - [ ] Tracing / trazabilidad de cada decisión (evidencia de auditoría = fuentes + reglas de política + registros de ejecución; el chain-of-thought oculto del modelo NO cuenta como evidencia).
 - [ ] Reintentos acotados (bounded retries) y fallback seguro. (Pipeline: hecho, las cargas reintentan 2 veces y `gold` conserva el último dato válido si algo falla. Falta lo mismo en el agente: reintentos acotados de herramientas y abstención/escalamiento ante un fallo)
-- [x] Setup reproducible. (Todo como código: `.railway/railway.ts`, Dockerfiles, CI que construye las imágenes y corre `dbt parse`; pasos en `spec/AIRFLOW_DEPLOYMENT.md`. El agente se suma a la misma IaC)
+- [x] Setup reproducible. (Todo como código: Terraform en `infra/gcp/`, Dockerfiles, CI que construye las imágenes y corre las pruebas; pasos en `spec/archive/AIRFLOW_DEPLOYMENT.md`. El agente se suma a la misma IaC)
 - [ ] Explicar límites de capacidad, monitoreo, controles de acceso, retención de datos, y qué falta para producción real. (Capacidad y camino de escalamiento: `ARCHITECTURE.md`; monitoreo del pipeline: Airflow + `ops.etl_runs`; control de acceso: rol de solo lectura del backend. Faltan la política de retención y el resto cuando exista el agente)
 
 ## Libertad de arquitectura (lo que NO es obligatorio)
