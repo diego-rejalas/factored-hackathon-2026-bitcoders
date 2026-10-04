@@ -53,7 +53,7 @@ class BankTools:
         return await self._request("GET", f"/me/transactions/{transaction_id}", token=token)
 
     async def create_dispute(
-        self, token: str, transaction_id: str, reason_code: str, summary: str
+        self, token: str, transaction_id: str | None, reason_code: str, summary: str
     ) -> dict:
         return await self._request(
             "POST",
@@ -65,10 +65,69 @@ class BankTools:
     async def get_dispute(self, token: str, case_id: str) -> dict:
         return await self._request("GET", f"/disputes/{case_id}", token=token)
 
+    async def list_disputes(self, token: str) -> list:
+        body = await self._request("GET", "/me/disputes", token=token)
+        return body if isinstance(body, list) else []
+
+    async def resolve_dispute(self, token: str, case_id: str, resolution: str) -> dict:
+        return await self._request(
+            "POST", f"/disputes/{case_id}/resolve", token=token, json={"resolution": resolution}
+        )
+
     async def escalate_dispute(self, token: str, case_id: str, handoff: dict) -> dict:
         return await self._request(
             "POST", f"/disputes/{case_id}/escalate", token=token, json={"handoff": handoff}
         )
+
+    # --- admin console: thin proxies to the backend (same double-enforcement as /session) ----
+
+    async def admin_login(self, username: str, password: str) -> dict:
+        return await self._request(
+            "POST", "/admin/session", json={"username": username, "password": password}
+        )
+
+    async def admin_list_disputes(
+        self,
+        token: str,
+        status: str | None = None,
+        customer_id: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict:
+        params = {"limit": limit, "offset": offset}
+        if status:
+            params["status"] = status
+        if customer_id:
+            params["customer_id"] = customer_id
+        return await self._request("GET", "/admin/disputes", token=token, params=params)
+
+    async def admin_get_dispute(self, token: str, case_id: str) -> dict:
+        return await self._request("GET", f"/admin/disputes/{case_id}", token=token)
+
+    async def admin_transition(
+        self,
+        token: str,
+        case_id: str,
+        action: str,
+        note: str,
+        resolution: str | None = None,
+    ) -> dict:
+        body: dict = {"action": action, "note": note}
+        if resolution:
+            body["resolution"] = resolution
+        return await self._request(
+            "POST", f"/admin/disputes/{case_id}/transition", token=token, json=body
+        )
+
+    async def admin_metrics(self, token: str, window_hours: int | None = None) -> dict:
+        params = {"window": window_hours} if window_hours is not None else None
+        return await self._request("GET", "/admin/metrics", token=token, params=params)
+
+    async def get_meta_data(self, token: str) -> dict:
+        return await self._request("GET", "/meta/data", token=token)
+
+    async def get_demo_scenarios(self) -> dict:
+        return await self._request("GET", "/meta/demo-scenarios")
 
     async def _request(self, method: str, path: str, token: str | None = None, **kwargs) -> dict:
         headers = kwargs.pop("headers", {})
