@@ -59,16 +59,19 @@ GRANT SELECT ON ALL TABLES IN SCHEMA gold TO backend_app;
 -- Tables the pipeline creates later in gold are readable from the start.
 ALTER DEFAULT PRIVILEGES FOR ROLE app IN SCHEMA gold GRANT SELECT ON TABLES TO backend_app;
 
--- When the data was last refreshed: the backend reads the pipeline's own run log, and nothing else in ops.
--- ops is created by the pipeline on its first run, so this waits for it instead of failing.
+-- The backend's freshness endpoint reads the latest ETL run. Keep this operational
+-- schema separate from agent.*; the backend receives no access to the agent trace.
+CREATE SCHEMA IF NOT EXISTS ops AUTHORIZATION app;
+GRANT USAGE ON SCHEMA ops TO backend_app;
 DO $$
 BEGIN
     IF to_regclass('ops.etl_runs') IS NOT NULL THEN
-        GRANT USAGE ON SCHEMA ops TO backend_app;
-        GRANT SELECT ON ops.etl_runs TO backend_app;
+        EXECUTE 'GRANT SELECT ON TABLE ops.etl_runs TO backend_app';
     END IF;
 END
 $$;
+-- Future pipeline tables in ops are readable by the backend from creation.
+ALTER DEFAULT PRIVILEGES FOR ROLE app IN SCHEMA ops GRANT SELECT ON TABLES TO backend_app;
 
 -- --- agent_app: owns agent.*
 CREATE SCHEMA IF NOT EXISTS agent AUTHORIZATION agent_app;

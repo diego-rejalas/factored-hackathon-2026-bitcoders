@@ -3,7 +3,7 @@ import uuid
 from contextlib import asynccontextmanager
 
 import jwt
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -16,16 +16,21 @@ from app.tracing import Tracer
 
 DESCRIPTION = """
 Conversational agent + deterministic guardrail for the Factored AI & Data
-Hackathon 2026 prototype. Exposes `POST /chat` to the frontend and a thin
-`POST /session` proxy to the backend, so the frontend only ever needs this
-service's URL. Limitations, stated explicitly:
+Hackathon 2026 prototype. The frontend only ever knows this service's URL:
+`POST /chat` runs the graph, `POST /session` and the `/admin/*` routes are
+thin proxies to the backend (which re-validates every token), and
+`/admin/agent-metrics` + `/admin/conversations/{id}/trace` are served from
+`agent.trace_log`, which this service owns. Limitations, stated explicitly:
 
 - The LangGraph checkpointer is in memory: conversation context is lost on
-  redeploy (accepted for the hackathon, documented as a limitation).
-- Tracing goes to `agent.trace_log` (best-effort); no chain-of-thought is
-  ever logged.
-- The agent never reads Postgres directly: all banking data travels through
-  the backend HTTP tools, forwarding the user's session token.
+  redeploy (accepted for the hackathon, documented as a limitation). The
+  trace and the handoff survive in Postgres even when the conversation does.
+- Tracing goes to `agent.trace_log` (best-effort); no chain-of-thought and
+  no user text is ever logged — only structured step metadata.
+- The agent never reads Postgres directly for banking data: everything
+  travels through the backend HTTP tools, forwarding the user's token.
+- Admin credentials are sandbox credentials (backend ADMIN_USERS); the demo
+  login is rate-limited in memory, per process.
 """
 
 
@@ -47,11 +52,26 @@ class ChatResponse(BaseModel):
     case_status: str | None = None
     outcome: str
     handoff: dict | None = None
+    candidates: list[dict] | None = None
+    case: dict | None = None
+    reason: str | None = None
+    language: str | None = None
 
 
 class SessionRequest(BaseModel):
     customer_id: str = Field(min_length=1)
     document_number: str = Field(min_length=1)
+
+
+class AdminSessionRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=1, max_length=200)
+
+
+class AdminTransitionRequest(BaseModel):
+    action: str = Field(pattern="^(claim|close)$")
+    note: str = Field(min_length=1, max_length=2000)
+    resolution: str | None = Field(default=None)
 
 
 def _precheck_token(token: str) -> None:
@@ -61,9 +81,47 @@ def _precheck_token(token: str) -> None:
     if not secret:
         return
     try:
-        jwt.decode(token, secret, algorithms=["HS256"], issuer="backend-sandbox")
+        payload = jwt.decode(token, secret, algorithms=["HS256"], issuer="backend-sandbox")
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid or expired session token")
+    if payload.get("role", "customer") != "customer":
+        raise HTTPException(status_code=403, detail="Customer role required")
+
+
+def _require_admin_local(token: str) -> None:
+    """Local admin validation for the endpoints this service owns. Unlike the
+    proxies, there is no backend hop behind these, so the role check happens here."""
+    secret = os.environ.get("SESSION_JWT_SECRET")
+    if not secret:
+        raise HTTPException(
+            status_code=503, detail="Admin validation unavailable (SESSION_JWT_SECRET not set)"
+        )
+    try:
+        payload = jwt.decode(token, secret, algorithms=["HS256"], issuer="backend-sandbox")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired session token")
+    if payload.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+
+
+def _bearer(authorization: str | None) -> str:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Missing bearer session token")
+    return authorization[7:].strip()
+
+
+def _precheck_admin(authorization: str | None) -> None:
+    """Fail fast on non-admin tokens before proxying; the backend enforces again."""
+    secret = os.environ.get("SESSION_JWT_SECRET")
+    token = _bearer(authorization)
+    if not secret:
+        return
+    try:
+        payload = jwt.decode(token, secret, algorithms=["HS256"], issuer="backend-sandbox")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired session token")
+    if payload.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
 
 
 def create_app(tools=None, tracer=None, llm=None) -> FastAPI:
@@ -83,7 +141,7 @@ def create_app(tools=None, tracer=None, llm=None) -> FastAPI:
     app = FastAPI(
         title="banking-support-agent",
         description=DESCRIPTION,
-        version="0.1.0",
+        version="0.2.0",
         lifespan=lifespan,
     )
 
@@ -157,7 +215,135 @@ def create_app(tools=None, tracer=None, llm=None) -> FastAPI:
             case_status=case.get("status"),
             outcome=result.get("outcome", "resolved"),
             handoff=result.get("handoff"),
+            candidates=result.get("candidates"),
+            case=result.get("case"),
+            reason=result.get("reason"),
+            language=result.get("language"),
         )
+
+    # --- customer: own cases (for the "Mis casos" panel) --------------------------------------
+
+    @app.get("/me/disputes", tags=["disputes"])
+    async def my_disputes(authorization: str | None = Header(default=None)) -> list:
+        token = _bearer(authorization)
+        _precheck_token(token)
+        try:
+            return await app.state.tools.list_disputes(token)
+        except ToolError as error:
+            raise HTTPException(status_code=error.status_code, detail=error.detail)
+
+    @app.get("/disputes/{case_id}", tags=["disputes"])
+    async def get_dispute(
+        case_id: str, authorization: str | None = Header(default=None)
+    ) -> dict:
+        token = _bearer(authorization)
+        _precheck_token(token)
+        try:
+            return await app.state.tools.get_dispute(token, case_id)
+        except ToolError as error:
+            raise HTTPException(status_code=error.status_code, detail=error.detail)
+
+    # --- meta: public demo aid + data freshness (proxied) --------------------------------------
+
+    @app.get("/meta/demo-scenarios", tags=["meta"])
+    async def demo_scenarios() -> dict:
+        try:
+            return await app.state.tools.get_demo_scenarios()
+        except ToolError as error:
+            raise HTTPException(status_code=error.status_code, detail=error.detail)
+
+    @app.get("/meta/data", tags=["meta"])
+    async def meta_data(authorization: str | None = Header(default=None)) -> dict:
+        token = _bearer(authorization)
+        _precheck_admin(authorization)
+        try:
+            return await app.state.tools.get_meta_data(token)
+        except ToolError as error:
+            raise HTTPException(status_code=error.status_code, detail=error.detail)
+
+    # --- admin console: thin proxies to the backend ----------------------------------------------
+
+    @app.post("/admin/session", tags=["admin"])
+    async def admin_session(body: AdminSessionRequest) -> dict:
+        try:
+            return await app.state.tools.admin_login(body.username, body.password)
+        except ToolError as error:
+            raise HTTPException(status_code=error.status_code, detail=error.detail)
+
+    @app.get("/admin/disputes", tags=["admin"])
+    async def admin_disputes(
+        status: str | None = None,
+        customer_id: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+        authorization: str | None = Header(default=None),
+    ) -> dict:
+        _precheck_admin(authorization)
+        token = _bearer(authorization)
+        try:
+            return await app.state.tools.admin_list_disputes(
+                token, status=status, customer_id=customer_id, limit=limit, offset=offset
+            )
+        except ToolError as error:
+            raise HTTPException(status_code=error.status_code, detail=error.detail)
+
+    @app.get("/admin/disputes/{case_id}", tags=["admin"])
+    async def admin_dispute(
+        case_id: str, authorization: str | None = Header(default=None)
+    ) -> dict:
+        _precheck_admin(authorization)
+        token = _bearer(authorization)
+        try:
+            return await app.state.tools.admin_get_dispute(token, case_id)
+        except ToolError as error:
+            raise HTTPException(status_code=error.status_code, detail=error.detail)
+
+    @app.post("/admin/disputes/{case_id}/transition", tags=["admin"])
+    async def admin_transition(
+        case_id: str,
+        body: AdminTransitionRequest,
+        authorization: str | None = Header(default=None),
+    ) -> dict:
+        _precheck_admin(authorization)
+        token = _bearer(authorization)
+        try:
+            return await app.state.tools.admin_transition(
+                token, case_id, body.action, body.note, body.resolution
+            )
+        except ToolError as error:
+            raise HTTPException(status_code=error.status_code, detail=error.detail)
+
+    @app.get("/admin/metrics", tags=["admin"])
+    async def admin_metrics(
+        window_hours: int | None = Query(default=None, alias="window", ge=1),
+        authorization: str | None = Header(default=None),
+    ) -> dict:
+        _precheck_admin(authorization)
+        token = _bearer(authorization)
+        try:
+            return await app.state.tools.admin_metrics(token, window_hours=window_hours)
+        except ToolError as error:
+            raise HTTPException(status_code=error.status_code, detail=error.detail)
+
+    # --- admin console: served from agent.trace_log (this service owns the schema) -------------
+
+    @app.get("/admin/agent-metrics", tags=["admin"])
+    async def agent_metrics(
+        window_hours: int | None = None,
+        authorization: str | None = Header(default=None),
+    ) -> dict:
+        _require_admin_local(_bearer(authorization))
+        return await app.state.tracer.metrics(window_hours=window_hours)
+
+    @app.get("/admin/conversations/{conversation_id}/trace", tags=["admin"])
+    async def conversation_trace(
+        conversation_id: str, authorization: str | None = Header(default=None)
+    ) -> dict:
+        _require_admin_local(_bearer(authorization))
+        return {
+            "conversation_id": conversation_id,
+            "rows": await app.state.tracer.conversation_trace(conversation_id),
+        }
 
     return app
 

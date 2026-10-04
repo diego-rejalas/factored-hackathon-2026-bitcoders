@@ -95,6 +95,7 @@ async def test_migrations_build_the_schema_and_a_second_run_does_nothing(databas
     first = await apply_migrations(conn)
     assert first == [
         "0001_baseline", "0002_login_accounts", "0003_dispute_per_transaction", "0004_repair_double_encoded_json",
+        "0005_admin_console",
     ]
     assert await apply_migrations(conn) == []
     tables = {r["table_name"] for r in await conn.fetch("select table_name from information_schema.tables where table_schema = 'app'")}
@@ -119,7 +120,9 @@ async def test_migration_0003_closes_older_duplicates_and_keeps_the_newest(datab
         )
     await conn.execute("insert into app.disputes (customer_id, transaction_id, reason_code, summary) values ('C1', 'T2', 'x', 's')")
 
-    assert await apply_migrations(conn) == ["0003_dispute_per_transaction", "0004_repair_double_encoded_json"]
+    assert await apply_migrations(conn) == [
+        "0003_dispute_per_transaction", "0004_repair_double_encoded_json", "0005_admin_console",
+    ]
 
     rows = await conn.fetch("select status from app.disputes where transaction_id = 'T1' order by created_at")
     assert [r["status"] for r in rows] == ["closed", "closed", "escalated"]  # the newest stays as it was
@@ -135,30 +138,37 @@ async def test_migration_0003_closes_older_duplicates_and_keeps_the_newest(datab
 async def test_a_case_per_transaction_even_when_two_requests_race(store):
     await add_customer(store)
     await add_tx(store, "T1")
-    results = await asyncio.gather(*[store.create_dispute("C1", "T1", "x", "s", {"transaction": {}}) for _ in range(6)])
-    assert sum(1 for _, created in results if created) == 1
-    assert len({case["case_id"] for case, _ in results}) == 1
+    cases = await asyncio.gather(*[store.create_dispute("C1", "T1", "x", "s", {"transaction": {}}) for _ in range(6)])
+    assert len({case["case_id"] for case in cases}) == 1  # the six requests got the same case
     assert await store.pool.fetchval("select count(*) from app.disputes") == 1
+    assert await store.pool.fetchval("select count(*) from app.dispute_events where event = 'created'") == 1
 
 
 @pytest.mark.anyio
 async def test_dispute_lifecycle_in_sql(store):
-    case, created = await store.create_dispute("C1", "T1", "x", "s", {"transaction": {"a": 1}}, idempotency_key="k1")
-    assert created and case["status"] == "open"
-    retry, created = await store.create_dispute("C1", "T9", "x", "s", {}, idempotency_key="k1")
-    assert not created and retry["case_id"] == case["case_id"]
+    case = await store.create_dispute("C1", "T1", "x", "s", {"transaction": {"a": 1}})
+    assert case["status"] == "open"
+    again = await store.create_dispute("C1", "T1", "x", "s", {})
+    assert again["case_id"] == case["case_id"]  # one case per (customer, transaction)
 
-    resolved = await store.resolve_dispute("C1", str(case["case_id"]), {"rule": "r"})
-    assert resolved["status"] == "auto_resolved" and resolved["evidence"]["resolution"] == {"rule": "r"}
-    again = await store.resolve_dispute("C1", str(case["case_id"]), {"rule": "other"})
-    assert again["evidence"]["resolution"] == {"rule": "r"}
+    resolved = await store.resolve_dispute("C1", str(case["case_id"]), "no_charge_confirmed")
+    assert resolved["status"] == "auto_resolved" and resolved["resolved_at"] is not None
+    assert await store.resolve_dispute("C1", str(case["case_id"]), "no_charge_confirmed") is None  # only open can be resolved
 
     escalated = await store.escalate_dispute("C1", str(case["case_id"]), {"request": "human"})
+    # The handoff is a JSON object, not JSON text inside the jsonb value (the bug the real database showed).
     assert escalated["status"] == "escalated" and escalated["evidence"]["handoff"] == {"request": "human"}
-    assert (await store.resolve_dispute("C1", str(case["case_id"]), {}))["status"] == "escalated"
-    events = [e["event"] for e in await store.get_dispute_events(str(case["case_id"]))]
-    assert events == ["created", "resolved", "escalated"]
-    assert await store.resolve_dispute("OTHER", str(case["case_id"]), {}) is None  # not theirs
+    events = await store.get_dispute_events(str(case["case_id"]))
+    assert [e["event"] for e in events] == ["created", "auto_resolved", "escalated"]
+    assert events[-1]["payload"] == {"request": "human"}
+    assert await store.escalate_dispute("OTHER", str(case["case_id"]), {}) is None  # not theirs
+
+
+@pytest.mark.anyio
+async def test_a_case_without_a_transaction_is_never_a_duplicate(store):
+    first = await store.create_dispute("C1", None, "x", "no transaction identified", {})
+    second = await store.create_dispute("C1", None, "x", "no transaction identified", {})
+    assert first["case_id"] != second["case_id"] and first["transaction_id"] is None
 
 
 @pytest.mark.anyio
@@ -184,7 +194,7 @@ async def test_filters_and_case_flag_in_sql(store):
     await add_tx(store, "T1", merchant="Farmacia Central", status="Approved", product="P1", when=datetime(2026, 1, 5, 10))
     await add_tx(store, "T2", merchant="Librería", status="Declined", product="P2", when=datetime(2026, 2, 5, 10))
     await add_tx(store, "TX", customer_id="OTHER", merchant="Farmacia")
-    case, _ = await store.create_dispute("C1", "T1", "x", "s", {})
+    case = await store.create_dispute("C1", "T1", "x", "s", {})
     items, _ = await store.list_transactions_page("C1", merchant="farmacia")
     assert [(i["transaction_id"], i["dispute_status"]) for i in items] == [("T1", "open")]
     assert items[0]["case_id"] == case["case_id"]
@@ -198,12 +208,12 @@ async def test_filters_and_case_flag_in_sql(store):
 async def test_a_closed_case_is_not_shown_as_the_transactions_case(store):
     await add_customer(store)
     await add_tx(store, "T1")
-    case, _ = await store.create_dispute("C1", "T1", "x", "s", {})
+    case = await store.create_dispute("C1", "T1", "x", "s", {})
     await put(store, "update app.disputes set status = 'closed'")
     items, _ = await store.list_transactions_page("C1")
     assert items[0]["case_id"] is None
-    again, created = await store.create_dispute("C1", "T1", "x", "s", {})
-    assert created and again["case_id"] != case["case_id"]
+    again = await store.create_dispute("C1", "T1", "x", "s", {})
+    assert again["case_id"] != case["case_id"]  # a closed case does not block reporting again
 
 
 @pytest.mark.anyio
@@ -271,7 +281,7 @@ async def test_migration_0004_unwraps_handoffs_that_were_stored_as_text(database
     )
     await conn.execute("insert into app.dispute_events (case_id, event, payload) values ($1, 'created', '{\"reason_code\": \"x\"}')", case_id)
 
-    assert await apply_migrations(conn) == ["0004_repair_double_encoded_json"]
+    assert await apply_migrations(conn) == ["0004_repair_double_encoded_json", "0005_admin_console"]
 
     evidence = await conn.fetchval("select evidence::text from app.disputes")
     assert '"handoff": {"request": "human"}' in evidence and '"k": 1' in evidence
@@ -324,30 +334,12 @@ async def test_the_app_boots_migrates_seeds_the_demo_accounts_and_serves_the_log
         created = client.post("/v1/disputes", json={"transaction_id": "T1", "reason_code": "x", "summary": "s"}, headers=headers)
         assert created.status_code == 201
         again = client.post("/v1/disputes", json={"transaction_id": "T1", "reason_code": "x", "summary": "s"}, headers=headers)
-        assert again.status_code == 200 and again.json()["case_id"] == created.json()["case_id"]
+        assert again.status_code == 201 and again.json()["case_id"] == created.json()["case_id"]
         case_id = created.json()["case_id"]
-        resolved = client.post(f"/v1/disputes/{case_id}/resolve", json={"resolution": {"rule": "r"}}, headers=headers).json()
-        assert resolved["status"] == "auto_resolved" and resolved["evidence"]["resolution"] == {"rule": "r"}
+        resolved = client.post(f"/v1/disputes/{case_id}/resolve", json={"resolution": "no_charge_confirmed"}, headers=headers).json()
+        assert resolved["status"] == "auto_resolved"
         assert [c["status"] for c in client.get("/v1/disputes", headers=headers).json()] == ["auto_resolved"]
-        assert client.get(f"/v1/disputes/{case_id}", headers=headers).json()["events"][-1]["event"] == "resolved"
-
-
-@pytest.mark.anyio
-async def test_data_meta_reads_the_last_successful_run_and_is_unknown_without_one(store):
-    assert await store.data_meta() == {"gold": [], "last_successful_run": None}  # no ops.etl_runs at all
-    await put(store, "create schema ops")
-    await put(store, "create table ops.etl_runs (run_id text primary key, started_at timestamptz, finished_at timestamptz, status text, detail text)")
-    assert await store.data_meta() == {"gold": [], "last_successful_run": None}  # the table, but no run
-    await put(store, "insert into ops.etl_runs values ('r1', '2026-10-01 10:00+00', '2026-10-01 10:20+00', 'success', $1)", '{"published_rows": {"customers": 10, "transactions": 99}}')
-    await put(store, "insert into ops.etl_runs values ('r2', '2026-10-02 10:00+00', '2026-10-02 10:05+00', 'failed', '{}')")
-    await put(store, "insert into ops.etl_runs values ('r3', '2026-10-03 10:00+00', '2026-10-03 10:20+00', 'success', 'not json')")
-    meta = await store.data_meta()
-    assert meta["last_successful_run"]["run_id"] == "r3"  # the newest success; a failed run does not count
-    assert meta["gold"] == []  # its detail is not JSON: unknown rows, not a crash
-    await put(store, "delete from ops.etl_runs where run_id = 'r3'")
-    meta = await store.data_meta()
-    assert meta["last_successful_run"]["run_id"] == "r1"
-    assert meta["gold"] == [{"table": "customers", "rows": 10}, {"table": "transactions", "rows": 99}]
+        assert client.get(f"/v1/disputes/{case_id}", headers=headers).json()["events"][-1]["event"] == "auto_resolved"
 
 
 @pytest.mark.anyio

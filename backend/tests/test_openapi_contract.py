@@ -24,6 +24,8 @@ PUBLIC = {
     ("post", "/session"),  # the agent's login (customer id + document)
     ("post", "/v1/auth/login"),
     ("get", "/v1/auth/demo-accounts"),
+    ("post", "/admin/session"),  # the specialist's login: it asks for the credentials
+    ("get", "/meta/demo-scenarios"),  # public by design: the sandbox's demo picks, never a fraud field
 }
 
 
@@ -59,6 +61,8 @@ def test_no_route_takes_a_customer_id_from_the_caller():
     offenders = []
     for path, item in document["paths"].items():
         if path == "/session":  # the login: the customer proves who they are with their document
+            continue
+        if path.startswith("/admin/"):  # a specialist looks at any customer's cases: the role is what authorizes it
             continue
         for method, operation in item.items():
             names = [p["name"] for p in operation.get("parameters", [])]

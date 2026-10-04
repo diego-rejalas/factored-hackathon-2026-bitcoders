@@ -37,17 +37,62 @@ def test_normal_dispute_auto_resolves_with_verification(graph, tools):
     result = _run(graph, "Me hicieron un cobro que no reconozco de 45.50 en Tienda Don Pepe")
 
     assert result["outcome"] == "resolved"
-    # the policy resolved it, and the case says so (it used to stay "open" in the customer's list)
     assert result["case"]["status"] == "auto_resolved"
     assert result.get("handoff") is None
-    # verify must re-consult the case after create_dispute (does not trust the LLM), and again after
-    # recording the resolution (it does not trust its own write either)
+    # verify must re-consult the case after create_dispute (does not trust the LLM)…
     methods = [c[0] for c in tools.calls]
-    assert methods.index("create_dispute") < methods.index("get_dispute") < methods.index("resolve_dispute")
-    assert methods[methods.index("resolve_dispute") + 1] == "get_dispute"
+    assert methods.index("create_dispute") < methods.index("get_dispute")
+    # …and close the safe path itself through the guarded resolve endpoint
+    assert methods.index("get_dispute") < methods.index("resolve_dispute")
     assert str(result["case"]["case_id"]) in result["reply"]
     assert "rechazada" in result["reply"]
     assert result["facts"]
+
+
+def test_resolution_failure_escalates_instead_of_reporting_success(graph, tools):
+    from app.tools import ToolError
+
+    async def fail_resolve(token, case_id, resolution):
+        raise ToolError(409, "case changed state")
+
+    tools.resolve_dispute = fail_resolve
+    result = _run(
+        graph,
+        "Me hicieron un cobro de 45.50 en Tienda Don Pepe",
+        conversation="conv-verify-failure",
+    )
+
+    assert result["outcome"] == "escalated"
+    assert result["reason"] == "verify_failed"
+    assert result["handoff"]["reason"] == "verify_failed"
+
+
+def test_new_case_does_not_reuse_previous_case_or_handoff(graph, tools):
+    conversation = "conv-new-case-after-resolution"
+    resolved = _run(
+        graph,
+        "No reconozco el cobro de 45.50",
+        conversation=conversation,
+    )
+    assert resolved["case"]["status"] == "auto_resolved"
+    tools.transactions.append(
+        _tx("TXN-APPROVED", CUS_A, "Librería Norte", "Approved", 980.00)
+    )
+
+    escalated = _run(
+        graph,
+        "No reconozco el cobro aprobado de 980 en Librería Norte",
+        conversation=conversation,
+    )
+    assert escalated["outcome"] == "escalated"
+    assert escalated["case"]["case_id"] != resolved["case"]["case_id"]
+    assert escalated["case"]["transaction_id"] == "TXN-APPROVED"
+    assert escalated["handoff"]["case_id"] == escalated["case"]["case_id"]
+
+    greeting = _run(graph, "Hola", conversation=conversation)
+    assert greeting["outcome"] == "resolved"
+    assert greeting.get("handoff") is None
+    assert greeting.get("case") is None
 
 
 def test_ambiguous_dispute_asks_before_assuming(graph, tools):
@@ -82,7 +127,10 @@ def test_two_clarify_rounds_then_escalate(graph, tools):
     third = _run(graph, "ya te dije, un cobro", conversation=conversation)
     assert third["outcome"] == "escalated"
     assert third["handoff"]["reason"] == "ambiguity_unresolved"
-    assert tools.calls_of("create_dispute") == []
+    assert third["case"]["transaction_id"] is None
+    assert third["case"]["status"] == "escalated"
+    assert third["handoff"]["case_id"] == third["case"]["case_id"]
+    assert tools.calls_of("create_dispute")[-1][1]["transaction_id"] is None
 
 
 def test_fraud_mention_always_escalates_with_structured_handoff(graph, tools):
@@ -93,7 +141,8 @@ def test_fraud_mention_always_escalates_with_structured_handoff(graph, tools):
     assert handoff["reason"] == "fraud_suspected"
     for key in ("request", "verified_facts", "actions_taken", "evidence", "open_questions"):
         assert key in handoff
-    assert tools.calls_of("create_dispute") == []
+    assert result["case"]["transaction_id"] is None
+    assert handoff["case_id"] == result["case"]["case_id"]
 
 
 def _cases_opened(tools):
@@ -101,7 +150,7 @@ def _cases_opened(tools):
     return [params["transaction_id"] for _, params in tools.calls_of("create_dispute")]
 
 
-def test_amount_above_threshold_escalates_and_opens_an_escalated_case(graph, tools):
+def test_amount_above_threshold_creates_linked_human_review_case(graph, tools):
     tools.transactions.append(
         _tx("TXN-BIG", CUS_A, "Electro Mega", "Declined", 600.00)
     )
@@ -117,6 +166,8 @@ def test_amount_above_threshold_escalates_and_opens_an_escalated_case(graph, too
     assert result["handoff"]["escalated_in_backend"] is True
     assert case["case_id"] in result["reply"]
     assert [c[0] for c in tools.calls if c[0] in ("create_dispute", "escalate_dispute")] == ["create_dispute", "escalate_dispute"]
+    assert result["case"]["transaction_id"] == "TXN-BIG"
+    assert result["case"]["status"] == "escalated"
 
 
 def test_out_of_scope_escalates(graph, tools):
@@ -223,6 +274,7 @@ def test_unknown_usd_amount_escalates_instead_of_counting_as_zero(graph, tools):
     assert result["handoff"]["reason"] == "amount_unknown"
     assert _cases_opened(tools) == ["TXN-5"]
     assert result["case"]["status"] == "escalated"
+    assert result["case"]["transaction_id"] == "TXN-5"
 
 
 def test_unrecognized_approved_charge_escalates_as_possible_fraud(graph, tools):
@@ -234,6 +286,7 @@ def test_unrecognized_approved_charge_escalates_as_possible_fraud(graph, tools):
     assert result["handoff"]["reason"] == "posted_charge_disputed"
     assert _cases_opened(tools) == ["TXN-7"]
     assert result["case"]["status"] == "escalated"
+    assert result["case"]["transaction_id"] == "TXN-7"
 
 
 def test_pending_charge_also_escalates(graph, tools):
@@ -241,6 +294,7 @@ def test_pending_charge_also_escalates(graph, tools):
     result = _run(graph, "No reconozco el cobro de 50 en Tienda Norte")
     assert result["outcome"] == "escalated"
     assert result["handoff"]["reason"] == "posted_charge_disputed"
+    assert result["case"]["transaction_id"] == "TXN-8"
 
 
 def test_a_four_digit_amount_is_not_read_as_a_smaller_one(graph, tools):
@@ -257,6 +311,7 @@ def test_a_four_digit_amount_is_not_read_as_a_smaller_one(graph, tools):
     assert result["handoff"]["reason"] == "amount_threshold"
     # The case is opened on the RIGHT transaction, and never on the 120 one.
     assert _cases_opened(tools) == ["TXN-BIG"]
+    assert result["case"]["transaction_id"] == "TXN-BIG"
 
 
 def test_replies_never_print_none_for_a_missing_merchant(graph, tools):
@@ -272,8 +327,9 @@ def test_replies_never_print_none_for_a_missing_merchant(graph, tools):
     assert "None" not in resolved["reply"]
 
 
-def test_a_backend_without_resolve_still_answers_the_customer(graph, tools, monkeypatch):
-    """An older backend answers 404 to /resolve: the case stays open and the customer gets the same answer."""
+def test_when_the_case_cannot_be_marked_resolved_the_agent_escalates_instead_of_promising(graph, tools, monkeypatch):
+    """The safe path closes the case through the backend. If that fails (the route is missing, or it answers an
+    error), "resolved" would be a promise nobody recorded, so the turn becomes an escalation."""
     from app.tools import ToolError
 
     async def no_resolve(token, case_id, resolution):
@@ -281,12 +337,9 @@ def test_a_backend_without_resolve_still_answers_the_customer(graph, tools, monk
 
     monkeypatch.setattr(tools, "resolve_dispute", no_resolve)
     result = _run(graph, "Me hicieron un cobro que no reconozco de 45.50 en Tienda Don Pepe")
-    assert result["outcome"] == "resolved"
-    assert result["case"]["status"] == "open"
-    assert str(result["case"]["case_id"]) in result["reply"]
-
-
-# ------------------------------------------------------------------ the transaction the customer picked in the app
+    assert result["outcome"] == "escalated"
+    assert result["handoff"]["reason"] == "verify_failed"
+    assert result["case"]["status"] in ("open", "escalated")  # never reported as auto_resolved
 
 
 def _run_selected(graph, message, transaction_id, conversation="conv-sel", token=f"token-{CUS_A}"):

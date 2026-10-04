@@ -36,11 +36,12 @@ locals {
     "agent-db-password",
     "openrouter-api-key",
     "typesafe-api-key",
+    "admin-users",
     "latam-bank-aws-id",
     "latam-bank-aws-secret",
   ], local.airflow_secret_names))
 
-  manual_secret_names = toset(["latam-bank-aws-id", "latam-bank-aws-secret"])
+  manual_secret_names = toset(["admin-users", "latam-bank-aws-id", "latam-bank-aws-secret"])
 
   airflow_secret_values = var.enable_airflow ? {
     "airflow-db-password"    = var.airflow_db_password
@@ -56,6 +57,9 @@ locals {
     "agent-db-password"   = lookup(var.service_db_passwords, "agent", "NOT_SET")
     "openrouter-api-key"  = coalesce(var.openrouter_api_key, "NOT_SET")
     "typesafe-api-key"    = coalesce(var.typesafe_api_key, "NOT_SET")
+    # Admin hashes are generated offline and added by hand; Terraform must never
+    # overwrite the Secret Manager value with a committed or generated credential.
+    "admin-users" = "NOT_SET"
     # The organizer's read-only S3 keys are copied in by hand after the first apply
     # (never through Terraform variables or git); the ETL fails fast while they are NOT_SET.
     "latam-bank-aws-id"     = "NOT_SET"

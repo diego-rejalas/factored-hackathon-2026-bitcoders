@@ -1,6 +1,28 @@
 {
   "components": {
     "schemas": {
+      "AdminSessionRequest": {
+        "properties": {
+          "password": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          },
+          "username": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "AdminSessionRequest",
+        "type": "object"
+      },
       "Balance": {
         "properties": {
           "currency": {
@@ -67,34 +89,6 @@
           "last_name"
         ],
         "title": "Customer",
-        "type": "object"
-      },
-      "DataMeta": {
-        "description": "What the gold layer holds and when the pipeline last succeeded.",
-        "properties": {
-          "gold": {
-            "items": {
-              "$ref": "#/components/schemas/TableCount"
-            },
-            "title": "Gold",
-            "type": "array"
-          },
-          "last_successful_run": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/LastRun"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "gold",
-          "last_successful_run"
-        ],
-        "title": "DataMeta",
         "type": "object"
       },
       "DemoAccount": {
@@ -171,7 +165,7 @@
         "type": "object"
       },
       "Dispute": {
-        "description": "A case. status: open (in progress), auto_resolved (the policy resolved it), escalated (a person has it) or closed.",
+        "description": "A case. status: open, auto_resolved (the policy resolved it), escalated (waiting for a specialist), in_progress (a specialist took it) or closed.",
         "properties": {
           "case_id": {
             "format": "uuid",
@@ -218,14 +212,21 @@
             "type": "string"
           },
           "transaction_id": {
-            "title": "Transaction Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null for an escalation that could not be tied to a transaction.",
+            "title": "Transaction Id"
           }
         },
         "required": [
           "case_id",
           "customer_id",
-          "transaction_id",
           "reason_code",
           "summary",
           "status",
@@ -250,13 +251,19 @@
             "type": "string"
           },
           "transaction_id": {
-            "minLength": 1,
-            "title": "Transaction Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transaction Id"
           }
         },
         "required": [
-          "transaction_id",
           "reason_code",
           "summary"
         ],
@@ -318,14 +325,21 @@
             "type": "string"
           },
           "transaction_id": {
-            "title": "Transaction Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null for an escalation that could not be tied to a transaction.",
+            "title": "Transaction Id"
           }
         },
         "required": [
           "case_id",
           "customer_id",
-          "transaction_id",
           "reason_code",
           "summary",
           "status",
@@ -387,36 +401,6 @@
           }
         },
         "title": "HTTPValidationError",
-        "type": "object"
-      },
-      "LastRun": {
-        "properties": {
-          "finished_at": {
-            "format": "date-time",
-            "title": "Finished At",
-            "type": "string"
-          },
-          "run_id": {
-            "title": "Run Id",
-            "type": "string"
-          },
-          "started_at": {
-            "format": "date-time",
-            "title": "Started At",
-            "type": "string"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          }
-        },
-        "required": [
-          "run_id",
-          "status",
-          "started_at",
-          "finished_at"
-        ],
-        "title": "LastRun",
         "type": "object"
       },
       "LoginRequest": {
@@ -578,10 +562,10 @@
       "ResolveRequest": {
         "properties": {
           "resolution": {
-            "additionalProperties": true,
-            "description": "What the policy decided and the facts it rested on (rule applied, verified facts).",
+            "description": "no_charge_confirmed for Declined, reversal_confirmed for Reversed",
+            "pattern": "^(no_charge_confirmed|reversal_confirmed)$",
             "title": "Resolution",
-            "type": "object"
+            "type": "string"
           }
         },
         "required": [
@@ -664,24 +648,6 @@
           "disputes"
         ],
         "title": "Summary",
-        "type": "object"
-      },
-      "TableCount": {
-        "properties": {
-          "rows": {
-            "title": "Rows",
-            "type": "integer"
-          },
-          "table": {
-            "title": "Table",
-            "type": "string"
-          }
-        },
-        "required": [
-          "table",
-          "rows"
-        ],
-        "title": "TableCount",
         "type": "object"
       },
       "Transaction": {
@@ -907,6 +873,39 @@
         "title": "TransactionPage",
         "type": "object"
       },
+      "TransitionRequest": {
+        "properties": {
+          "action": {
+            "pattern": "^(claim|close)$",
+            "title": "Action",
+            "type": "string"
+          },
+          "note": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Note",
+            "type": "string"
+          },
+          "resolution": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required when action=close: resolved_customer or no_resolution",
+            "title": "Resolution"
+          }
+        },
+        "required": [
+          "action",
+          "note"
+        ],
+        "title": "TransitionRequest",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -956,12 +955,318 @@
     }
   },
   "info": {
-    "description": "\nMock banking service (tool layer) for the Factored AI & Data Hackathon 2026\nprototype. Sandbox limitations, stated explicitly:\n\n- Login is a test session: `POST /session` checks `customer_id` +\n  `document_number` against `gold.customers` and issues a short-lived JWT\n  (HS256). No real identity provider is behind it.\n- Reads come from the read-only `gold.*` tables published by the dbt pipeline;\n  operational tables (`app.*`) are built by the versioned SQL migrations in\n  `app/migrations`, applied at startup under an advisory lock.\n- `/v1` is what the web app uses (user name and password login, products,\n  paginated history, summary). The routes at the root are the agent's.\n- No money is ever moved: disputes only explain, document and escalate.\n- Fraud ground truth (`is_fraud`/`fraud_score`) is not part of `gold.transactions`\n  and is never exposed here.\n",
+    "description": "\nMock banking service (tool layer) for the Factored AI & Data Hackathon 2026\nprototype. Sandbox limitations, stated explicitly:\n\n- Login is a test session: `POST /session` checks `customer_id` +\n  `document_number` against `gold.customers` and issues a short-lived JWT\n  (HS256). No real identity provider is behind it.\n- Admin login (`POST /admin/session`) checks credentials against `ADMIN_USERS`\n  (bcrypt hashes, in-memory rate limit, single-process sandbox limitation).\n  Admins work an inbox of escalated cases with audited transitions\n  (claim -> in_progress -> closed); they never set `auto_resolved`.\n- `GET /meta/demo-scenarios` is a public demo aid: it surfaces only the fields\n  the test login itself asks for (customer_id, document_number, name), never\n  fraud columns.\n- Reads come from the read-only `gold.*` tables published by the dbt pipeline;\n  operational tables (`app.*`) are built by the versioned SQL migrations in\n  `app/migrations`, applied at startup under an advisory lock.\n- `/v1` is what the web app uses (user name and password login, products,\n  paginated history, summary). The routes at the root are the agent's.\n- No money is ever moved: disputes only explain, document and escalate.\n- Fraud ground truth (`is_fraud`/`fraud_score`) is not part of `gold.transactions`\n  and is never exposed here.\n",
     "title": "mock-banking-service",
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "openapi": "3.1.0",
   "paths": {
+    "/admin/disputes": {
+      "get": {
+        "operationId": "list_disputes_admin_disputes_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "customer_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minLength": 2,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Customer Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Disputes Admin Disputes Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Disputes",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/disputes/{case_id}": {
+      "get": {
+        "operationId": "get_dispute_admin_disputes__case_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Dispute Admin Disputes  Case Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Dispute",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/disputes/{case_id}/transition": {
+      "post": {
+        "operationId": "transition_dispute_admin_disputes__case_id__transition_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransitionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Transition Dispute Admin Disputes  Case Id  Transition Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Transition Dispute",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/metrics": {
+      "get": {
+        "description": "Outcome metrics from app.disputes, with denominators always reported.\nDefinitions follow spec/CRITERIA.md; rates are null (\"not defined\") without data.",
+        "operationId": "admin_metrics_admin_metrics_get",
+        "parameters": [
+          {
+            "description": "Hours back from now; omit for all time",
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Hours back from now; omit for all time",
+              "title": "Window"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Admin Metrics Admin Metrics Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Admin Metrics",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/session": {
+      "post": {
+        "operationId": "create_admin_session_admin_session_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Admin Session",
+        "tags": [
+          "session",
+          "admin"
+        ]
+      }
+    },
     "/disputes": {
       "get": {
         "description": "The customer's own cases, newest first.",
@@ -974,7 +1279,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "pattern": "^(open|auto_resolved|escalated)$",
+                  "pattern": "^(open|auto_resolved|escalated|in_progress)$",
                   "type": "string"
                 },
                 {
@@ -1034,27 +1339,8 @@
         ]
       },
       "post": {
-        "description": "One case per (customer, transaction): reporting the same transaction again returns the same case.",
+        "description": "Open the case. One per (customer, transaction): reporting the same transaction again returns that case.",
         "operationId": "create_dispute_disputes_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "idempotency-key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "maxLength": 120,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1066,9 +1352,6 @@
           "required": true
         },
         "responses": {
-          "200": {
-            "description": "The transaction already had a case: this is it, nothing new was created."
-          },
           "201": {
             "content": {
               "application/json": {
@@ -1207,7 +1490,7 @@
     },
     "/disputes/{case_id}/resolve": {
       "post": {
-        "description": "Record that the policy resolved the case without a person (open -> auto_resolved), once.",
+        "description": "System (agent) resolution after verifying the case: 'open' -> 'auto_resolved'.\nOnly the safe path ever calls this; humans close cases through /admin transitions.",
         "operationId": "resolve_dispute_disputes__case_id__resolve_post",
         "parameters": [
           {
@@ -1307,6 +1590,37 @@
           }
         ],
         "summary": "Get Me",
+        "tags": [
+          "customers"
+        ]
+      }
+    },
+    "/me/disputes": {
+      "get": {
+        "operationId": "list_my_disputes_me_disputes_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response List My Disputes Me Disputes Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List My Disputes",
         "tags": [
           "customers"
         ]
@@ -1463,6 +1777,59 @@
         ]
       }
     },
+    "/meta/data": {
+      "get": {
+        "description": "Data freshness for the admin console: gold.* counts plus the last pipeline run\n(ops.etl_runs). The snapshot is static by design — see spec/ARCHITECTURE.md.",
+        "operationId": "meta_data_meta_data_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Meta Data Meta Data Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Meta Data",
+        "tags": [
+          "meta"
+        ]
+      }
+    },
+    "/meta/demo-scenarios": {
+      "get": {
+        "description": "Deterministic demo picks so a demo/video can guarantee the four workflow paths\n(auto-resolved, ambiguous, fraud, threshold). Public by design: it only surfaces the\nsame fields the test login asks for (customer_id, document_number, name) and never\nany fraud column. Sandbox aid, documented as such.",
+        "operationId": "demo_scenarios_meta_demo_scenarios_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Demo Scenarios Meta Demo Scenarios Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Demo Scenarios",
+        "tags": [
+          "meta"
+        ]
+      }
+    },
     "/ready": {
       "get": {
         "description": "Liveness says the process is up; readiness says it can reach the database.",
@@ -1604,7 +1971,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "pattern": "^(open|auto_resolved|escalated)$",
+                  "pattern": "^(open|auto_resolved|escalated|in_progress)$",
                   "type": "string"
                 },
                 {
@@ -1664,27 +2031,8 @@
         ]
       },
       "post": {
-        "description": "One case per (customer, transaction): reporting the same transaction again returns the same case.",
+        "description": "Open the case. One per (customer, transaction): reporting the same transaction again returns that case.",
         "operationId": "create_dispute_v1_disputes_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "idempotency-key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "maxLength": 120,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1696,9 +2044,6 @@
           "required": true
         },
         "responses": {
-          "200": {
-            "description": "The transaction already had a case: this is it, nothing new was created."
-          },
           "201": {
             "content": {
               "application/json": {
@@ -1837,7 +2182,7 @@
     },
     "/v1/disputes/{case_id}/resolve": {
       "post": {
-        "description": "Record that the policy resolved the case without a person (open -> auto_resolved), once.",
+        "description": "System (agent) resolution after verifying the case: 'open' -> 'auto_resolved'.\nOnly the safe path ever calls this; humans close cases through /admin transitions.",
         "operationId": "resolve_dispute_v1_disputes__case_id__resolve_post",
         "parameters": [
           {
@@ -2218,33 +2563,6 @@
           }
         ],
         "summary": "Get Transaction",
-        "tags": [
-          "v1"
-        ]
-      }
-    },
-    "/v1/meta/data": {
-      "get": {
-        "description": "When the data was last refreshed (the last successful pipeline run), for a \"data as of ...\" line.",
-        "operationId": "data_meta_v1_meta_data_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DataMeta"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Data Meta",
         "tags": [
           "v1"
         ]

@@ -44,3 +44,11 @@ async def get_transaction(
             status.HTTP_404_NOT_FOUND, "Transaction not found for this customer"
         )
     return transaction
+
+
+@router.get("/disputes")
+async def list_my_disputes(
+    customer_id: str = Depends(get_current_customer),
+    store=Depends(get_store),
+) -> list[dict]:
+    return await store.list_customer_disputes(customer_id)
