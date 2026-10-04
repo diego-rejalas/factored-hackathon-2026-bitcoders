@@ -12,6 +12,7 @@ from app.observability import RequestLogMiddleware
 from app.graph import build_graph
 from app.llm import LLM
 from app.tools import ToolError, bank_tools_from_env
+from app.conversations import Conversations
 from app.tracing import Tracer
 
 DESCRIPTION = """
@@ -88,6 +89,19 @@ def _precheck_token(token: str) -> None:
         raise HTTPException(status_code=403, detail="Customer role required")
 
 
+def _customer_id(token: str) -> str | None:
+    """The customer a verified token belongs to. None when the shared secret is not configured (local runs
+    without it): nothing is then saved or listed, because there is no identity to scope it to."""
+    secret = os.environ.get("SESSION_JWT_SECRET")
+    if not secret:
+        return None
+    try:
+        payload = jwt.decode(token, secret, algorithms=["HS256"], issuer="backend-sandbox")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired session token")
+    return payload.get("sub")
+
+
 def _require_admin_local(token: str) -> None:
     """Local admin validation for the endpoints this service owns. Unlike the
     proxies, there is no backend hop behind these, so the role check happens here."""
@@ -124,7 +138,7 @@ def _precheck_admin(authorization: str | None) -> None:
         raise HTTPException(status_code=403, detail="Admin role required")
 
 
-def create_app(tools=None, tracer=None, llm=None) -> FastAPI:
+def create_app(tools=None, tracer=None, llm=None, conversations=None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         if tracer is None:
@@ -132,6 +146,8 @@ def create_app(tools=None, tracer=None, llm=None) -> FastAPI:
             app.state.tools = tools or bank_tools_from_env()
             app.state.llm = llm or LLM()
             app.state.tracer = owned
+            app.state.conversations = conversations or Conversations(owned.pool)
+            await app.state.conversations.init_schema()
             app.state.graph = build_graph(app.state.tools, owned, app.state.llm)
             yield
             await owned.close()
@@ -165,6 +181,7 @@ def create_app(tools=None, tracer=None, llm=None) -> FastAPI:
     if tools is not None or tracer is not None or llm is not None:
         app.state.tools = tools or bank_tools_from_env()
         app.state.tracer = tracer if tracer is not None else Tracer(None)
+        app.state.conversations = conversations or Conversations(None)
         app.state.llm = llm or LLM()
         app.state.graph = build_graph(app.state.tools, app.state.tracer, app.state.llm)
 
@@ -183,6 +200,7 @@ def create_app(tools=None, tracer=None, llm=None) -> FastAPI:
     async def chat(body: ChatRequest) -> ChatResponse:
         _precheck_token(body.session_token)
         conversation_id = body.conversation_id or str(uuid.uuid4())
+        customer_id = _customer_id(body.session_token)
         run_id = str(uuid.uuid4())
         try:
             result = await app.state.graph.ainvoke(
@@ -195,7 +213,9 @@ def create_app(tools=None, tracer=None, llm=None) -> FastAPI:
                     # not inherit the previous one's.
                     "selected_transaction_id": body.transaction_id,
                 },
-                config={"configurable": {"thread_id": conversation_id}},
+                # The graph's memory is keyed by customer too: a conversation id someone else guessed must not
+                # land in another customer's thread.
+                config={"configurable": {"thread_id": f"{customer_id}:{conversation_id}" if customer_id else conversation_id}},
             )
         except ToolError as error:
             if error.status_code == 401:
@@ -208,7 +228,7 @@ def create_app(tools=None, tracer=None, llm=None) -> FastAPI:
                 outcome="unavailable",
             )
         case = result.get("case") or {}
-        return ChatResponse(
+        response = ChatResponse(
             reply=result.get("reply", ""),
             conversation_id=conversation_id,
             case_id=str(case["case_id"]) if case.get("case_id") else None,
@@ -220,6 +240,30 @@ def create_app(tools=None, tracer=None, llm=None) -> FastAPI:
             reason=result.get("reason"),
             language=result.get("language"),
         )
+        if customer_id:
+            await app.state.conversations.save_turn(
+                customer_id, conversation_id, body.message, response.reply, response.model_dump(mode="json")
+            )
+        return response
+
+    # --- customer: own conversations (the history next to "My cases") ------------------------------
+
+    @app.get("/me/conversations", tags=["conversations"])
+    async def my_conversations(authorization: str | None = Header(default=None)) -> list:
+        token = _bearer(authorization)
+        _precheck_token(token)
+        customer_id = _customer_id(token)
+        return await app.state.conversations.recent(customer_id) if customer_id else []
+
+    @app.get("/me/conversations/{conversation_id}", tags=["conversations"])
+    async def my_conversation(conversation_id: str, authorization: str | None = Header(default=None)) -> dict:
+        token = _bearer(authorization)
+        _precheck_token(token)
+        customer_id = _customer_id(token)
+        messages = await app.state.conversations.messages(customer_id, conversation_id) if customer_id else []
+        if not messages:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        return {"conversation_id": conversation_id, "messages": messages}
 
     # --- customer: own cases (for the "Mis casos" panel) --------------------------------------
 

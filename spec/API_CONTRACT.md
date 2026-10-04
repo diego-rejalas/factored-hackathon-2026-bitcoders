@@ -69,6 +69,8 @@ El esquema exacto está en `backend/tests/contract/openapi.json`. Aquí, lo que 
 | `POST /admin/session` `{username, password}` | no | Login del especialista con `ADMIN_USERS` (hashes bcrypt, en Secret Manager). Cinco fallos por IP y usuario bloquean 60 s |
 | `GET /me`, `GET /me/transactions`, `GET /me/transactions/{id}` | cliente | Perfil mínimo y movimientos propios (lista simple). Cada movimiento trae `response_meaning` |
 | `GET /me/disputes` | cliente | Mis casos, más nuevos primero (incluye los cerrados y los que no tienen transacción) |
+| `GET /me/conversations` | cliente | Mis conversaciones, la más reciente primero, con el título (lo primero que escribió). Propias del agente: `agent.conversation_messages` |
+| `GET /me/conversations/{id}` | cliente | Una conversación completa (mensajes y las tarjetas de cada respuesta). 404 si no existe o es de otro cliente |
 | `POST /disputes` `{transaction_id?, reason_code, summary}` | cliente | Abre el caso. `transaction_id` es **opcional**: una escalada que no pudo atarse a una transacción es un caso sin transacción |
 | `GET /disputes/{case_id}` | cliente | El caso con su línea de tiempo (`events`) |
 | `POST /disputes/{case_id}/escalate` `{handoff}` | cliente | Lo llama el agente. Marca `escalated` y guarda el traspaso. **No se guarda por estado**: se puede llamar sobre cualquier caso del cliente |
@@ -155,7 +157,7 @@ Responde: `{reply, conversation_id, outcome, handoff, case_id, case_status, case
 
 ### El resto de las rutas del agente
 
-Son reenvíos delgados al backend con la misma sesión, con comprobaciones previas que fallan rápido: `GET /me/disputes`, `GET /disputes/{id}`, `GET /meta/demo-scenarios`, `GET /meta/data` y, para el especialista, `POST /admin/session`, `GET /admin/disputes`, `GET /admin/disputes/{id}` y `POST /admin/disputes/{id}/transition`, más `GET /admin/metrics`. **Dos rutas son del propio agente**: `GET /admin/agent-metrics` (resultados, contención, latencia p50 y p95, intenciones e idiomas, de `agent.trace_log`) y `GET /admin/conversations/{id}/trace` (los pasos de una conversación). `POST /session` reenvía el login del backend.
+Son reenvíos delgados al backend con la misma sesión, con comprobaciones previas que fallan rápido: `GET /me/disputes`, `GET /disputes/{id}`, `GET /meta/demo-scenarios`, `GET /meta/data` y, para el especialista, `POST /admin/session`, `GET /admin/disputes`, `GET /admin/disputes/{id}` y `POST /admin/disputes/{id}/transition`, más `GET /admin/metrics`. **Dos rutas son del propio agente**: `GET /admin/agent-metrics` (resultados, contención, latencia p50 y p95, intenciones e idiomas, de `agent.trace_log`) y `GET /admin/conversations/{id}/trace` (los pasos de una conversación). También son del agente las del cliente `GET /me/conversations` y `GET /me/conversations/{id}`: guardan lo que el cliente escribió y lo que se le respondió, y solo se leen con el cliente que sale del token verificado (la tabla es la que lleva la política de retención; `trace_log` sigue sin texto de usuario). `POST /session` reenvía el login del backend.
 
 ## 6. Flujos de punta a punta
 

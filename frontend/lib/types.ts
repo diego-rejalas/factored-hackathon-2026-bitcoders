@@ -64,6 +64,19 @@ export type ChatResponse = {
   language?: Language | null;
 };
 
+export type ConversationItem = {
+  conversation_id: string;
+  title: string;
+  last_at: string;
+};
+
+export type StoredMessage = {
+  role: "user" | "bot";
+  text: string;
+  response?: ChatResponse | null;
+  created_at: string;
+};
+
 export type CaseListItem = Pick<
   DisputeCase,
   "case_id" | "transaction_id" | "reason_code" | "status" | "created_at" | "resolved_at"

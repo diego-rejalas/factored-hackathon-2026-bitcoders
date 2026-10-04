@@ -19,8 +19,9 @@ import {
 import CasesPanel from "@/components/CasesPanel";
 import { EvidenceItem, EvidenceList, evidenceFromCase, evidenceLabel } from "@/components/Evidence";
 import { ct } from "@/lib/chatText";
+import { useTheme } from "@/lib/useTheme";
 import { caseStatusLabel, reasonLabel, suggestions, tr } from "@/lib/i18n";
-import type { Candidate, ChatResponse, DisputeCase, Handoff, Language } from "@/lib/types";
+import type { Candidate, ChatResponse, ConversationItem, DisputeCase, Handoff, Language, StoredMessage } from "@/lib/types";
 import { formatCandidateAmount, formatDate } from "@/lib/types";
 
 type Message = {
@@ -51,7 +52,8 @@ export default function Chat({
   const [casesOpen, setCasesOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showJump, setShowJump] = useState(false);
-  const [theme, setTheme] = useState<"light" | "dark" | null>(null);
+  const [theme, toggleTheme] = useTheme();
+  const [history, setHistory] = useState<ConversationItem[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const stuck = useRef(true);
@@ -63,34 +65,56 @@ export default function Chat({
     element.scrollTo({ top: element.scrollHeight, behavior: smooth ? "smooth" : "auto" });
   }, []);
 
+  const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
+
+  const loadHistory = useCallback(async () => {
+    try {
+      const response = await fetch(`${agentUrl}/me/conversations`, { headers: authHeaders, cache: "no-store" });
+      if (response.status === 401) return onLogout(true);
+      if (response.ok) setHistory((await response.json()) as ConversationItem[]);
+    } catch {
+      /* the list is a convenience; the chat works without it */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentUrl, authHeaders]);
+
+  useEffect(() => {
+    void loadHistory();
+  }, [loadHistory]);
+
+  async function openConversation(id: string) {
+    if (busy || id === conversationId) return setMenuOpen(false);
+    setError(null);
+    try {
+      const response = await fetch(`${agentUrl}/me/conversations/${encodeURIComponent(id)}`, { headers: authHeaders, cache: "no-store" });
+      if (response.status === 401) return onLogout(true);
+      if (!response.ok) throw new Error(String(response.status));
+      const body = (await response.json()) as { messages: StoredMessage[] };
+      setMessages(
+        body.messages.map((message) => ({
+          id: nextId.current++,
+          role: message.role,
+          text: message.text,
+          response: message.response ?? undefined,
+        })),
+      );
+      setConversationId(id);
+      const last = [...body.messages].reverse().find((message) => message.response?.language);
+      if (last?.response?.language) setLanguage(last.response.language === "pt" ? "pt" : "es");
+      setMenuOpen(false);
+      stuck.current = true;
+      requestAnimationFrame(() => scrollToBottom());
+    } catch {
+      setError(ct(language, "loadError"));
+    }
+  }
+
   function onScroll() {
     const element = scrollRef.current;
     if (!element) return;
     const away = element.scrollHeight - element.scrollTop - element.clientHeight;
     stuck.current = away < 80;
     setShowJump(away > 240);
-  }
-
-  // null follows the system; a choice made here is remembered for the next visit.
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem("chat-theme");
-      if (saved === "light" || saved === "dark") setTheme(saved);
-    } catch {
-      /* storage can be blocked; the system theme applies */
-    }
-  }, []);
-
-  function toggleTheme() {
-    const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const effective = theme ?? (systemDark ? "dark" : "light");
-    const next = effective === "dark" ? "light" : "dark";
-    setTheme(next);
-    try {
-      window.localStorage.setItem("chat-theme", next);
-    } catch {
-      /* not remembered */
-    }
   }
 
   useEffect(() => {
@@ -133,6 +157,7 @@ export default function Chat({
         ...previous,
         { id: nextId.current++, role: "bot", text: body.reply, response: body, animate: true },
       ]);
+      void loadHistory();
     } catch {
       setError(tr(language, "connectError"));
     } finally {
@@ -202,6 +227,28 @@ export default function Chat({
             {ct(language, "cases")}
           </button>
         </nav>
+        <div className="gpt-history">
+          <h2>{ct(language, "recent")}</h2>
+          {history.length === 0 ? (
+            <p>{ct(language, "noRecent")}</p>
+          ) : (
+            <ul>
+              {history.map((item) => (
+                <li key={item.conversation_id}>
+                  <button
+                    type="button"
+                    className={item.conversation_id === conversationId ? "active" : undefined}
+                    aria-current={item.conversation_id === conversationId ? "true" : undefined}
+                    title={formatDate(item.last_at, language)}
+                    onClick={() => openConversation(item.conversation_id)}
+                  >
+                    {item.title || "…"}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
         <button className="gpt-theme" type="button" onClick={toggleTheme}>
           <Sun className="icon-sun" size={18} aria-hidden="true" />
           <Moon className="icon-moon" size={18} aria-hidden="true" />
