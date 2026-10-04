@@ -1,6 +1,6 @@
 # Probar todo en local
 
-Una base con datos de ejemplo, el backend y el agente en Docker, y el frontend en tu máquina (recarga al editar). No necesita nube, ni claves, ni la base real. Verificado el 2026-10-02: login, chat y caso registrado en un navegador real, y los 11 escenarios de `infra/gcp/scripts/e2e.py`.
+Una base con datos de ejemplo, el backend y el agente en Docker, y el frontend en tu máquina (recarga al editar). No necesita nube, ni claves, ni la base real. Verificado el 2026-10-04 con la interfaz de Felix en un navegador real (cliente y consola del especialista) y los 11 escenarios de `infra/gcp/scripts/e2e.py`.
 
 ## 1. Backend, agente y base
 
@@ -31,18 +31,22 @@ Abre http://localhost:3000. Debe ser el puerto **3000**: el agente solo acepta e
 
 `PNPM_MANAGE_PACKAGE_MANAGER_VERSIONS=false` evita que pnpm intente descargar su propia versión (`packageManager` fija la 11.1.3), cosa que falla en algunas redes.
 
+> **Para ver el panel "Mis casos", usa la versión compilada** (`pnpm build && pnpm start`). En modo desarrollo React monta cada componente dos veces y el `<dialog>` del panel se cierra al instante; es un artefacto de `pnpm dev`, no del producto.
+
 ## 3. Qué probar
 
-El login de la pantalla (sandbox) pide `customer_id` y documento:
+**Cliente (`/`).** En el formulario, "Escenarios para demostración" rellena `customer_id` y documento y propone el mensaje. A mano:
 
 | Cliente | customer_id | Documento | Mensaje | Resultado |
 |---|---|---|---|---|
-| Ana | `CLI-00MT1OY089RA` | `17521506` | `No reconozco la transferencia de 4189.18 dólares` | **Escala** (sobre USD 500) |
+| Ana | `CLI-00MT1OY089RA` | `17521506` | `No reconozco la transferencia de 4189.18 dólares` | **Escala** (sobre USD 500), con su caso |
 | Ana | | | `No reconozco la transferencia de 6783.64 dólares` | **Escala** (cobro ya aprobado) |
-| Bruno | `CLI-0064RNKCVQCN` | `0863503738` | `No reconozco el cobro de 256.10` | **Se resuelve** (rechazado, no hubo cobro) |
+| Bruno | `CLI-0064RNKCVQCN` | `0863503738` | `No reconozco el cobro de 256.10` | **Se resuelve** (rechazado; dice el motivo, código 51) |
 | Carla | `CLI-00232W4ZDQPP` | `57064351` | `No reconozco el cobro de 389.87` | **Se resuelve** (revertido) |
 
-Cualquiera: `Me robaron la tarjeta, no fui yo` → escala por sospecha de fraude.
+Cualquiera: `Me robaron la tarjeta, no fui yo` → escala por sospecha de fraude. **Mis casos** muestra los casos del cliente.
+
+**Especialista (`/admin`).** Usuario `ops-demo`, clave `Admin-Local-2026` (solo local). La bandeja muestra lo escalado; se puede **tomar** un caso y **cerrarlo** (nota y resolución obligatorias), y ver las **métricas**. Haz primero una escalada como cliente para que haya algo en la bandeja.
 
 ## 4. Probar el backend `/v1` solo
 
@@ -71,7 +75,7 @@ OPENROUTER_API_KEY=sk-or-... docker compose -f docker-compose.dev.yml up --build
 ## Tests
 
 ```bash
-# Backend: rutas con un store en memoria, y el SQL real si hay un PostgreSQL
+# Backend: rutas con un store en memoria, y el SQL real (incluido el de la consola) si hay un PostgreSQL
 cd backend && PG_TEST_HOST=localhost PG_TEST_PORT=5433 PG_TEST_USER=postgres PG_TEST_PASSWORD=dev python -m pytest
 cd agent && python -m pytest
 ```
