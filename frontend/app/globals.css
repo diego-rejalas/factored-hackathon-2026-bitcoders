@@ -258,70 +258,6 @@ button {
   text-align: center;
 }
 
-/* --- login (customer + admin) --------------------------------------------------------------- */
-
-.login {
-  min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 1.25rem;
-  gap: 1rem;
-}
-
-.login-brand {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  color: var(--navy);
-  font-weight: 700;
-  letter-spacing: 0.01em;
-}
-
-.login-brand .mark {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-  background: var(--navy);
-  color: #fff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.95rem;
-}
-
-.login-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-2);
-  padding: 1.6rem;
-  width: 100%;
-  max-width: 400px;
-  display: flex;
-  flex-direction: column;
-  gap: 0.9rem;
-}
-
-.login-card h1 {
-  font-size: 1.2rem;
-  margin: 0;
-}
-
-.login-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.8rem;
-}
-
-.login-heading-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
 .eyebrow {
   color: var(--primary);
   font-size: 0.7rem;
@@ -338,79 +274,6 @@ button {
   color: var(--navy);
   padding: 0.35rem;
   font-weight: 600;
-}
-
-.login-submit {
-  min-height: 48px;
-}
-
-.login-card p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-
-.login-footnote {
-  color: var(--muted);
-  font-size: 0.75rem;
-  max-width: 400px;
-  text-align: center;
-}
-
-/* demo scenario picker */
-
-.scenarios {
-  border-top: 1px dashed var(--border-strong);
-  padding-top: 0.8rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.scenarios summary {
-  cursor: pointer;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--primary);
-}
-
-.scenarios ul {
-  list-style: none;
-  margin: 0.4rem 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-}
-
-.scenario {
-  text-align: left;
-  background: var(--primary-soft);
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  padding: 0.5rem 0.7rem;
-  cursor: pointer;
-  font-size: 0.82rem;
-  color: var(--text);
-}
-
-.scenario:hover {
-  border-color: var(--primary);
-}
-
-.scenario .tag {
-  font-weight: 700;
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--primary);
-  display: block;
-}
-
-.scenario .hint {
-  display: block;
-  color: var(--muted);
-  margin-top: 0.15rem;
 }
 
 .scenario-error {
@@ -1723,7 +1586,8 @@ table.metrics-table tbody th {
 
 /* --- customer chat, in the manner of a chat assistant: sidebar, centered conversation, floating composer ---- */
 
-.gpt {
+.gpt,
+.auth {
   /* Light theme. The inner cards read the global tokens, so they are redefined here for the dark theme. */
   --g-bg: #ffffff;
   --g-side: #f6f7f9;
@@ -1734,14 +1598,18 @@ table.metrics-table tbody th {
   --g-muted: #5b6676;
   --g-line: #e2e6ec;
   --g-mark: #1d4ed8;
-  display: grid;
-  grid-template-columns: 17rem minmax(0, 1fr);
-  height: 100dvh;
   background: var(--g-bg);
   color: var(--g-text);
 }
 
-.gpt[data-theme="dark"] {
+.gpt {
+  display: grid;
+  grid-template-columns: 17rem minmax(0, 1fr);
+  height: 100dvh;
+}
+
+.gpt[data-theme="dark"],
+.auth[data-theme="dark"] {
   --g-bg: #1c1d21;
   --g-side: #141518;
   --g-hover: #26282d;
@@ -1771,7 +1639,8 @@ table.metrics-table tbody th {
 }
 
 @media (prefers-color-scheme: dark) {
-  .gpt:not([data-theme="light"]) {
+  .gpt:not([data-theme="light"]),
+  .auth:not([data-theme="light"]) {
     --g-bg: #1c1d21;
     --g-side: #141518;
     --g-hover: #26282d;
@@ -1852,7 +1721,6 @@ table.metrics-table tbody th {
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
-  flex: 1;
 }
 
 .gpt-nav button,
@@ -2261,5 +2129,424 @@ table.metrics-table tbody th {
 
   .turn-user {
     max-width: 92%;
+  }
+}
+
+.gpt-history {
+  flex: 1;
+  min-height: 0;
+  margin-top: 0.9rem;
+  overflow-y: auto;
+}
+
+.gpt-history h2 {
+  margin: 0 0 0.35rem;
+  padding: 0 0.65rem;
+  color: var(--g-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.gpt-history p {
+  margin: 0;
+  padding: 0 0.65rem;
+  color: var(--g-muted);
+  font-size: 0.85rem;
+}
+
+.gpt-history ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.gpt-history button {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  padding: 0.5rem 0.65rem;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--g-text);
+  text-align: left;
+  font-size: 0.92rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 140ms ease;
+}
+
+.gpt-history button:hover,
+.gpt-history button.active {
+  background: var(--g-hover);
+}
+
+/* --- sign-in, same language as the chat ---------------------------------------------------------- */
+
+.auth {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  min-height: 100dvh;
+}
+
+.auth-aside {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 2rem;
+  padding: clamp(1.5rem, 4vw, 3rem);
+  background: var(--g-side);
+  border-right: 1px solid var(--g-line);
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.auth-aside h2 {
+  margin: 0 0 1.25rem;
+  max-width: 22ch;
+  font-size: clamp(1.7rem, 3vw, 2.4rem);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+}
+
+.auth-aside ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+  display: grid;
+  gap: 0.9rem;
+  max-width: 30rem;
+}
+
+.auth-aside li {
+  display: flex;
+  gap: 0.8rem;
+  align-items: baseline;
+  counter-increment: step;
+  color: var(--g-muted);
+  line-height: 1.5;
+}
+
+.auth-aside li::before {
+  content: counter(step);
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1px solid var(--g-line);
+  border-radius: 50%;
+  color: var(--g-text);
+  font-size: 0.78rem;
+}
+
+.auth-aside > p {
+  margin: 0;
+  color: var(--g-muted);
+  font-size: 0.8rem;
+}
+
+.auth-pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  padding: 3.5rem 1.25rem 2rem;
+}
+
+.auth-theme {
+  position: absolute;
+  top: 0.9rem;
+  right: 0.9rem;
+}
+
+.auth-card {
+  width: min(26rem, 100%);
+  display: grid;
+  gap: 1rem;
+}
+
+.auth-brand-small {
+  display: none;
+}
+
+.auth-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.auth-heading h1 {
+  margin: 0;
+  font-size: 1.6rem;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.auth-lead {
+  margin: -0.4rem 0 0;
+  color: var(--g-muted);
+  line-height: 1.55;
+}
+
+.auth .field label {
+  color: var(--g-text);
+  font-weight: 500;
+}
+
+.auth .field input,
+.auth .language-switch select {
+  min-height: 48px;
+  border: 1px solid var(--g-line);
+  border-radius: 12px;
+  background: var(--g-composer);
+  color: var(--g-text);
+}
+
+.auth .field input:focus-visible,
+.auth .language-switch select:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.auth-submit {
+  min-height: 48px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--g-text);
+  color: var(--g-bg);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.auth-submit:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+.auth-submit:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.auth-demo {
+  margin-top: 0.5rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--g-line);
+}
+
+.auth-demo h2 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.auth-demo p {
+  margin: 0.2rem 0 0.7rem;
+  color: var(--g-muted);
+  font-size: 0.85rem;
+}
+
+.auth-demo ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.auth-scenario {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--g-line);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--g-text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.auth-scenario:hover {
+  background: var(--g-hover);
+}
+
+.auth-scenario[aria-pressed="true"] {
+  border-color: var(--primary);
+  background: var(--primary-soft, var(--g-hover));
+}
+
+.auth-scenario-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 8px;
+  background: var(--g-hover);
+  color: var(--primary);
+}
+
+.auth-scenario-text {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.auth-scenario .tag {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.auth-scenario .hint {
+  color: var(--g-muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.auth-footnote {
+  margin: 0;
+  max-width: 26rem;
+  text-align: center;
+  color: var(--g-muted);
+  font-size: 0.75rem;
+}
+
+
+.auth-theme .icon-moon,
+.auth[data-theme="dark"] .auth-theme .icon-sun {
+  display: none;
+}
+
+.auth[data-theme="dark"] .auth-theme .icon-moon {
+  display: inline;
+}
+
+@media (prefers-color-scheme: dark) {
+  .auth:not([data-theme="light"]) .auth-theme .icon-sun {
+    display: none;
+  }
+  .auth:not([data-theme="light"]) .auth-theme .icon-moon {
+    display: inline;
+  }
+}
+
+@media (max-width: 899px) {
+  .auth {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .auth-aside {
+    display: none;
+  }
+
+  .auth-brand-small {
+    display: flex;
+  }
+}
+
+/* --- console sign-in (the customer sign-in uses .auth above) ---------------------------------- */
+
+.login {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  gap: 1rem;
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--navy);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.login-brand .mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--navy);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+}
+
+.login-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+  padding: 1.6rem;
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.login-card h1 {
+  font-size: 1.2rem;
+  margin: 0;
+}
+
+.login-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.login-heading-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.login-submit {
+  min-height: 48px;
+}
+
+.login-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.login-footnote {
+  color: var(--muted);
+  font-size: 0.75rem;
+  max-width: 400px;
+  text-align: center;
+}
+
+@media (min-width: 900px) {
+  .auth-footnote {
+    display: none;
   }
 }

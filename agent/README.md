@@ -13,6 +13,7 @@ Vertical 4 de `../spec/ARCHITECTURE.md`. Servicio FastAPI con LangGraph adentro.
 | `GET /admin/agent-metrics?window=<hours>` | Métricas de `agent.trace_log`: outcomes, contención proxy, p50/p95 por nodo, intent, idioma y resultado de verify. |
 | `GET /admin/conversations/{id}/trace` | Timeline estructurado de la conversación asociada a un caso. Nunca contiene texto del cliente. |
 | `GET /me/disputes`, `GET /disputes/{id}` | Proxies para que el cliente consulte sus casos y eventos. |
+| `GET /me/conversations`, `GET /me/conversations/{id}` | Historial del cliente: se guarda cada turno en `agent.conversation_messages` y solo lo lee su dueño. |
 | `GET /meta/demo-scenarios`, `GET /meta/data` | Proxy público del selector demo y proxy admin de frescura, respectivamente. |
 | `GET /health` | Liveness para Cloud Run. |
 

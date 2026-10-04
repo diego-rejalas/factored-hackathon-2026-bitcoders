@@ -1,8 +1,18 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import type { DemoScenario, Language } from "@/lib/types";
+import { CheckCircle, Gauge, Moon, Question, ShieldWarning, Sun } from "@phosphor-icons/react";
+import { ct } from "@/lib/chatText";
 import { scenarioLabel, tr } from "@/lib/i18n";
+import type { DemoScenario, Language } from "@/lib/types";
+import { useTheme } from "@/lib/useTheme";
+
+const SCENARIO_ICON = {
+  auto_resolved: CheckCircle,
+  ambiguous: Question,
+  fraud: ShieldWarning,
+  threshold: Gauge,
+} as const;
 
 export default function Login({
   agentUrl,
@@ -22,6 +32,7 @@ export default function Login({
   const [language, setLanguage] = useState<Language>("es");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [theme, toggleTheme] = useTheme();
 
   useEffect(() => {
     let active = true;
@@ -76,102 +87,120 @@ export default function Login({
   }
 
   return (
-    <main className="login">
+    <main className="auth" data-theme={theme ?? undefined}>
       <a className="skip-link" href="#customer-login">
         {language === "pt" ? "Pular para o formulário" : "Ir al formulario"}
       </a>
-      <div className="login-brand">
-        <span className="mark" aria-hidden="true">B</span>
-        <span>{tr(language, "appTitle")}</span>
-      </div>
-      <form id="customer-login" className="login-card" onSubmit={submit}>
-        <div className="login-heading">
-          <div className="login-heading-copy">
-            <span className="eyebrow">{tr(language, "sandbox")}</span>
-            <h1>{tr(language, "loginTitle")}</h1>
-          </div>
-          <label className="language-switch">
-            <span className="sr-only">Idioma / Idioma</span>
-            <select
-              value={language}
-              onChange={(event) => setLanguage(event.target.value as Language)}
-              aria-label="Idioma / Idioma"
-            >
-              <option value="es">ES</option>
-              <option value="pt">PT</option>
-            </select>
-          </label>
+
+      <section className="auth-aside" aria-hidden="true">
+        <div className="auth-brand">
+          <span className="gpt-mark" aria-hidden="true">L</span>
+          <span>{ct(language, "brand")}</span>
         </div>
-        <p>{tr(language, "loginDescription")}</p>
-        {sessionExpired && (
-          <div className="alert alert-error" role="alert">
-            {tr(language, "expired")}
-          </div>
-        )}
-        {error && <div className="alert alert-error" role="alert">{error}</div>}
-        <div className="field">
-          <label htmlFor="customer_id">{tr(language, "customerId")}</label>
-          <input
-            id="customer_id"
-            name="customer_id"
-            value={customerId}
-            onChange={(event) => {
-              setCustomerId(event.target.value);
-              setSelectedScenario(null);
-              setFirstName(undefined);
-            }}
-            autoComplete="username"
-            required
-          />
+        <div>
+          <h2>{ct(language, "asideTitle")}</h2>
+          <ol>
+            <li>{ct(language, "asideStep1")}</li>
+            <li>{ct(language, "asideStep2")}</li>
+            <li>{ct(language, "asideStep3")}</li>
+          </ol>
         </div>
-        <div className="field">
-          <label htmlFor="document_number">{tr(language, "documentNumber")}</label>
-          <input
-            id="document_number"
-            name="document_number"
-            value={documentNumber}
-            onChange={(event) => {
-              setDocumentNumber(event.target.value);
-              setSelectedScenario(null);
-              setFirstName(undefined);
-            }}
-            autoComplete="current-password"
-            required
-          />
-        </div>
-        <button className="btn login-submit" type="submit" disabled={busy}>
-          {busy ? tr(language, "loggingIn") : tr(language, "login")}
+        <p>{ct(language, "note")}</p>
+      </section>
+
+      <section className="auth-pane">
+        <button className="gpt-icon auth-theme" type="button" onClick={toggleTheme} aria-label={ct(language, "theme")} title={ct(language, "theme")}>
+          <Sun className="icon-sun" size={20} />
+          <Moon className="icon-moon" size={20} />
         </button>
 
-        <details className="scenarios">
-          <summary>{tr(language, "demoScenarios")}</summary>
-          {scenariosError && <p className="scenario-error">{tr(language, "scenariosUnavailable")}</p>}
-          {scenarios.length > 0 && (
-            <ul>
-              {scenarios.map((scenario) => (
-                <li key={`${scenario.scenario}-${scenario.customer_id}`}>
-                  <button
-                    type="button"
-                    className="scenario"
-                    aria-pressed={selectedScenario === scenario.scenario}
-                    onClick={() => selectScenario(scenario)}
-                  >
-                    <span className="tag">{scenarioLabel(scenario.scenario, language)}</span>
-                    <span className="hint">
-                      {language === "pt" ? scenario.hint_pt : scenario.hint_es}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+        <form id="customer-login" className="auth-card" onSubmit={submit}>
+          <div className="auth-brand auth-brand-small">
+            <span className="gpt-mark" aria-hidden="true">L</span>
+            <span>{ct(language, "brand")}</span>
+          </div>
+          <div className="auth-heading">
+            <h1>{tr(language, "loginTitle")}</h1>
+            <label className="language-switch">
+              <span className="sr-only">Idioma / Idioma</span>
+              <select value={language} onChange={(event) => setLanguage(event.target.value as Language)} aria-label="Idioma / Idioma">
+                <option value="es">ES</option>
+                <option value="pt">PT</option>
+              </select>
+            </label>
+          </div>
+          <p className="auth-lead">{tr(language, "loginDescription")}</p>
+          {sessionExpired && (
+            <div className="alert alert-error" role="alert">
+              {tr(language, "expired")}
+            </div>
           )}
-        </details>
-      </form>
-      <p className="login-footnote">
-        {language === "pt"
-          ? "Protótipo de hackathon: os dados e as credenciais são sintéticos; nenhum dinheiro é movimentado."
-          : "Prototipo de hackathon: los datos y las credenciales son sintéticos; no se mueve dinero."}
-      </p>
+          {error && <div className="alert alert-error" role="alert">{error}</div>}
+          <div className="field">
+            <label htmlFor="customer_id">{tr(language, "customerId")}</label>
+            <input
+              id="customer_id"
+              name="customer_id"
+              value={customerId}
+              onChange={(event) => {
+                setCustomerId(event.target.value);
+                setSelectedScenario(null);
+                setFirstName(undefined);
+              }}
+              autoComplete="username"
+              required
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="document_number">{tr(language, "documentNumber")}</label>
+            <input
+              id="document_number"
+              name="document_number"
+              value={documentNumber}
+              onChange={(event) => {
+                setDocumentNumber(event.target.value);
+                setSelectedScenario(null);
+                setFirstName(undefined);
+              }}
+              autoComplete="current-password"
+              required
+            />
+          </div>
+          <button className="auth-submit" type="submit" disabled={busy}>
+            {busy ? tr(language, "loggingIn") : tr(language, "login")}
+          </button>
+
+          <div className="auth-demo">
+            <h2>{ct(language, "demo")}</h2>
+            <p>{ct(language, "demoHint")}</p>
+            {scenariosError && <p className="scenario-error">{tr(language, "scenariosUnavailable")}</p>}
+            {scenarios.length > 0 && (
+              <ul>
+                {scenarios.map((scenario) => {
+                  const Icon = SCENARIO_ICON[scenario.scenario] ?? Question;
+                  return (
+                    <li key={`${scenario.scenario}-${scenario.customer_id}`}>
+                      <button
+                        type="button"
+                        className="auth-scenario"
+                        aria-pressed={selectedScenario === scenario.scenario}
+                        onClick={() => selectScenario(scenario)}
+                      >
+                        <span className="auth-scenario-icon" aria-hidden="true"><Icon size={20} /></span>
+                        <span className="auth-scenario-text">
+                          <span className="tag">{scenarioLabel(scenario.scenario, language)}</span>
+                          <span className="hint">{language === "pt" ? scenario.hint_pt : scenario.hint_es}</span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </form>
+        <p className="auth-footnote">{ct(language, "note")}</p>
+      </section>
     </main>
   );
 }

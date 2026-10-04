@@ -107,14 +107,24 @@ jobs:
   agent:
     name: Build the agent image and run its tests
     runs-on: ubuntu-latest
+    # The conversation store's SQL (grouping, ordering, jsonb) runs against a real PostgreSQL, like the backend's.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - name: Build image (tests ship inside, backend and LLM are faked)
         run: docker build . -f agent/Dockerfile -t agent-ci-check
-      - name: pytest inside the image
+      - name: pytest inside the image, against the PostgreSQL service
         run: >
-          docker run --rm -w /app
+          docker run --rm --network host -w /app
           -e SESSION_JWT_SECRET=ci-secret -e GUARDRAIL_MAX_USD=500
+          -e PG_TEST_HOST=localhost -e PG_TEST_PORT=5432 -e PG_TEST_USER=postgres -e PG_TEST_PASSWORD=ci
           agent-ci-check sh -c "pip install --no-cache-dir pytest httpx && python -m pytest -q"
 
   frontend:
