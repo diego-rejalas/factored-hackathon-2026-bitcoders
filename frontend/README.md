@@ -38,5 +38,5 @@ Nota: pnpm 11 aplica una política de trust (`no-downgrade`) configurada en esta
 ## Deploy (Vercel)
 
 1. Para GCP, desplegar el servicio Cloud Run `frontend` y configurar `AGENT_URL` (Terraform lo establece al endpoint público del agent/ALB).
-2. Para Vercel/Railway legacy, setear `NEXT_PUBLIC_AGENT_URL` a la URL del servicio `agent`.
+2. Para otro host, setear `NEXT_PUBLIC_AGENT_URL` a la URL del servicio `agent`.
 3. No se necesita `vercel.json`: la configuración por defecto de Next.js alcanza.

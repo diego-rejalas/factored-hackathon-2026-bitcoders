@@ -104,7 +104,7 @@ Según `spec/DATA_FINDINGS.md`: las descripciones y resoluciones de reclamos son
 
 ### 4.8 Modelo de mora de CreditGuard (propuesta de crédito, opción D)
 
-`spec/CREDIT_WORKFLOW_PROPOSAL.md` proponía un LightGBM de probabilidad de mora por cliente contra una línea base de score. Se repitió con partición por cliente:
+`spec/archive/CREDIT_WORKFLOW_PROPOSAL.md` proponía un LightGBM de probabilidad de mora por cliente contra una línea base de score. Se repitió con partición por cliente:
 
 | Prueba | Resultado |
 |---|---|

@@ -1,9 +1,0 @@
-# Extra packages for the DAGs. No version pins: Airflow's own constraints file
-# already pins compatible versions of what it shares, and pinning here conflicts
-# with it.
-
-# dbt runs as its own Railway service (infra/dbt/): the DAG calls it over HTTP.
-# dbt's dependencies clash with Airflow's constraints, so it is not installed here.
-
-# Extraction and load: DuckDB reads S3 and writes into Postgres in one statement.
-duckdb

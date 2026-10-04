@@ -19,7 +19,7 @@ misconfigurations:
     paths: ["infra/gcp/modules/cloudsql/main.tf"]
     statement: same
   # Containers that run as root. The application images belong to the app team (tracked in the Checkov
-  # baseline); infra/airflow is the Railway image, root on purpose so it can chown the mounted volume.
+  # baseline).
   - id: DS-0002
-    paths: ["backend/Dockerfile", "agent/Dockerfile", "frontend/Dockerfile", "infra/airflow/Dockerfile", "infra/dbt/Dockerfile"]
+    paths: ["backend/Dockerfile", "agent/Dockerfile", "frontend/Dockerfile"]
     statement: not owned by this change; see .checkov.baseline and spec/SECURITY_SCANS.md

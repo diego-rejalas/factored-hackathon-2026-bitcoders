@@ -1,6 +1,6 @@
 # backend/ — mock banking service (tool layer)
 
-Vertical 3 de `../spec/ARCHITECTURE.md`. Servicio FastAPI separado en Railway. Es el "service/tool layer" que el reto exige para enforced de permisos — la política vive acá, no en el prompt del LLM. **Implementado** (workflow Opción A: disputas de transacciones, ver `../spec/WORKFLOW_DECISION.md`).
+Vertical 3 de `../spec/ARCHITECTURE.md`. Servicio FastAPI separado (Cloud Run). Es el "service/tool layer" que el reto exige para enforced de permisos — la política vive acá, no en el prompt del LLM. **Implementado** (workflow Opción A: disputas de transacciones, ver `../spec/WORKFLOW_DECISION.md`).
 
 ## Contrato (OpenAPI en `/docs`)
 
@@ -12,7 +12,7 @@ Dos superficies sobre el mismo servicio. La **raíz** es la del agente (no cambi
 |---|---|---|
 | `POST /session` | — | Login de prueba: valida `customer_id` + `document_number` contra `gold.customers` y emite JWT HS256 con `role=customer` (exp ~2h, `SESSION_TTL_MINUTES`). Sesión sandbox, no hay IdP real detrás. |
 | `POST /admin/session` | — | Login de especialista con `ADMIN_USERS` (hashes bcrypt en Secret Manager); emite JWT `role=admin` (`ADMIN_TTL_MINUTES`, default 8h). Cinco fallos por IP+usuario bloquean 60s en memoria; límite por proceso, solo adecuado para la demo. |
-| `GET /health` | — | Liveness para el healthcheck de Railway. |
+| `GET /health` | — | Liveness para el healthcheck de Cloud Run. |
 | `GET /me` | Bearer | Perfil mínimo (nombre, país). Jamás expone income/credit_score/document_number. |
 | `GET /me/transactions?status=&merchant=&days=&limit=` | Bearer | Movimientos propios; siempre filtra por el `customer_id` del token (el query no acepta customer_id). `amount_usd_effective` = `coalesce(amount_usd, amount si currency='USD')` — 57% de `amount_usd` es nulo en filas USD (ver `../spec/DATA_FINDINGS.md`). `days` ancla al borde del snapshot (última transacción del dataset), no a `now()`. |
 | `GET /me/transactions/{id}` | Bearer | Detalle con verificación de titularidad → 404 si es ajena. |
@@ -63,7 +63,7 @@ Todo endpoint con sesión valida el rol: un token `admin` no abre rutas de clien
 ## Ejecutar y probar
 
 ```bash
-cp .env.example .env            # PG_* apuntando al Postgres de Railway (database `data`) + SESSION_JWT_SECRET
+cp .env.example .env            # PG_* apuntando al Postgres local (`docker-compose.dev.yml`) (database `data`) + SESSION_JWT_SECRET
 set -a; . ./.env; set +a
 uvicorn app.main:app --reload   # desde esta carpeta; http://localhost:8000/docs
 ```
@@ -85,4 +85,4 @@ python -c "import bcrypt; print(bcrypt.hashpw(b'CAMBIA_ESTA_CLAVE', bcrypt.gensa
 
 El usuario introduce la contraseña original; solo el hash se almacena. En GCP, `admin-users` es un secreto manual separado por ambiente (`factored-dev-admin-users`, `factored-qa-admin-users`, `factored-prod-admin-users`). Sustituye el placeholder `NOT_SET` con una nueva versión antes de habilitar el acceso. No uses una contraseña real de producción: este prototipo no tiene IdP ni rate-limit distribuido.
 
-Despliegue: `../.railway/railway.ts` (servicio `backend`, Dockerfile propio, watchPatterns `backend/**`, healthcheck `/health`).
+Despliegue: Cloud Run, ver `../infra/gcp/envs/`.

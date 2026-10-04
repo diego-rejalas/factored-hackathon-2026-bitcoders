@@ -32,28 +32,6 @@
                     ]
                 }
             ]
-        },
-        {
-            "file": "/infra/airflow/Dockerfile",
-            "findings": [
-                {
-                    "resource": "/infra/airflow/Dockerfile.USER",
-                    "check_ids": [
-                        "CKV_DOCKER_8"
-                    ]
-                }
-            ]
-        },
-        {
-            "file": "/infra/dbt/Dockerfile",
-            "findings": [
-                {
-                    "resource": "/infra/dbt/Dockerfile.",
-                    "check_ids": [
-                        "CKV_DOCKER_3"
-                    ]
-                }
-            ]
         }
     ]
 }

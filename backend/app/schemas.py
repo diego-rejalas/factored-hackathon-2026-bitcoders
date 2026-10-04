@@ -9,25 +9,6 @@ class Health(BaseModel):
     status: str
 
 
-class TableCount(BaseModel):
-    table: str
-    rows: int
-
-
-class LastRun(BaseModel):
-    run_id: str
-    status: str
-    started_at: datetime
-    finished_at: datetime
-
-
-class DataMeta(BaseModel):
-    """What the gold layer holds and when the pipeline last succeeded."""
-
-    gold: list[TableCount]
-    last_successful_run: LastRun | None
-
-
 # --------------------------------------------------------------------------------------------- v1 contract
 # Money is a float in the JSON (the database has numeric, which pydantic would otherwise write as a string).
 

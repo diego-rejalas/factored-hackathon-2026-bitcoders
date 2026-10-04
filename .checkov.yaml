@@ -13,7 +13,6 @@ skip-path:
   - node_modules
   - .terraform
   - frontend/node_modules
-  - agent/poc
   - infra/gcp/envs
   - infra/gcp/modules
 compact: true
