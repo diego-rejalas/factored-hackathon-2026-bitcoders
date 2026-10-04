@@ -1,19 +1,29 @@
-# frontend/ — chat UI
+# frontend/ — customer support + admin console
 
 Deploy en Vercel. Pega a `POST /chat` y `POST /session` de `../agent/` — **nunca** a `../backend/` ni a Postgres directo. **Implementado**: Next.js (App Router) + TypeScript.
 
-## Qué muestra
+## Cliente (`/`)
 
-- **Login de prueba:** `customer_id` + `document_number` → `POST /session` del agent (sandbox, sin IdP real).
-- **Chat:** burbujas, badge de `outcome` (resuelto / aclaración) y **banner de handoff con `case_id`** cuando `outcome=escalated`.
+- **Login de prueba:** `customer_id` + `document_number` → `POST /session` del agent; incluye selector determinista de escenarios desde `/meta/demo-scenarios` (sandbox, sin IdP real).
+- **Chat:** candidatas con comercio/monto/fecha/estado, caso verificado, handoff legible y badge de outcome; el idioma es/pt se adapta a la respuesta del agente.
+- **Mis casos:** lista propia más la línea de tiempo de eventos del caso.
 - **Sesión expirada:** un 401 del agent vuelve al login con aviso.
-- Estados vacío, cargando y error. El texto del asistente llega en el idioma del usuario (es/pt) — sin selector obligatorio.
+- Estados de carga, vacío y error; foco visible, navegación por teclado, `aria-live`, objetivos táctiles y `prefers-reduced-motion`.
+
+## Especialistas (`/admin`)
+
+- Login de sandbox separado (credenciales configuradas en backend `ADMIN_USERS`).
+- Bandeja de casos escalados/en curso, filtro por estado e idioma, detalle del handoff, auditoría y traza estructurada del agente.
+- `claim → in_progress → close` requiere nota; el cierre pide resultado y confirmación.
+- Métricas de backend + agent trace: tasas con denominadores, latencia p50/p95, idioma, outcomes y frescura ETL. Sin muestra/costos/labels de referencia, se muestra “No definido” o se explica la limitación.
+- Sin IdP real ni credenciales de producción; el rate-limit backend es por proceso y el token solo vive en memoria del navegador.
 
 ## Variables
 
 | Variable | Qué es |
 |---|---|
-| `NEXT_PUBLIC_AGENT_URL` | URL del agent (único backend que esta app contacta). En Vercel se configura como variable de proyecto. |
+| `AGENT_URL` | URL del agent en runtime (Cloud Run; única API que conoce el navegador). |
+| `NEXT_PUBLIC_AGENT_URL` | Alternativa de compatibilidad para builds/Vercel y desarrollo local. |
 
 ## Desarrollo y verificación
 
@@ -27,6 +37,6 @@ Nota: pnpm 11 aplica una política de trust (`no-downgrade`) configurada en esta
 
 ## Deploy (Vercel)
 
-1. Importar el repo en Vercel con **Root Directory = `frontend`** (framework preset: Next.js — detecta `pnpm build` solo).
-2. Setear `NEXT_PUBLIC_AGENT_URL` a la URL pública del servicio `agent` en Railway.
-3. Deploy. No se necesita `vercel.json`: la configuración por defecto de Next.js alcanza.
+1. Para GCP, desplegar el servicio Cloud Run `frontend` y configurar `AGENT_URL` (Terraform lo establece al endpoint público del agent/ALB).
+2. Para Vercel/Railway legacy, setear `NEXT_PUBLIC_AGENT_URL` a la URL del servicio `agent`.
+3. No se necesita `vercel.json`: la configuración por defecto de Next.js alcanza.

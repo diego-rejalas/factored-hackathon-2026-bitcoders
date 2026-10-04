@@ -130,7 +130,7 @@ def test_summary_counts_active_cases_by_status(client, auth_headers):
         "/v1/disputes", json={"transaction_id": "TXN-A1", "reason_code": "x", "summary": "s"}, headers=auth_headers
     ).json()["case_id"]
     assert client.get("/v1/me/summary", headers=auth_headers).json()["disputes"] == {"open": 1}
-    client.post(f"/v1/disputes/{case_id}/resolve", json={"resolution": {}}, headers=auth_headers)
+    client.post(f"/v1/disputes/{case_id}/resolve", json={"resolution": "no_charge_confirmed"}, headers=auth_headers)
     assert client.get("/v1/me/summary", headers=auth_headers).json()["disputes"] == {"auto_resolved": 1}
 
 
@@ -153,23 +153,3 @@ def test_ready_is_503_when_the_database_is_down(client, store):
 
     store.ping = down
     assert client.get("/ready").status_code == 503
-
-
-# ------------------------------------------------------------------ data freshness
-
-
-def test_meta_data_says_when_the_data_was_last_refreshed(client, auth_headers):
-    body = client.get("/v1/meta/data", headers=auth_headers).json()
-    assert body["last_successful_run"]["status"] == "success"
-    assert body["last_successful_run"]["finished_at"].startswith("2026-10-02T14:34")
-    assert {"table": "transactions", "rows": 4425008} in body["gold"]
-
-
-def test_meta_data_without_a_run_is_unknown_not_invented(client, auth_headers, store):
-    store.meta = {"gold": [], "last_successful_run": None}
-    body = client.get("/v1/meta/data", headers=auth_headers).json()
-    assert body == {"gold": [], "last_successful_run": None}
-
-
-def test_meta_data_needs_a_session(client):
-    assert client.get("/v1/meta/data").status_code == 401

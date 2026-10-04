@@ -131,11 +131,11 @@ class DisputeEvent(BaseModel):
 
 
 class Dispute(BaseModel):
-    """A case. status: open (in progress), auto_resolved (the policy resolved it), escalated (a person has it) or closed."""
+    """A case. status: open, auto_resolved (the policy resolved it), escalated (waiting for a specialist), in_progress (a specialist took it) or closed."""
 
     case_id: UUID
     customer_id: str
-    transaction_id: str
+    transaction_id: str | None = Field(default=None, description="Null for an escalation that could not be tied to a transaction.")
     reason_code: str
     summary: str
     status: str
