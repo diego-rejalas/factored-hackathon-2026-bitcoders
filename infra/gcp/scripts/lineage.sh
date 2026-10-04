@@ -13,7 +13,7 @@ set -euo pipefail
 ENVIRONMENT="${ENVIRONMENT:-prod}"
 PROJECT="${PROJECT:-bitcoders-factored-hackathon}"
 BUCKET="gs://factored-${ENVIRONMENT}-lakehouse-${PROJECT}"
-OUT="${OUT:-docs/lineage}"
+OUT="${OUT:-${TMPDIR:-/tmp}/lineage}"
 WHICH="${1:-latest}"
 
 if [ "$WHICH" = "list" ]; then

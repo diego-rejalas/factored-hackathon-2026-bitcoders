@@ -31,7 +31,7 @@ Tabla de decisiones, **no un prompt** — el LLM no puede negociarla:
 
 ## Clasificación de intent (`app/intents.py`)
 
-TypeSafe API si `TYPESAFE_API_KEY`+`TYPESAFE_API_URL` están presentes (la key aún no existe — camino defensivo), sino few-shot por OpenRouter, sino baseline determinista por keywords (referencia, se evalúa en el branch de eval).
+few-shot por OpenRouter, sino baseline determinista por keywords (referencia, se evalúa en el branch de eval).
 
 ## Otros módulos
 

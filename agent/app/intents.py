@@ -1,7 +1,3 @@
-import os
-
-import httpx
-
 from app.guardrail import normalize
 
 INTENTS = ("dispute", "case_status", "greeting", "out_of_scope")
@@ -46,31 +42,8 @@ def baseline_classify(message: str) -> str:
     return "out_of_scope"
 
 
-async def typesafe_classify(message: str) -> str | None:
-    """Optional semantic classification via TypeSafe. The API key does not
-    exist yet (see plan risks), so this path is defensive: any failure returns
-    None and the caller falls through to the LLM / baseline."""
-    api_key = os.environ.get("TYPESAFE_API_KEY")
-    api_url = os.environ.get("TYPESAFE_API_URL")
-    if not api_key or not api_url:
-        return None
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            response = await client.post(
-                api_url,
-                headers={"Authorization": f"Bearer {api_key}"},
-                json={"task": "intent_classification", "labels": list(INTENTS), "input": message},
-            )
-            response.raise_for_status()
-            data = response.json()
-        label = data.get("label") or data.get("output") or data.get("result")
-        return label if label in INTENTS else None
-    except Exception:
-        return None
-
-
 async def classify(message: str, llm=None) -> str:
-    label = await typesafe_classify(message)
-    if label is None and llm is not None and llm.enabled:
+    label = None
+    if llm is not None and llm.enabled:
         label = await llm.classify_intent(message)
     return label if label in INTENTS else baseline_classify(message)

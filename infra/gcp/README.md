@@ -11,7 +11,7 @@ infra/gcp/
 ├── modules/
 │   ├── foundation/         APIs del proyecto + Artifact Registry
 │   ├── network/            VPC, subred, Private Service Access, firewall de IAP y NAT opcional
-│   ├── cloudsql/           Cloud SQL Postgres 16 (base `data`, usuario `app`)
+│   ├── cloudsql/           Cloud SQL Postgres 18 (base `data`, usuario `app`)
 │   ├── secrets/            Secret Manager: JWT, contraseña de la base, claves de LLM y de S3
 │   ├── lakehouse/          bucket de GCS para el Parquet de bronze y silver
 │   ├── cloud_run_service/  un servicio de Cloud Run con su propia cuenta de servicio

@@ -20,3 +20,7 @@ team_credentials.txt
 team_credentials.md
 *credentials*
 
+
+# Code-intelligence indexes (generated)
+.codegraph/
+graphify-out/
