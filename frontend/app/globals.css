@@ -2188,19 +2188,7 @@ table.metrics-table tbody th {
 /* --- sign-in, same language as the chat ---------------------------------------------------------- */
 
 .auth {
-  display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
   min-height: 100dvh;
-}
-
-.auth-aside {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 2rem;
-  padding: clamp(1.5rem, 4vw, 3rem);
-  background: var(--g-side);
-  border-right: 1px solid var(--g-line);
 }
 
 .auth-brand {
@@ -2211,54 +2199,9 @@ table.metrics-table tbody th {
   letter-spacing: -0.01em;
 }
 
-.auth-aside h2 {
-  margin: 0 0 1.25rem;
-  max-width: 22ch;
-  font-size: clamp(1.7rem, 3vw, 2.4rem);
-  line-height: 1.12;
-  letter-spacing: -0.02em;
-}
-
-.auth-aside ol {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  counter-reset: step;
-  display: grid;
-  gap: 0.9rem;
-  max-width: 30rem;
-}
-
-.auth-aside li {
-  display: flex;
-  gap: 0.8rem;
-  align-items: baseline;
-  counter-increment: step;
-  color: var(--g-muted);
-  line-height: 1.5;
-}
-
-.auth-aside li::before {
-  content: counter(step);
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  border: 1px solid var(--g-line);
-  border-radius: 50%;
-  color: var(--g-text);
-  font-size: 0.78rem;
-}
-
-.auth-aside > p {
-  margin: 0;
-  color: var(--g-muted);
-  font-size: 0.8rem;
-}
-
 .auth-pane {
   position: relative;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2280,7 +2223,9 @@ table.metrics-table tbody th {
 }
 
 .auth-brand-small {
-  display: none;
+  display: flex;
+  justify-content: center;
+  margin-bottom: 0.5rem;
 }
 
 .auth-heading {
@@ -2450,19 +2395,6 @@ table.metrics-table tbody th {
   }
 }
 
-@media (max-width: 899px) {
-  .auth {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .auth-aside {
-    display: none;
-  }
-
-  .auth-brand-small {
-    display: flex;
-  }
-}
 
 /* --- console sign-in (the customer sign-in uses .auth above) ---------------------------------- */
 
@@ -2545,8 +2477,3 @@ table.metrics-table tbody th {
   text-align: center;
 }
 
-@media (min-width: 900px) {
-  .auth-footnote {
-    display: none;
-  }
-}

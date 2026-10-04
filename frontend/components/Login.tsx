@@ -92,22 +92,6 @@ export default function Login({
         {language === "pt" ? "Pular para o formulário" : "Ir al formulario"}
       </a>
 
-      <section className="auth-aside" aria-hidden="true">
-        <div className="auth-brand">
-          <span className="gpt-mark" aria-hidden="true">L</span>
-          <span>{ct(language, "brand")}</span>
-        </div>
-        <div>
-          <h2>{ct(language, "asideTitle")}</h2>
-          <ol>
-            <li>{ct(language, "asideStep1")}</li>
-            <li>{ct(language, "asideStep2")}</li>
-            <li>{ct(language, "asideStep3")}</li>
-          </ol>
-        </div>
-        <p>{ct(language, "note")}</p>
-      </section>
-
       <section className="auth-pane">
         <button className="gpt-icon auth-theme" type="button" onClick={toggleTheme} aria-label={ct(language, "theme")} title={ct(language, "theme")}>
           <Sun className="icon-sun" size={20} />
