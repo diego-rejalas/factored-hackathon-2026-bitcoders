@@ -196,6 +196,7 @@ export default function AdminCaseDetail({
                 <dt>{tr("es", "limitation")}</dt><dd>{handoff.limitation || "Revisión humana requerida por política."}</dd>
               </dl>
             </section>
+            {handoff.customer_message && <section><h4>Mensaje del cliente</h4><p>{handoff.customer_message}</p></section>}
             {request && <section><h4>{tr("es", "request")}</h4><p>{request}</p></section>}
             <ListSection title={tr("es", "verifiedFacts")} values={handoff.verified_facts} />
             <ListSection title={tr("es", "actionsTaken")} values={handoff.actions_taken?.map(actionDescription)} />

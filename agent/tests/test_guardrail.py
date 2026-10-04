@@ -129,3 +129,45 @@ def test_an_exact_amount_beats_an_approximate_one():
 def test_an_approximate_amount_still_matches_when_nothing_is_exact():
     a = _tx("TXN-1", "C", None, "Declined", 120.00)
     assert guardrail.narrow_candidates([a], "cobro de unos 119", {"amount": 119.0}) == [a]
+
+
+# --- found by the held-out evaluation (docs/EVALUATION.md) ----------------------------------------------------
+
+from app.guardrail import extract_entities, mentions_fraud  # noqa: E402
+
+
+def test_a_written_date_is_not_read_as_the_amount():
+    # The year used to win: "2026" was taken for the amount and the real one ignored.
+    assert extract_entities("No dia 10 de junho de 2026, apareceu um valor de 27.65 USD que não entendo.")["amount"] == 27.65
+    assert extract_entities("El 1 de mayo de 2026, hay un cargo de 107.27 USD de 'Café del Parque'")["amount"] == 107.27
+    assert extract_entities("No dia 1º de maio de 2026 houve uma cobrança de 107,27")["amount"] == 107.27
+    assert extract_entities("En junio de 2026 vi un cargo de 84.20")["amount"] == 84.20
+    assert extract_entities("El 15 de junio vi un cargo de 84.20")["amount"] == 84.20
+
+
+def test_a_real_amount_that_looks_like_a_year_is_still_an_amount():
+    assert extract_entities("No reconozco el cobro de 2026")["amount"] == 2026.0
+    assert extract_entities("Me cobraron 2514.48 USD")["amount"] == 2514.48
+
+
+def test_fraud_described_without_the_obvious_words_is_still_fraud():
+    for message in [
+        "Alguien usó mi tarjeta sin mi permiso",
+        "Alguém usou meu cartão sem minha autorização",
+        "Me hackearon la cuenta, hay movimientos que no son míos",
+        "Invadiram minha conta, tem movimentos que não são meus",
+        "Perdí mi cartera y ya hay cargos raros",
+        "Perdi minha carteira no ônibus",
+        "Alguien entró a mi cuenta y cambió mi contraseña",
+    ]:
+        assert mentions_fraud(message), message
+
+
+def test_an_ordinary_dispute_is_not_taken_for_fraud():
+    for message in [
+        "No reconozco el cobro de 256.10",
+        "Não reconheço a cobrança de 389.87",
+        "Me cobraron dos veces la misma compra",
+        "Mi compra fue rechazada pero el dinero salió de mi cuenta",
+    ]:
+        assert not mentions_fraud(message), message

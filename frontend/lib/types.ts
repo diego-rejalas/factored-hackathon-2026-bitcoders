@@ -24,6 +24,7 @@ export type Handoff = {
   reason?: string;
   limitation?: string;
   request?: { es?: string; pt?: string };
+  customer_message?: string;
   customer_language?: Language;
   conversation_id?: string;
   verified_facts?: string[];

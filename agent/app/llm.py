@@ -46,6 +46,8 @@ class LLM:
             if os.environ.get("OPENROUTER_MODEL")
             else DEFAULT_MODELS
         )
+        # What the calls consumed, for the cost per case: OpenRouter reports tokens and, when asked, the price.
+        self.usage = {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "cost": 0.0, "cost_reported_calls": 0}
 
     @property
     def enabled(self) -> bool:
@@ -68,13 +70,26 @@ class LLM:
                             ],
                             "temperature": 0.2,
                             "max_tokens": 400,
+                            "usage": {"include": True},
                         },
                     )
                     response.raise_for_status()
-                    return response.json()["choices"][0]["message"]["content"]
+                    body = response.json()
+                    self._record(body.get("usage"))
+                    return body["choices"][0]["message"]["content"]
             except Exception:
                 continue
         return None
+
+    def _record(self, usage: dict | None) -> None:
+        self.usage["calls"] += 1
+        if not isinstance(usage, dict):
+            return
+        self.usage["prompt_tokens"] += int(usage.get("prompt_tokens") or 0)
+        self.usage["completion_tokens"] += int(usage.get("completion_tokens") or 0)
+        if usage.get("cost") is not None:
+            self.usage["cost"] += float(usage["cost"])
+            self.usage["cost_reported_calls"] += 1
 
     async def classify_intent(self, message: str) -> str | None:
         from app.intents import INTENTS

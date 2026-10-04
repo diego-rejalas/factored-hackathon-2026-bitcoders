@@ -11,14 +11,14 @@ Lo que el reto exige, extraído de `doc/Factored AI & Data Hackathon 2026.md` y 
 | Alcance obligatorio | 6 | 0 |
 | Sistema funcional (requisitos mínimos) | 5 | 0 |
 | Automatización controlada | 4 | 0 |
-| Datos y ML | 1 | 3 |
-| Medición de calidad y manejo de fallas | 0 | 3 |
+| Datos y ML | 4 | 0 |
+| Medición de calidad y manejo de fallas | 3 | 0 |
 | Ruta a producción (honestidad, no implementación real) | 3 | 1 |
 | Fronteras de datos y ejecución | 6 | 1 |
 | Entrega (submission, antes de Oct 5) | 0 | 6 |
-| **Total** | **25** | **14** |
+| **Total** | **31** | **8** |
 
-Lo abierto, en orden de impacto: la **evaluación** (componente aprendido contra una línea base, casos retenidos y el reporte de resultados), el **documento de ruta a producción**, el **despliegue** de esta versión y la **entrega** (repositorio público, diapositivas, video y envío).
+Lo abierto, en orden de impacto: el **documento de ruta a producción**, el **despliegue** de esta versión y la **entrega** (repositorio público, diapositivas, video y envío). La evaluación está en [Evaluación](EVALUATION.md), con una repetición completa con modelo pendiente.
 
 ## Alcance obligatorio
 
@@ -47,15 +47,15 @@ Lo abierto, en orden de impacto: la **evaluación** (componente aprendido contra
 ## Datos y ML
 
 - [x] Pipeline de datos repetible: contratos de esquema, checks de calidad, linaje, política de actualización/frescura. (DAG de Airflow con DuckDB: reconstruye bronze desde S3 en cada corrida; los tests de dbt (claves, relaciones, valores aceptados, rangos y reglas de negocio) y, si falla uno de silver, no se publica `gold`; linaje por fila en `_source_key`; política de frescura explícita en [Arquitectura](ARCHITECTURE.md) (snapshot estático, recarga a demanda). Falta endurecer los contratos de `gold` a tipados con `contract: enforced`)
-- [ ] Al menos un componente aprendido evaluado contra un baseline apropiado. **Pendiente.** El candidato es el clasificador de intención por modelo contra las palabras clave en es y pt (el texto histórico es plantilla, ver [Datos](DATA.md); se evalúa sobre texto vivo generado por el equipo y rotulado como tal). Hoy `classify_intent` no tiene prueba directa.
-- [ ] Labels o juicios de relevancia válidos, sin leakage (ej. no usar `is_fraud` como input si se supone que el sistema lo "detecta").
-- [ ] Justificar representaciones, métricas, umbrales, y splits de evaluación.
+- [x] Al menos un componente aprendido evaluado contra un baseline apropiado. (Clasificación de intención: modelo contra palabras clave, 228 casos ciegos y 40 adversariales, con intervalos y prueba pareada. [Evaluación](EVALUATION.md#1-el-componente-clasificación-de-intención).)
+- [x] Labels o juicios de relevancia válidos, sin leakage (ej. no usar `is_fraud` como input si se supone que el sistema lo "detecta"). (Etiquetas por construcción o por un oráculo de la política escrito aparte; `is_fraud` no existe en los casos; los conjuntos se leyeron uno por uno y se depuraron (lo hizo el autor de la evaluación, no un tercero). [Evaluación](EVALUATION.md#cómo-se-evaluó).)
+- [x] Justificar representaciones, métricas, umbrales, y splits de evaluación. (No hay entrenamiento, así que no hay partición de entrenamiento y prueba: los conjuntos se escribieron antes de ejecutar y lo ajustado después se validó con un conjunto nuevo. [Evaluación](EVALUATION.md#cómo-se-evaluó).)
 
 ## Medición de calidad y manejo de fallas
 
-- [ ] Evaluación sobre casos held-out.
-- [ ] Incluir: datos incorrectos/faltantes, sesiones expiradas, intentos de acceso no autorizado, prompt injection, fallos de herramientas, ambigüedad multilingüe.
-- [ ] Reportar: resultados exitosos, resultados inseguros, comportamiento de handoff, latencia, costo — con tamaños de muestra y limitaciones explícitas.
+- [x] Evaluación sobre casos held-out. (549 casos de punta a punta contra el backend y la base reales, con y sin modelo. Son casos generados por el equipo.)
+- [x] Incluir: datos incorrectos/faltantes, sesiones expiradas, intentos de acceso no autorizado, prompt injection, fallos de herramientas, ambigüedad multilingüe. (Datos inexistentes 24, sesión vencida 6, datos ajenos 20, inyección 12, fallo del backend 12 y aclaración en es y pt 31: [Evaluación](EVALUATION.md#2-el-sistema-completo-de-punta-a-punta).)
+- [x] Reportar: resultados exitosos, resultados inseguros, comportamiento de handoff, latencia, costo — con tamaños de muestra y limitaciones explícitas. (Con tamaños de muestra, intervalos y límites explícitos. Pendiente repetir la corrida completa con modelo después de las correcciones; ver los límites.)
 
 ## Métricas a reportar (definiciones exactas del reto)
 

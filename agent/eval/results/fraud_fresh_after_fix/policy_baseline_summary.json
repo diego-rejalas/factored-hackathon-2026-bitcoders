@@ -1,0 +1,45 @@
+{
+  "config": "baseline",
+  "model": "none",
+  "n": 40,
+  "concurrency": 4,
+  "wall_seconds": 1.2,
+  "pass_rate_by_category": {
+    "fraud": {
+      "n": 40,
+      "k": 36,
+      "value": 0.9,
+      "ci95": [
+        0.7695,
+        0.9604
+      ]
+    }
+  },
+  "by_language": {
+    "es": {
+      "n": 21,
+      "k": 21,
+      "value": 1.0,
+      "ci95": [
+        0.8454,
+        1.0
+      ]
+    },
+    "pt": {
+      "n": 19,
+      "k": 15,
+      "value": 0.7895,
+      "ci95": [
+        0.5667,
+        0.9149
+      ]
+    }
+  },
+  "failures": {
+    "fraud/wrong_outcome": 4
+  },
+  "latency_ms": {
+    "p50": 103.65,
+    "p95": 135.06
+  }
+}

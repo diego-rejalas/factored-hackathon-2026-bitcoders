@@ -433,3 +433,25 @@ def test_no_reason_is_invented_for_an_unknown_or_empty_code(graph, tools):
     tools.transactions[0]["response_meaning"] = None
     result = _run_selected(graph, "No reconozco este cobro", "TXN-1")
     assert "Motivo informado" not in result["reply"] and "código 99" not in result["reply"]
+
+
+# --- found by the held-out evaluation (docs/EVALUATION.md): the handoff arrived with no verified facts ----------
+
+
+def test_an_escalation_hands_over_what_was_verified_and_what_the_customer_wrote(graph, tools):
+    from tests.fakes import _tx, CUS_A
+
+    tools.transactions.append(_tx("TXN-BIG", CUS_A, "Electro Mega", "Declined", 600.00))
+    result = _run(graph, "No reconozco el cobro de 600 en Electro Mega")
+    handoff = result["handoff"]
+    facts = " | ".join(handoff["verified_facts"])
+    assert "TXN-BIG" in facts and "Declined" in facts and "600.00 USD" in facts
+    assert "GUARDRAIL_MAX_USD" in facts  # the rule that sent it to a person
+    assert handoff["customer_message"] == "No reconozco el cobro de 600 en Electro Mega"
+
+
+def test_an_escalation_with_no_transaction_says_so_instead_of_leaving_the_facts_empty(graph, tools):
+    result = _run(graph, "Me robaron la tarjeta, no fui yo")
+    facts = " | ".join(result["handoff"]["verified_facts"])
+    assert "no se identificó una única transacción" in facts and "fraud" in facts
+    assert len(result["handoff"]["customer_message"]) <= 300

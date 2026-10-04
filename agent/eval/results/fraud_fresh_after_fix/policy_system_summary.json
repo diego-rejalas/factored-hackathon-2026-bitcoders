@@ -1,0 +1,45 @@
+{
+  "config": "system",
+  "model": "anthropic/claude-haiku-4.5",
+  "n": 40,
+  "concurrency": 4,
+  "wall_seconds": 14.2,
+  "pass_rate_by_category": {
+    "fraud": {
+      "n": 40,
+      "k": 35,
+      "value": 0.875,
+      "ci95": [
+        0.7389,
+        0.9454
+      ]
+    }
+  },
+  "by_language": {
+    "es": {
+      "n": 21,
+      "k": 21,
+      "value": 1.0,
+      "ci95": [
+        0.8454,
+        1.0
+      ]
+    },
+    "pt": {
+      "n": 19,
+      "k": 14,
+      "value": 0.7368,
+      "ci95": [
+        0.5121,
+        0.8819
+      ]
+    }
+  },
+  "failures": {
+    "fraud/wrong_outcome": 5
+  },
+  "latency_ms": {
+    "p50": 1312.55,
+    "p95": 1680.42
+  }
+}
