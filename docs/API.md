@@ -163,7 +163,7 @@ Son reenvíos delgados al backend con la misma sesión, con comprobaciones previ
 
 ## 6. Flujos de punta a punta
 
-**Cliente:** `POST /session` → `POST /chat` (con `message` y, si lo eligió, `transaction_id`) → `resolved` con su caso, o `escalated` con su caso y su traspaso → `GET /me/disputes` para "Mis casos".
+**Cliente:** `POST /session` → `POST /chat` (con `message` y, si lo eligió, `transaction_id`) → `resolved` con su caso, o `escalated` con su caso y su traspaso → `GET /me/disputes` para "Mis casos" y `GET /me/conversations` para las conversaciones recientes, que se reabren con `GET /me/conversations/{id}`.
 
 **Especialista:** `POST /admin/session` → `GET /admin/disputes?status=active` → detalle (traspaso y eventos) → `claim` → `close` con nota y resolución → `GET /admin/metrics`.
 

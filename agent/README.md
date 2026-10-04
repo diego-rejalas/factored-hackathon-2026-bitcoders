@@ -1,51 +1,60 @@
-# agent/ — agente + guardrail
+# agent/: agente y guardrail
 
-Vertical 4 de `../docs/ARCHITECTURE.md`. Servicio FastAPI con LangGraph adentro. **Nunca toca `gold.*` directo** — todos los datos viajan por las tools HTTP de `../backend/`, siempre reenviando el token del usuario (enforcement doble). **Implementado** (workflow Opción A: disputas de transacciones).
+Servicio FastAPI con LangGraph. Habla con el cliente, decide con una política determinista, llama a las herramientas del backend, verifica y escala. Es la vertical 4 de [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md); la política completa está en [`docs/WORKFLOW.md`](../docs/WORKFLOW.md).
+
+**Nunca toca `gold.*`.** Todo dato bancario viaja por el backend HTTP, reenviando el token del cliente (la autorización se comprueba dos veces). Solo escribe sus propias tablas: `agent.trace_log` y `agent.conversation_messages`.
 
 ## Contrato
 
-| Endpoint | Qué hace |
+El esquema exacto es `tests/contract/openapi.json` y una prueba falla si el código se desvía. Rutas del propio agente:
+
+| Ruta | Qué hace |
 |---|---|
-| `POST /chat` `{session_token, message, conversation_id?}` | Devuelve `{reply, conversation_id, outcome, handoff?, candidates?, case?, reason?, language?}`. Los nuevos campos son opcionales; todo el flujo sigue siendo compatible con consumidores antiguos. |
-| `POST /session` | Proxy delgado al `POST /session` del backend — el frontend solo conoce la URL de este servicio. |
-| `POST /admin/session` | Proxy de login admin; el backend valida el hash y crea el JWT. |
-| `GET /admin/disputes*`, `POST /admin/disputes/{id}/transition`, `GET /admin/metrics` | Proxies: reenvían el JWT admin y el ID token de servicio al backend, que vuelve a validar permisos. |
-| `GET /admin/agent-metrics?window=<hours>` | Métricas de `agent.trace_log`: outcomes, contención proxy, p50/p95 por nodo, intent, idioma y resultado de verify. |
-| `GET /admin/conversations/{id}/trace` | Timeline estructurado de la conversación asociada a un caso. Nunca contiene texto del cliente. |
-| `GET /me/disputes`, `GET /disputes/{id}` | Proxies para que el cliente consulte sus casos y eventos. |
-| `GET /me/conversations`, `GET /me/conversations/{id}` | Historial del cliente: se guarda cada turno en `agent.conversation_messages` y solo lo lee su dueño. |
-| `GET /meta/demo-scenarios`, `GET /meta/data` | Proxy público del selector demo y proxy admin de frescura, respectivamente. |
-| `GET /health` | Liveness para Cloud Run. |
+| `POST /chat` `{session_token, message, conversation_id?, transaction_id?}` | Devuelve `{reply, conversation_id, outcome, case_id, case_status, case, handoff, candidates, reason, language}`. `outcome` es `resolved`, `clarify`, `escalated` o `unavailable` |
+| `GET /me/conversations`, `GET /me/conversations/{id}` | El historial del cliente. Solo lo lee su dueño (el cliente sale del token); otro cliente recibe 404 |
+| `GET /admin/agent-metrics?window=<horas>` | Resultados, contención, latencia p50 y p95 por nodo, intenciones, idiomas y resultado de `verify`, desde `agent.trace_log` |
+| `GET /admin/conversations/{id}/trace` | Los pasos de una conversación. Nunca contiene texto del cliente |
+| `GET /health` | Liveness |
+
+El resto son reenvíos delgados al backend con comprobaciones previas: `POST /session`, `POST /admin/session`, `GET /me/disputes`, `GET /disputes/{id}`, `GET /meta/demo-scenarios`, `GET /meta/data`, `GET /admin/disputes*`, `POST /admin/disputes/{id}/transition` y `GET /admin/metrics`.
 
 ## Grafo (`app/graph.py`)
 
-`understand → decide → act → verify → (escalate) → respond` con edges condicionales. Control de flujo en código; el LLM solo redacta la respuesta final a partir de hechos verificados (sin key de OpenRouter responde con templates deterministas es/pt). Estado conversacional por `conversation_id` con checkpointer **en memoria** — se pierde al redeployar (limitación aceptada y documentada).
+`understand → decide → act → verify → respond | escalate`, con aristas condicionales. El control de flujo es código; el modelo no decide nada.
 
-## Guardrail determinista (`app/guardrail.py` + nodo `decide`)
+- **`decide`** aplica el guardrail antes de cualquier herramienta.
+- **`verify`** relee el caso del backend antes de decir que se registró; si no coincide, escala (`verify_failed`).
+- **Fallas:** hasta 3 intentos por herramienta, con 2 s de conexión (peor caso ~6,9 s). Si el backend no responde, `outcome: unavailable` con un mensaje seguro y sin cambios.
 
-Tabla de decisiones, **no un prompt** — el LLM no puede negociarla:
+## Guardrail (`app/guardrail.py`)
 
-- **Escal SIEMPRE:** (a) keywords de fraude/robo/"no fui yo" en es/pt (normalizadas sin acentos), (b) monto efectivo USD ≥ `GUARDRAIL_MAX_USD` (default 500), (c) ambigüedad sin resolver tras 2 rondas de aclaración, (d) intent fuera de alcance.
-- **Auto-resuelve SOLO:** transacción `Declined`/`Reversed` del propio cliente, única candidata sin ambigüedad, bajo el umbral. `verify` re-consulta `GET /disputes/{id}` y marca `auto_resolved` por el endpoint del backend antes de reportar (no confía en que el LLM "diga" que funcionó).
-- **Aclara (máx 2 rondas)** cuando hay 0 o >1 candidatas: pide comercio/monto/fecha; el narrowing es por menciones de comercio y monto en el texto, y si el cliente nombra un comercio que no coincide con nada, nunca autodescubre una transacción alternativa.
+Una tabla de decisiones en código, no un prompt. Escala siempre ante: fraude o robo (es y pt), un cobro `Approved` o `Pending`, un monto efectivo en USD mayor o igual a `GUARDRAIL_MAX_USD` (500 por defecto) o desconocido, ambigüedad sin resolver tras 2 rondas de aclaración, y una petición fuera de alcance. Resuelve solo una transacción `Declined` o `Reversed` del propio cliente, única candidata y bajo el umbral. El detalle y el orden están en [`docs/WORKFLOW.md`](../docs/WORKFLOW.md).
 
-## Clasificación de intent (`app/intents.py`)
+## Modelo de lenguaje (opcional)
 
-few-shot por OpenRouter, sino baseline determinista por keywords (referencia, se evalúa en el branch de eval).
+Con `OPENROUTER_API_KEY`, el modelo hace dos cosas, y nunca decide la política:
+
+1. **Clasificar la intención** de un mensaje (`app/intents.py`). Sin clave, o si falla, se usan las palabras clave en es y pt.
+2. **Redactar la respuesta de un caso ya resuelto** (`app/llm.py`). El borrador pasa por `app/grounding.py` antes de enviarse: sin plazos ni promesas de dinero, sin números que no estén en los hechos, sin identificadores de cliente, con el número de caso. Si falla, sale la plantilla de `app/replies.py`. Escalaciones, aclaraciones y estados nunca los redacta el modelo.
 
 ## Otros módulos
 
-- `app/tools.py` — clientes HTTP delgados al backend y proxies admin; cada llamada bancaria reenvía el token del cliente, y cada llamada admin el token admin.
-- `app/tracing.py` — cada paso del grafo a `agent.trace_log` en Postgres (DDL en startup). Evidencia de auditoría; **nunca** se registra chain-of-thought ni texto del usuario. Best-effort: un fallo de trace no rompe la conversación.
-- `app/llm.py` — cliente OpenRouter (`OPENROUTER_MODEL` configurable, lista de fallback). Instrucción de sistema: responder en el idioma del usuario (es/pt), no inventar hechos, solo datos verificados.
-- `app/replies.py` — templates deterministas es/pt por outcome (fallback sin LLM).
+- `app/tools.py`: clientes HTTP delgados al backend; cada llamada reenvía el token del cliente o del administrador.
+- `app/tracing.py`: cada paso a `agent.trace_log`. Nunca guarda el texto del cliente ni el razonamiento del modelo. Es la evidencia de auditoría; un fallo de traza no rompe la conversación.
+- `app/conversations.py`: guarda cada turno en `agent.conversation_messages` (lo que escribió el cliente, la respuesta y sus tarjetas). Es la tabla a la que aplicaría la política de retención. Guardar es de mejor esfuerzo.
+- `app/observability.py`: `X-Request-ID` y registros JSON.
 
-## Tests (backend mockeado, sin red ni Postgres)
+## Configuración
+
+Ver `.env.example`. Las principales: `BANK_URL`, `SESSION_JWT_SECRET` (compartida con el backend), `GUARDRAIL_MAX_USD`, `OPENROUTER_API_KEY` y `OPENROUTER_MODEL`, `CORS_ALLOWED_ORIGINS` (orígenes exactos, nunca `*`) y `PG_*` para las tablas del agente.
+
+## Pruebas
 
 ```bash
-python -m pytest                # desde agent/, con pytest + httpx instalados
+python -m pytest        # desde agent/, con pytest y httpx; el backend y el modelo van simulados
+PG_TEST_HOST=localhost PG_TEST_PORT=5433 PG_TEST_USER=postgres PG_TEST_PASSWORD=dev python -m pytest   # también el SQL del historial contra PostgreSQL
 ```
 
-Cubre los 3 caminos obligatorios (normal auto-resuelto con verificación, ambiguo con aclaración, handoff estructurado) más: fraude keyword → escalate, monto ≥ umbral → escalate (borde inclusive), 2 rondas sin resolución → escalate, portugués → respuesta en pt, token inválido/expirado → 401, proxies admin y agregación de percentiles, y que el agente jamás toca datos de otro cliente.
+Cubren los tres caminos obligatorios, el guardrail y sus bordes (el umbral inclusive), el portugués, la sesión inválida, los reintentos, las comprobaciones del borrador del modelo, el aislamiento del historial entre clientes y el contrato OpenAPI.
 
-Despliegue: Cloud Run, ver `../infra/gcp/envs/`.
+Despliegue: Cloud Run, ver [`infra/gcp/envs/`](../infra/gcp/envs/).

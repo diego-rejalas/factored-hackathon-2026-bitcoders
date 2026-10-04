@@ -82,7 +82,7 @@ Las etapas compartidas viven en `data/pipeline/` y las prueba su propia suite. E
 
 **Responsabilidad:** es el "service/tool layer" que el reto pide: los permisos se hacen cumplir aquí, no en el prompt. FastAPI con asyncpg, en `backend/`. El contrato endpoint por endpoint está en [API](API.md) y el de OpenAPI está versionado, con una prueba que falla si el código se desvía.
 
-- **Sesión:** JWT firmado (HS256, emisor `backend-sandbox`) con vencimiento y rol `customer` o `admin`. Las cuentas de demostración usan contraseña con bcrypt y bloqueo por intentos. Es un sandbox y se presenta como tal.
+- **Sesión:** JWT firmado (HS256, emisor `backend-sandbox`) con vencimiento y rol `customer` o `admin`. Las cuentas de demostración usan contraseña con argon2id y bloqueo por intentos; la consola del especialista, hashes bcrypt guardados en Secret Manager. Es un sandbox y se presenta como tal.
 - **Titularidad:** toda consulta se filtra por el cliente del token. Pedir una transacción o un caso ajeno devuelve 404, no 403, para no confirmar que existe.
 - **Casos:** un caso por cliente y transacción (índice único parcial), con estados `open`, `auto_resolved`, `escalated`, `in_progress` y `closed`, sus eventos y la evidencia. Las migraciones están versionadas (`app/migrations/`, con candado de asesoría).
 - **Solo lectura sobre los datos:** el rol `backend_app` lee `gold` y escribe únicamente en `app.*`.

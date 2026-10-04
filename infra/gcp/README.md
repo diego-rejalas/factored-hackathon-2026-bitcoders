@@ -129,16 +129,20 @@ ENVIRONMENT=dev ./infra/gcp/scripts/manage_db.sh status
 
 Cloud Run a 0 instancias cuesta casi nada; Cloud SQL es el único costo permanente.
 
-## Estado de esta estructura y qué falta
+## Estado y qué falta
 
-**Verificado:** `terraform fmt`, `init` y `validate` pasan en los tres ambientes, y un `plan` real contra `bitcoders-factored-hackathon` los planifica sin errores ni choques con el stack anterior.
-**No verificado:** ningún `apply` contra GCP. En particular la ruta privada de qa y prod (Private Service Access, Direct VPC egress de Cloud Run, y que el ETL de DuckDB conecte a la IP privada) está sin probar, y el modo `connector` también. `dev` es el ambiente que reproduce lo que ya funcionaba.
+**Verificado:** `terraform fmt` y `validate` pasan en los tres ambientes. **`prod` está aplicado** (borde con Cloud Armor, backend privado, un rol de base por servicio, la VM de Airflow y el despliegue desde GitHub) y `scripts/e2e.py` pasó 11 de 11 contra él.
 
-Pendiente de endurecer (no cambió con esta reestructura):
+**No verificado:**
+- **La versión actual del código no está desplegada en `prod`.** Lo desplegado es anterior a la consola del especialista, al historial de conversaciones y a los cambios del agente posteriores. Al desplegar, las migraciones del backend (`0003` y `0005`) corren sobre la base de `prod`: `0003` cierra los casos duplicados por transacción, así que conviene revisar antes los datos de prueba que hay ahí.
+- `dev` y `qa` solo se validaron con `plan`; `connector` (el conector de Cloud SQL) no se probó.
+
+**Pendiente de endurecer:**
 - Presupuesto con alerta y monitoreo.
-- **Acceso humano a una base privada:** desde un portátil no se llega a una instancia sin IP pública (ni con `cloud-sql-proxy`, que debe estar dentro de la VPC). El camino previsto es entrar por IAP a la VM de Airflow (el firewall de `modules/network` ya permite el rango de IAP para instancias con la etiqueta `iap`) y conectar desde ahí. Mientras no exista esa VM, `dev` (IP pública) es el ambiente para consultas manuales.
-- **Airflow y dbt como servicio no están en este Terraform** (el pipeline es el Cloud Run Job con `dbt-duckdb`). Llevarlos a GCP es el siguiente paso, y encaja como un módulo nuevo `airflow` (VM de Compute Engine) en los tres ambientes.
+- **Acceso humano a una base privada:** desde un portátil no se llega a una instancia sin IP pública (ni con `cloud-sql-proxy`, que debe estar dentro de la VPC). Se entra por IAP a la VM de Airflow (el firewall de `modules/network` permite el rango de IAP para instancias con la etiqueta `iap`) y se conecta desde ahí.
+- El secreto `typesafe-api-key` sigue declarado y vacío: ya no lo usa nada. Quitarlo es un `apply` que destruye un secreto, y se deja para un cambio deliberado.
+- Los contenedores `backend`, `agent` y `frontend` corren como `root` (ver [`docs/SECURITY.md`](../../docs/SECURITY.md)).
 
-## Migración desde el stack anterior
+## Un stack anterior
 
-El stack desplegado antes de esta separación usa nombres antiguos (`factored-hackathon`, `us-central1`) y estado sin prefijo de ambiente. Los ambientes nuevos son despliegues **nuevos** (otros nombres, otra región): no reemplazan al anterior ni lo destruyen. Para retirarlo, hacer `terraform destroy` con la versión anterior del código (commit `62a97b1`) y su estado, después de verificar el ambiente nuevo.
+Antes de separar los ambientes existió un despliegue con nombres antiguos (`factored-hackathon`, `us-central1`) y estado sin prefijo. Los ambientes actuales son despliegues **nuevos** y no lo reemplazan ni lo destruyen. Si todavía existe, se retira con `terraform destroy` desde el commit `62a97b1` y su estado, después de verificar el ambiente nuevo.

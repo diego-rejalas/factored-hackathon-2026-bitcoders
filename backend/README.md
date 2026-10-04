@@ -4,9 +4,9 @@ Vertical 3 de `../docs/ARCHITECTURE.md`. Servicio FastAPI separado (Cloud Run). 
 
 ## Contrato (OpenAPI en `/docs`)
 
-Dos superficies sobre el mismo servicio. La **raíz** es la del agente (no cambia); **`/v1`** es la de la aplicación web, a la que llega por su servidor (BFF), nunca desde el navegador. Diseño y decisiones en `../docs/API.md`; **el contrato (rutas, estados, errores, seguridad) en `../docs/API.md`**, cuyo OpenAPI se guarda en `tests/contract/openapi.json` y una prueba falla si el código se desvía de él.
+Dos superficies sobre el mismo servicio. La **raíz** es la que usa el agente (el navegador no llama al backend: va al agente); **`/v1`** es una superficie pensada para una aplicación web, que la interfaz actual no usa. Diseño y decisiones en `../docs/API.md`; **el contrato (rutas, estados, errores, seguridad) en `../docs/API.md`**, cuyo OpenAPI se guarda en `tests/contract/openapi.json` y una prueba falla si el código se desvía de él.
 
-**`/v1` (aplicación web)**
+**Raíz (la que usa el agente)**
 
 | Endpoint | Auth | Qué hace |
 |---|---|---|

@@ -60,7 +60,7 @@ with Diagram(
                 with Cluster("Subred de aplicación  10.30.0.0/24", graph_attr={**cluster_attr, "bgcolor": "#F6FBF7", "pencolor": "#34A853", "style": "dashed"}):
                     with Cluster("Cloud Run  (Direct VPC egress)", graph_attr={**cluster_attr, "bgcolor": "#FFFFFF", "pencolor": "#4285F4"}):
                         frontend = Run("7  frontend\nNext.js")
-                        agent = Run("8  agent\nPydanticAI")
+                        agent = Run("8  agent\nLangGraph")
                         backend = Run("9  backend\nFastAPI, solo lectura")
                         etl = Run("10  Job etl\na demanda")
                     with Cluster("VM de orquestación", graph_attr={**cluster_attr, "bgcolor": "#FFFFFF", "pencolor": "#FBBC04"}):

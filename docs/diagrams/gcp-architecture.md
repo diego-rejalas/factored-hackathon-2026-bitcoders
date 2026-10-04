@@ -14,7 +14,7 @@ Generado con la biblioteca `diagrams` (mingrammer): `python gcp_architecture.py`
 | 5 | IAM | Una cuenta de servicio por componente |
 | 6 | Cloud IAP + OS Login | Único acceso a la VM, sin IP pública |
 | 7 | frontend | Interfaz web (Next.js) |
-| 8 | agent | Política de disputas (PydanticAI) |
+| 8 | agent | Política de disputas (LangGraph) |
 | 9 | backend | API FastAPI de solo lectura sobre gold |
 | 10 | Job etl | El mismo pipeline, lanzado a demanda |
 | 11 | Airflow 3 + dbt | VM e2-standard-4, DAG de 7 tareas, apagada a las 03:00 |

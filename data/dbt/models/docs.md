@@ -8,7 +8,7 @@ Data layer of an AI-first banking customer-service prototype. It turns the organ
 | Layer | Schema | Built by | Content |
 |---|---|---|---|
 | S3 | read-only bucket | organizer | One CSV table each (daily files for the partitioned tables) |
-| Bronze | `bronze` | Airflow DAG `latam_bank_pipeline` (DuckDB) | Faithful copy, every column as text, plus `_source_key` and `_ingested_at`. Read only by dbt. |
+| Bronze | `bronze` | Airflow DAG `latam_bank_gcp` (DuckDB) | Faithful copy, every column as text, plus `_source_key` and `_ingested_at`. Read only by dbt. |
 | Silver | `silver` | dbt `stg_*` views | Typed view per bronze table: real types, empty strings as NULL, 'Mexico' conformed to 'México' where the macro is applied. Carries the data tests. |
 | Gold | `gold` | dbt tables | Backend-ready `customers`, `products`, `transactions`, `complaints`, `call_center_interactions`. Enforced contracts, indexed by customer. |
 
