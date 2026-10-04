@@ -9,6 +9,7 @@ except ImportError:  # pragma: no cover
 
 from langgraph.graph import END, START, StateGraph
 
+import app.grounding as grounding
 import app.guardrail as guardrail
 import app.intents as intents
 import app.replies as replies
@@ -374,16 +375,40 @@ def build_graph(tools, tracer, llm=None):
         else:
             reply = replies.clarify_empty_reply(language)
 
-        if llm is not None and llm.enabled:
-            facts = state.get("facts") or []
+        draft_status = None
+        facts = state.get("facts") or []
+        # The model phrases ONE thing: a case the policy resolved and the backend recorded, which is the only
+        # turn that has verified facts to give it. Escalations, questions, greetings and statuses keep their fixed
+        # text: the escalation carries the case number and what happens next, the question carries the candidates,
+        # and without facts a model improvises (it told customers to contact the fraud team, when the case had
+        # already been escalated to a person).
+        drafts_here = (
+            llm is not None
+            and llm.enabled
+            and facts
+            and outcome == "resolved"
+            and not state.get("handoff")
+            and state.get("case")
+            and state.get("candidate")
+            and state.get("intent") == "dispute"
+        )
+        if drafts_here:
+            case_id = str(state["case"].get("case_id") or "")
             draft = await llm.chat(
                 "Hechos verificados:\n- " + "\n- ".join(facts)
                 + f"\n\nMensaje del cliente: {state['message']}\n"
                 + f"Redacta la respuesta final al cliente en {language} usando solo estos hechos."
             )
-            if draft:
-                reply = draft
-        await tracer.log(state["run_id"], state["conversation_id"], "respond", intent=state.get("intent"), result_status=outcome, latency_ms=_elapsed(start))
+            if not draft:
+                draft_status = "llm_no_answer"
+            else:
+                broken = grounding.check(draft, facts, state["message"], case_id)
+                if broken:
+                    draft_status = f"llm_rejected_{broken}"  # the fixed text stays
+                else:
+                    reply = grounding.with_case_id(draft, case_id, language)
+                    draft_status = "llm_drafted"
+        await tracer.log(state["run_id"], state["conversation_id"], "respond", intent=state.get("intent"), result_status=draft_status or outcome, latency_ms=_elapsed(start))
         return {"reply": reply}
 
     def route_after_decide(state: AgentState) -> str:
