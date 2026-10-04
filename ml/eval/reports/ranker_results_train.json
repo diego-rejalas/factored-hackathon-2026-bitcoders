@@ -1,0 +1,100 @@
+{
+  "split": "train",
+  "baseline": {
+    "n": 206,
+    "top1": 0.3069,
+    "top3": 0.3122,
+    "empty_on_unrelated": 1.0,
+    "false_empty_on_labeled": 0.5661,
+    "top1_by_noise": {
+      "amount_off": 0.0,
+      "amount_vague": 0.8378,
+      "combo": 0.3421,
+      "date_vague": 0.0,
+      "merchant_missing": 0.3846,
+      "merchant_misspelled": 0.1212
+    },
+    "top3_by_noise": {
+      "amount_off": 0.0,
+      "amount_vague": 0.8378,
+      "combo": 0.3421,
+      "date_vague": 0.0,
+      "merchant_missing": 0.3846,
+      "merchant_misspelled": 0.1515
+    },
+    "top1_by_currency": {
+      "ARS": 0.2273,
+      "COP": 0.3621,
+      "USD": 0.2936
+    },
+    "baseline_pool_1_n": 59,
+    "baseline_pool_1_baseline_top1": 0.8983,
+    "baseline_pool_2plus_n": 23,
+    "baseline_pool_2plus_baseline_top1": 0.2174,
+    "baseline_empty_on_labeled_n": 107
+  },
+  "weighted": {
+    "n": 206,
+    "top1": 0.6085,
+    "top3": 0.8942,
+    "empty_on_unrelated": 0.0588,
+    "false_empty_on_labeled": 0.0,
+    "top1_by_noise": {
+      "amount_off": 0.5,
+      "amount_vague": 0.7297,
+      "combo": 0.6053,
+      "date_vague": 0.4074,
+      "merchant_missing": 0.3462,
+      "merchant_misspelled": 0.9394
+    },
+    "top3_by_noise": {
+      "amount_off": 0.9286,
+      "amount_vague": 0.973,
+      "combo": 0.8158,
+      "date_vague": 0.7778,
+      "merchant_missing": 0.8462,
+      "merchant_misspelled": 1.0
+    },
+    "top1_by_currency": {
+      "ARS": 0.7727,
+      "COP": 0.7414,
+      "USD": 0.5046
+    },
+    "floor": 0.1,
+    "top1_on_baseline_single": 0.6441,
+    "top1_on_baseline_multi": 0.7826,
+    "top1_on_baseline_empty": 0.5514
+  },
+  "gbm": {
+    "n": 206,
+    "top1": 0.9048,
+    "top3": 0.9841,
+    "empty_on_unrelated": 0.4706,
+    "false_empty_on_labeled": 0.0,
+    "top1_by_noise": {
+      "amount_off": 0.9286,
+      "amount_vague": 0.973,
+      "combo": 0.8684,
+      "date_vague": 0.8889,
+      "merchant_missing": 0.8077,
+      "merchant_misspelled": 0.9394
+    },
+    "top3_by_noise": {
+      "amount_off": 1.0,
+      "amount_vague": 1.0,
+      "combo": 0.9737,
+      "date_vague": 0.963,
+      "merchant_missing": 0.9615,
+      "merchant_misspelled": 1.0
+    },
+    "top1_by_currency": {
+      "ARS": 1.0,
+      "COP": 0.931,
+      "USD": 0.8716
+    },
+    "floor": 0.1,
+    "top1_on_baseline_single": 0.9492,
+    "top1_on_baseline_multi": 0.913,
+    "top1_on_baseline_empty": 0.8785
+  }
+}

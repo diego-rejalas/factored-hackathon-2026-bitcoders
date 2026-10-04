@@ -1,0 +1,17 @@
+{"case_id": "DSP-0029", "claim": "Tem uma cobrança que não reconheço, há 47 dias", "noise_type": "date_vague", "language": "pt", "label": "TXN-S004045", "ranking": [], "baseline_pool": 0}
+{"case_id": "DSP-0064", "claim": "No reconozco este cargo de 886.16", "noise_type": "amount_off", "language": "es", "label": "TXN-S004983", "ranking": ["TXN-S004990", "TXN-S004996", "TXN-S004991", "TXN-S004983"], "baseline_pool": 0}
+{"case_id": "DSP-0116", "claim": "Apareceu um lançamento que não autorizei, há 16 dias", "noise_type": "date_vague", "language": "pt", "label": "TXN-S004537", "ranking": ["TXN-S004538"], "baseline_pool": 0}
+{"case_id": "DSP-0155", "claim": "Tem uma cobrança que não reconheço, há 29 dias", "noise_type": "date_vague", "language": "pt", "label": "TXN-S007703", "ranking": [], "baseline_pool": 0}
+{"case_id": "DSP-0156", "claim": "Cobraram algo que não foi eu, há 61 dias", "noise_type": "date_vague", "language": "pt", "label": "TXN-S008816", "ranking": ["TXN-S008821"], "baseline_pool": 0}
+{"case_id": "DSP-0180", "claim": "Reconheço uma cobrança que não fiz, há 34 dias", "noise_type": "date_vague", "language": "pt", "label": "TXN-S005485", "ranking": [], "baseline_pool": 0}
+{"case_id": "DSP-0196", "claim": "Me hicieron un cobro que no reconozco, a principios de mes", "noise_type": "date_vague", "language": "es", "label": "TXN-S008947", "ranking": ["TXN-S008955", "TXN-S008942", "TXN-S008946"], "baseline_pool": 16}
+{"case_id": "DSP-0201", "claim": "Tengo un cobro que no hice de 541.53", "noise_type": "merchant_missing", "language": "es", "label": "TXN-S008350", "ranking": ["TXN-S008349", "TXN-S008353", "TXN-S008355", "TXN-S008354", "TXN-S008350"], "baseline_pool": 1}
+{"case_id": "DSP-0208", "claim": "No reconozco este cargo, a principios de mes", "noise_type": "date_vague", "language": "es", "label": "TXN-S005925", "ranking": [], "baseline_pool": 12}
+{"case_id": "DSP-0214", "claim": "Cobraram algo que não foi eu, há 72 dias", "noise_type": "date_vague", "language": "pt", "label": "TXN-S002074", "ranking": [], "baseline_pool": 0}
+{"case_id": "DSP-0234", "claim": "Apareceu um lançamento que não autorizei, há 59 dias", "noise_type": "date_vague", "language": "pt", "label": "TXN-S009298", "ranking": [], "baseline_pool": 0}
+{"case_id": "DSP-0248", "claim": "Reconheço uma cobrança que não fiz, há 31 dias", "noise_type": "date_vague", "language": "pt", "label": "TXN-S005265", "ranking": [], "baseline_pool": 0}
+{"case_id": "DSP-0301", "claim": "Tem uma cobrança que não reconheço, no começo do mês", "noise_type": "date_vague", "language": "pt", "label": "TXN-S009411", "ranking": [], "baseline_pool": 7}
+{"case_id": "DSP-0305", "claim": "Apareceu um lançamento que não autorizei, no começo do mês", "noise_type": "date_vague", "language": "pt", "label": "TXN-S006949", "ranking": [], "baseline_pool": 8}
+{"case_id": "DSP-0343", "claim": "Tem uma cobrança que não reconheço da Elc", "noise_type": "merchant_misspelled", "language": "pt", "label": "TXN-S006754", "ranking": [], "baseline_pool": 7}
+{"case_id": "DSP-0374", "claim": "Cobraram algo que não foi eu de 774.99", "noise_type": "amount_off", "language": "pt", "label": "TXN-S003348", "ranking": ["TXN-S003344"], "baseline_pool": 0}
+{"case_id": "DSP-0387", "claim": "No reconozco este cargo, a principios de mes", "noise_type": "date_vague", "language": "es", "label": "TXN-S001687", "ranking": ["TXN-S001698"], "baseline_pool": 12}

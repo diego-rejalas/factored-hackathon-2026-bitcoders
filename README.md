@@ -7,8 +7,9 @@ Prototipo de sistema de atención al cliente bancario AI-first para el Factored 
 1. `doc/Factored AI & Data Hackathon 2026.md` — enunciado del reto (leer primero).
 2. `spec/CRITERIA.md` — checklist de todo lo que hay que cumplir para la entrega.
 3. `spec/DATA_FINDINGS.md` — hallazgos reales del dataset (S3), antes de asumir nada de los datos.
-4. `spec/ARCHITECTURE.md` — arquitectura por verticales, diagramas, decisiones tomadas y por qué.
-5. `spec/ENTERPRISE_ARCHITECTURE_EVALUATION.md` — evaluación de viabilidad para empresas reales, modelado de costos TCO y roadmap de madurez.
+4. `spec/ML_FINDINGS.md` — evaluación de los componentes de intención e identificación de transacciones contra sus baselines.
+5. `spec/ARCHITECTURE.md` — arquitectura por verticales, diagramas, decisiones tomadas y por qué.
+6. `spec/ENTERPRISE_ARCHITECTURE_EVALUATION.md` — evaluación de viabilidad para empresas reales, modelado de costos TCO y roadmap de madurez.
 
 ## Estructura del repo
 
@@ -19,6 +20,7 @@ Prototipo de sistema de atención al cliente bancario AI-first para el Factored 
 | `infra/gcp/etl/` | Pipeline B (GCP, del PR): un Cloud Run Job con DuckDB y `dbt-duckdb` en RAM; publica solo `gold.*` | Definido, sin validar |
 | `backend/` | Backend — microservicio de banca (tool layer, sesión por JWT, permisos por titularidad, API admin de disputas) | Implementado (PR #1) |
 | `agent/` | AI engineer — agente + guardrail (LangGraph); proxies admin y métricas/traza desde `agent.trace_log` | Implementado (PR #1); en revisión, ver `spec/PR1_REVIEW.md` |
+| `ml/eval/` | Sets sintéticos retenidos y harnesses de evaluación para clasificación de intención y ranking de transacciones | Implementado; resultados y limitaciones en `spec/ML_FINDINGS.md` §12 |
 | `frontend/` | Next.js (Cloud Run standalone con `AGENT_URL`): chat cliente (`/`), consola de especialistas (`/admin`), documentación de datos en `/data-docs` | Implementado |
 | `.railway/railway.ts` | Infra Railway: pipeline A y servicios actuales | Vigente hasta decidir la migración |
 | `infra/gcp/` | Infra GCP en Terraform, en tres ambientes (`envs/dev|qa|prod`) con módulos compartidos | Definido, `validate` y `plan` verificados; sin `apply` |
@@ -56,4 +58,3 @@ Control de base de datos Just-in-Time (GCP):
 ./infra/gcp/scripts/manage_db.sh status   # Inspecciona estado actual (RUNNABLE / STOPPED)
 ./infra/gcp/scripts/manage_db.sh pause    # Hiberna Cloud SQL y congela facturación de cómputo/IP
 ```
-
