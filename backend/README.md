@@ -1,10 +1,10 @@
 # backend/ — mock banking service (tool layer)
 
-Vertical 3 de `../spec/ARCHITECTURE.md`. Servicio FastAPI separado (Cloud Run). Es el "service/tool layer" que el reto exige para enforced de permisos — la política vive acá, no en el prompt del LLM. **Implementado** (workflow Opción A: disputas de transacciones, ver `../spec/WORKFLOW_DECISION.md`).
+Vertical 3 de `../docs/ARCHITECTURE.md`. Servicio FastAPI separado (Cloud Run). Es el "service/tool layer" que el reto exige para enforced de permisos — la política vive acá, no en el prompt del LLM. **Implementado** (workflow Opción A: disputas de transacciones, ver `../docs/WORKFLOW.md`).
 
 ## Contrato (OpenAPI en `/docs`)
 
-Dos superficies sobre el mismo servicio. La **raíz** es la del agente (no cambia); **`/v1`** es la de la aplicación web, a la que llega por su servidor (BFF), nunca desde el navegador. Diseño y decisiones en `../spec/BACKEND_API.md`; **el contrato (rutas, estados, errores, seguridad) en `../spec/API_CONTRACT.md`**, cuyo OpenAPI se guarda en `tests/contract/openapi.json` y una prueba falla si el código se desvía de él.
+Dos superficies sobre el mismo servicio. La **raíz** es la del agente (no cambia); **`/v1`** es la de la aplicación web, a la que llega por su servidor (BFF), nunca desde el navegador. Diseño y decisiones en `../docs/API.md`; **el contrato (rutas, estados, errores, seguridad) en `../docs/API.md`**, cuyo OpenAPI se guarda en `tests/contract/openapi.json` y una prueba falla si el código se desvía de él.
 
 **`/v1` (aplicación web)**
 
@@ -14,7 +14,7 @@ Dos superficies sobre el mismo servicio. La **raíz** es la del agente (no cambi
 | `POST /admin/session` | — | Login de especialista con `ADMIN_USERS` (hashes bcrypt en Secret Manager); emite JWT `role=admin` (`ADMIN_TTL_MINUTES`, default 8h). Cinco fallos por IP+usuario bloquean 60s en memoria; límite por proceso, solo adecuado para la demo. |
 | `GET /health` | — | Liveness para el healthcheck de Cloud Run. |
 | `GET /me` | Bearer | Perfil mínimo (nombre, país). Jamás expone income/credit_score/document_number. |
-| `GET /me/transactions?status=&merchant=&days=&limit=` | Bearer | Movimientos propios; siempre filtra por el `customer_id` del token (el query no acepta customer_id). `amount_usd_effective` = `coalesce(amount_usd, amount si currency='USD')` — 57% de `amount_usd` es nulo en filas USD (ver `../spec/DATA_FINDINGS.md`). `days` ancla al borde del snapshot (última transacción del dataset), no a `now()`. |
+| `GET /me/transactions?status=&merchant=&days=&limit=` | Bearer | Movimientos propios; siempre filtra por el `customer_id` del token (el query no acepta customer_id). `amount_usd_effective` = `coalesce(amount_usd, amount si currency='USD')` — 57% de `amount_usd` es nulo en filas USD (ver `../docs/DATA.md`). `days` ancla al borde del snapshot (última transacción del dataset), no a `now()`. |
 | `GET /me/transactions/{id}` | Bearer | Detalle con verificación de titularidad → 404 si es ajena. |
 | `GET /me/disputes` | Bearer | Lista mínima de casos propios, ordenados por creación descendente. |
 | `POST /disputes` | Bearer | Crea caso `open` en `app.disputes`; valida titularidad de la transacción primero → 404 si es ajena. Evidencia: snapshot de la transacción. |

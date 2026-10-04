@@ -1,5 +1,5 @@
 -- Marketing campaigns (200 rows). Not used in customer service.
--- Silver: real types, '' -> NULL, no business logic. See spec/DATA_FINDINGS.md.
+-- Silver: real types, '' -> NULL, no business logic. See docs/DATA.md.
 with source as (
     select * from {{ source('bronze', 'marketing_campaigns') }}
 )

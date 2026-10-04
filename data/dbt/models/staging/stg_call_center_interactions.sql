@@ -1,5 +1,5 @@
 -- contact_reason == reason_category in practice (same 6 values, see
--- spec/DATA_FINDINGS.md) — kept as two columns for schema fidelity, don't
+-- docs/DATA.md) — kept as two columns for schema fidelity, don't
 -- expect extra granularity from contact_reason downstream.
 with source as (
     select * from {{ source('bronze', 'call_center_interactions') }}

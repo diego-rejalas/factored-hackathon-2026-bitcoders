@@ -1,9 +1,9 @@
 # Checkov configuration. Every skipped check is a decision, with its reason. Anything not listed here
 # must pass; findings that already existed in code owned by other people are in .checkov.baseline
-# (new findings fail CI, see spec/SECURITY_SCANS.md).
+# (new findings fail CI, see docs/SECURITY.md).
 # Terraform is NOT scanned from source: Checkov cannot evaluate dynamic blocks or conditionals, so it
 # reports options as missing that the real configuration sets (Cloud SQL flags, SSL mode). Terraform is
-# scanned from the resolved plan instead: see .github/workflows/gcp-deploy.yml and spec/SECURITY_SCANS.md.
+# scanned from the resolved plan instead: see .github/workflows/gcp-deploy.yml and docs/SECURITY.md.
 framework:
   - dockerfile
   - github_actions

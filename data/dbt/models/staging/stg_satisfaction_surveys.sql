@@ -1,5 +1,5 @@
 -- Satisfaction surveys (212,759 rows). main_score runs 1 to 7 across CSAT, NPS and CES; nps_category never contains Promoter.
--- Silver: real types, '' -> NULL, no business logic. See spec/DATA_FINDINGS.md.
+-- Silver: real types, '' -> NULL, no business logic. See docs/DATA.md.
 with source as (
     select * from {{ source('bronze', 'satisfaction_surveys') }}
 )

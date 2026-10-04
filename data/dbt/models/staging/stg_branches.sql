@@ -1,5 +1,5 @@
 -- Branches. Small dimension (350 rows) that enables the branch foreign-key tests.
--- Silver: real types, '' -> NULL, no business logic. See spec/DATA_FINDINGS.md.
+-- Silver: real types, '' -> NULL, no business logic. See docs/DATA.md.
 with source as (
     select * from {{ source('bronze', 'branches') }}
 )

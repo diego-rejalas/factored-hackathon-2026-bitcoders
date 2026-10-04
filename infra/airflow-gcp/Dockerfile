@@ -10,7 +10,7 @@ FROM apache/airflow:slim-${AIRFLOW_VERSION}-python${PYTHON_VERSION}
 
 ARG AIRFLOW_VERSION
 ARG PYTHON_VERSION
-# Same versions that ran the pipeline in production (see spec/AIRFLOW_GCP.md).
+# Same versions that ran the pipeline in production (see docs/ARCHITECTURE.md).
 ARG DUCKDB_VERSION=1.5.6
 ARG DBT_DUCKDB_VERSION=1.11.0
 

@@ -6,7 +6,7 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Same versions as the Airflow image (see spec/AIRFLOW_GCP.md).
+# Same versions as the Airflow image (see docs/ARCHITECTURE.md).
 RUN pip install --no-cache-dir "dbt-duckdb==1.11.0" "duckdb==1.5.6"
 
 COPY data/pipeline /app/pipeline

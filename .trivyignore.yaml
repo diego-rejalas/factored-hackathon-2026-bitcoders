@@ -2,7 +2,7 @@
 misconfigurations:
   # Trivy, like Checkov, cannot evaluate dynamic "database_flags" blocks, so it reports the Cloud SQL
   # logging flags as missing. They are set (qa, prod, dev: db_audit_logging = true); the resolved plan
-  # shows them and Checkov passes the equivalent checks on it (spec/SECURITY_SCANS.md).
+  # shows them and Checkov passes the equivalent checks on it (docs/SECURITY.md).
   - id: GCP-0014
     paths: ["infra/gcp/modules/cloudsql/main.tf"]
     statement: logging flags are set through a dynamic block that Trivy does not evaluate
@@ -22,4 +22,4 @@ misconfigurations:
   # baseline).
   - id: DS-0002
     paths: ["backend/Dockerfile", "agent/Dockerfile", "frontend/Dockerfile"]
-    statement: not owned by this change; see .checkov.baseline and spec/SECURITY_SCANS.md
+    statement: not owned by this change; see .checkov.baseline and docs/SECURITY.md

@@ -1,5 +1,7 @@
 # Probar todo en local
 
+[Índice](README.md) · [Workflow](WORKFLOW.md) · [Arquitectura](ARCHITECTURE.md) · [Datos](DATA.md) · [API](API.md)
+
 Una base con datos de ejemplo, el backend y el agente en Docker, y el frontend en tu máquina (recarga al editar). No necesita nube, ni claves, ni la base real. Verificado el 2026-10-04 con la interfaz de Felix en un navegador real (cliente y consola del especialista) y los 11 escenarios de `infra/gcp/scripts/e2e.py`.
 
 ## 1. Backend, agente y base

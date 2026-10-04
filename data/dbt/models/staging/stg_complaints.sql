@@ -1,5 +1,5 @@
 -- description/resolution are templated text, not real free text — see
--- spec/DATA_FINDINGS.md. category/subcategory are the real structured
+-- docs/DATA.md. category/subcategory are the real structured
 -- signal; don't build NLP intent classification on the text fields here.
 with source as (
     select * from {{ source('bronze', 'complaints') }}

@@ -21,7 +21,7 @@ def _json_default(value: Any) -> Any:
         return float(value)
     raise TypeError(f"Object of type {value.__class__.__name__} is not JSON serializable")
 
-# gold.transactions is a static snapshot (see spec/DATA_FINDINGS.md): relative
+# gold.transactions is a static snapshot (see docs/DATA.md): relative
 # day filters are anchored to the latest transaction in the dataset, not now(),
 # so the demo does not return an empty list once the snapshot ages.
 SNAPSHOT_EDGE_SQL = "select max(transaction_date) as edge from gold.transactions"
@@ -688,7 +688,7 @@ class BankStore:
                     )
         return dict(row) if row else None
 
-    # --- admin: metrics (definitions mirror spec/CRITERIA.md; denominators always reported) ----
+    # --- admin: metrics (definitions mirror docs/CRITERIA.md; denominators always reported) ----
 
     async def admin_metrics(self, window_hours: int | None = None) -> dict:
         def scope(column: str) -> str:

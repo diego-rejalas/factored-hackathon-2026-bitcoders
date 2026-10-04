@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-This repository is an AI-first banking customer-service hackathon prototype. Read `doc/Factored AI & Data Hackathon 2026.md` before changing product behavior, then use `spec/CRITERIA.md`, `spec/DATA_FINDINGS.md`, and `spec/ARCHITECTURE.md` as the implementation contract.
+This repository is an AI-first banking customer-service hackathon prototype. Read `doc/Factored AI & Data Hackathon 2026.md` before changing product behavior, then use `docs/CRITERIA.md`, `docs/DATA.md`, and `docs/ARCHITECTURE.md` as the implementation contract.
 
 - `infra/airflow-gcp/` holds the Airflow image and the DAG `latam_bank_gcp` that runs on the GCP VM; `infra/gcp/etl/` is the Cloud Run Job fallback. Shared pipeline stages live in `data/pipeline/`.
 - `data/dbt/` contains the dbt project (dbt-postgres): `models/staging/` builds `silver.*` and `models/gold/` supplies `gold.*` tables; custom tests live in `tests/`.

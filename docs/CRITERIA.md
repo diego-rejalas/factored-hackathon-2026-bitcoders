@@ -1,15 +1,17 @@
 # Criterios del reto (Factored AI & Data Hackathon 2026)
 
+[Índice](README.md) · [Workflow](WORKFLOW.md) · [Arquitectura](ARCHITECTURE.md) · [Datos](DATA.md) · [API](API.md)
+
 Extraído de `doc/Factored AI & Data Hackathon 2026.md` y `doc/Datathon_2026_Kickoff.pdf`. Esto es la checklist de lo que el sistema DEBE cumplir, no ideas — para no perderla de vista mientras se investiga y se construye.
 
 ## Alcance obligatorio
 
-- [x] Un solo workflow bancario coherente (cuentas/pagos, tarjetas, disputas, o crédito). Implementar más de uno NO da bonus. (Disputas de transacciones, `WORKFLOW_DECISION.md`; no hay un segundo workflow.)
+- [x] Un solo workflow bancario coherente (cuentas/pagos, tarjetas, disputas, o crédito). Implementar más de uno NO da bonus. (Disputas de transacciones, `WORKFLOW.md`; no hay un segundo workflow.)
 - [x] Caso normal resuelto de forma automática (safe automated resolution). (Declined o Reversed bajo USD 500: Bruno y Carla en `infra/gcp/scripts/e2e.py`, 11 de 11 contra el stack local.)
 - [x] Caso ambiguo o no soportado → el sistema pide aclaración o se abstiene explícitamente. (Varias candidatas: pide aclaración y ofrece elegir; sin candidatas o fuera de alcance: escala. Cubierto en `agent/tests/test_graph.py` y en e2e.)
 - [x] Caso que requiere intervención humana → handoff estructurado. (Cobro aprobado, fraude, monto sobre el umbral, monto desconocido: `handoff` con solicitud, hechos, acciones, evidencia y preguntas abiertas.)
 - [x] Interacción demostrada en **español y portugués**. (e2e incluye un caso en portugués; la detección de idioma y las respuestas fijas están en es y pt. Falta medir por idioma en la evaluación.)
-- [x] Reportar limitaciones de datos o cobertura de idioma encontradas. (`DATA_FINDINGS.md`, `WORKFLOW_DECISION.md`: sin MXN en transacciones, sin portugués en histórico, `complaints.affected_product_id` inconsistente, sin duplicados exactos)
+- [x] Reportar limitaciones de datos o cobertura de idioma encontradas. (`DATA.md`, `WORKFLOW.md`: sin MXN en transacciones, sin portugués en histórico, `complaints.affected_product_id` inconsistente, sin duplicados exactos)
 
 ## Sistema funcional (requisitos mínimos)
 
@@ -21,7 +23,7 @@ Extraído de `doc/Factored AI & Data Hackathon 2026.md` y `doc/Datathon_2026_Kic
 
 ## Automatización controlada
 
-- [x] Define explícitamente qué puede responder solo, qué requiere confirmación, y cuándo debe abstenerse o transferir a humano. (`spec/DISPUTE_WORKFLOW.md`, tabla de autonomía.)
+- [x] Define explícitamente qué puede responder solo, qué requiere confirmación, y cuándo debe abstenerse o transferir a humano. (`docs/WORKFLOW.md`, tabla de autonomía.)
 - [x] Permisos y políticas se hacen cumplir **fuera** del texto generado por el modelo (código determinista, no el prompt). (Guardrail determinista en `agent/app/guardrail.py`; titularidad en el backend; el modelo no decide la política.)
 - [x] El handoff a humano entrega: la solicitud, hechos verificados, acciones tomadas, evidencia de soporte, preguntas sin resolver — no un dump crudo de transcript. (Estructura en `Handoff`; la consola `/admin` la muestra.)
 - [x] **No aplica:** el workflow es disputas y no toca crédito. Si el workflow tocara crédito: separar conversación / riesgo predictivo / política de elegibilidad. El modelo conversacional NUNCA inventa reglas de elegibilidad ni aprueba crédito por su cuenta.
@@ -53,7 +55,7 @@ Extraído de `doc/Factored AI & Data Hackathon 2026.md` y `doc/Datathon_2026_Kic
 
 - [x] Tracing / trazabilidad de cada decisión (evidencia de auditoría = fuentes + reglas de política + registros de ejecución; el chain-of-thought oculto del modelo NO cuenta como evidencia). (`agent.trace_log` por paso, sin texto de usuario ni razonamiento del modelo; el caso guarda sus eventos y evidencia.)
 - [x] Reintentos acotados (bounded retries) y fallback seguro. (Pipeline: las cargas reintentan 2 veces y `gold` conserva el último dato válido. Agente: 3 intentos con tiempo de conexión de 2 s y peor caso de 6.9 s; si el backend no responde, `outcome: unavailable` con un mensaje seguro y sin cambios.)
-- [x] Setup reproducible. (Todo como código: Terraform en `infra/gcp/`, Dockerfiles, CI que construye las imágenes y corre las pruebas; pasos en `spec/archive/AIRFLOW_DEPLOYMENT.md`. El agente se suma a la misma IaC)
+- [x] Setup reproducible. (Todo como código: Terraform en `infra/gcp/`, Dockerfiles, CI que construye las imágenes y corre las pruebas; los pasos están en `infra/gcp/README.md`. El agente se suma a la misma IaC)
 - [ ] **Falta el documento.** Explicar límites de capacidad, monitoreo, controles de acceso, retención de datos, y qué falta para producción real. (Capacidad y camino de escalamiento: `ARCHITECTURE.md`; monitoreo del pipeline: Airflow + `ops.etl_runs`; control de acceso: rol de solo lectura del backend. Faltan la política de retención y el resto cuando exista el agente)
 
 ## Libertad de arquitectura (lo que NO es obligatorio)
@@ -69,9 +71,9 @@ Extraído de `doc/Factored AI & Data Hackathon 2026.md` y `doc/Datathon_2026_Kic
 ## Fronteras de datos y ejecución
 
 - [x] Solo el dataset organizador-aprobado (LATAM Bank sintético) y recursos externos permitidos.
-- [x] Identificar qué inputs son reales, de-identificados, sintéticos, o generados por el equipo. (`DATA_FINDINGS.md`, "Procedencia de los datos": todo es sintético del organizador; lo que genere el equipo se rotulará aparte)
+- [x] Identificar qué inputs son reales, de-identificados, sintéticos, o generados por el equipo. (`DATA.md`, "Procedencia de los datos": todo es sintético del organizador; lo que genere el equipo se rotulará aparte)
 - [x] No incluir registros privados reales, credenciales, o datos restringidos en la entrega pública ni en requests a modelos externos. (PDF con AWS keys sacado del repo y de la historia de git — ver commits de purge)
-- [x] Servicios sandbox / tools de banca simulados son aceptables si sus contratos y límites están documentados. (`spec/API_CONTRACT.md` y `spec/BACKEND_API.md`; el contrato OpenAPI está versionado y una prueba falla si se desvía.)
+- [x] Servicios sandbox / tools de banca simulados son aceptables si sus contratos y límites están documentados. (`docs/API.md` y `docs/API.md`; el contrato OpenAPI está versionado y una prueba falla si se desvía.)
 - [ ] Autenticación con sesión de prueba confiable o servicio de identidad — un ID/número de cliente solo NO prueba identidad. **Parcial:** hay sesión JWT firmada con vencimiento y rol, y cuentas de demostración con contraseña en bcrypt y bloqueo por intentos; pero el ingreso del chat sigue aceptando cliente + número de documento. Es un sandbox, hay que decirlo así en la entrega y no presentarlo como identidad real.
 - [x] Permisos de acceso a registros de cada cliente enforced en la capa de servicio/tool, no en el prompt. (Cada consulta del backend se filtra por el cliente del token; hay pruebas de acceso cruzado en backend y agente.)
 - [x] No se requiere ni autoriza mover dinero real ni decisiones de crédito en vivo. (Nada en el sistema mueve dinero; el backend es de solo lectura)

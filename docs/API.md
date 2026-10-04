@@ -1,5 +1,7 @@
 # Contrato de las APIs
 
+[Índice](README.md) · [Workflow](WORKFLOW.md) · [Arquitectura](ARCHITECTURE.md) · [Datos](DATA.md) · [API](API.md)
+
 Contrato del workflow A (disputas de transacciones) entre **la interfaz web**, **el agente** y **el backend**, incluida la consola del especialista. Fecha: 2026-10-04, ya con el trabajo de Felix (consola y casos del cliente) fusionado.
 
 ## Cómo se mantiene este contrato

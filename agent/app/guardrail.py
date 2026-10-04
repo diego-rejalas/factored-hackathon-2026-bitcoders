@@ -3,7 +3,7 @@ import re
 import unicodedata
 
 # Deterministic guardrail tables. These are policy, not prompts: no LLM can
-# talk its way past them. See .kilo plan and spec/WORKFLOW_DECISION.md.
+# talk its way past them. See .kilo plan and docs/WORKFLOW.md.
 
 FRAUD_KEYWORDS = [
     "fraude",
