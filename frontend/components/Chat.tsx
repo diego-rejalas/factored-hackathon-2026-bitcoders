@@ -2,6 +2,7 @@
 
 import { FormEvent, KeyboardEvent, useRef, useState } from "react";
 import CasesPanel from "@/components/CasesPanel";
+import { EvidenceItem, EvidenceList, evidenceFromCase, evidenceLabel } from "@/components/Evidence";
 import { reasonLabel, tr } from "@/lib/i18n";
 import type { Candidate, ChatResponse, DisputeCase, Handoff, Language } from "@/lib/types";
 import { formatCandidateAmount, formatDate } from "@/lib/types";
@@ -111,7 +112,7 @@ export default function Chat({
             {message.role === "bot" && message.response && (
               <div className="msg-meta">
                 <OutcomeBadge outcome={message.response.outcome} language={language} />
-                {message.response.candidates && message.response.candidates.length > 0 && (
+                {message.response.outcome === "clarify" && message.response.candidates && message.response.candidates.length > 0 && (
                   <CandidateCards
                     candidates={message.response.candidates}
                     language={language}
@@ -204,6 +205,7 @@ function CandidateCards({
 }
 
 function VerifiedCaseCard({ caseData, language }: { caseData: DisputeCase; language: Language }) {
+  const evidence = evidenceFromCase(caseData, language);
   return (
     <section className="case-card" aria-label={`${tr(language, "case")} ${caseData.case_id}`}>
       <div className="head">
@@ -215,6 +217,13 @@ function VerifiedCaseCard({ caseData, language }: { caseData: DisputeCase; langu
         {tr(language, "transaction")}: <span className="mono">{caseData.transaction_id || tr(language, "unlinkedTransaction")}</span>
         {caseData.resolved_at ? ` · ${formatDate(caseData.resolved_at, language)}` : ""}
       </div>
+      {evidence.length > 0 && (
+        <EvidenceList variant="grid" label={evidenceLabel(language)}>
+          {evidence.map((item) => (
+            <EvidenceItem key={item.id} data={item} language={language} />
+          ))}
+        </EvidenceList>
+      )}
     </section>
   );
 }
