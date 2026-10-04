@@ -1801,7 +1801,7 @@ table.metrics-table tbody th {
   }
 }
 
-.gpt button {
+:where(.gpt) button {
   font: inherit;
   color: inherit;
 }
