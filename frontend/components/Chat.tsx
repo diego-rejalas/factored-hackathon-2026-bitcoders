@@ -3,7 +3,7 @@
 import { FormEvent, KeyboardEvent, useRef, useState } from "react";
 import CasesPanel from "@/components/CasesPanel";
 import { EvidenceItem, EvidenceList, evidenceFromCase, evidenceLabel } from "@/components/Evidence";
-import { reasonLabel, tr } from "@/lib/i18n";
+import { caseStatusLabel, reasonLabel, suggestions, tr } from "@/lib/i18n";
 import type { Candidate, ChatResponse, DisputeCase, Handoff, Language } from "@/lib/types";
 import { formatCandidateAmount, formatDate } from "@/lib/types";
 
@@ -35,9 +35,9 @@ export default function Chat({
   const [casesOpen, setCasesOpen] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
-  async function send(event?: FormEvent<HTMLFormElement>) {
+  async function send(event?: FormEvent<HTMLFormElement>, preset?: string) {
     event?.preventDefault();
-    const text = input.trim();
+    const text = (preset ?? input).trim();
     if (!text || busy) return;
     setInput("");
     setError(null);
@@ -108,10 +108,22 @@ export default function Chat({
       <div className="messages" ref={listRef} aria-label={tr(language, "appTitle")} aria-live="polite" aria-relevant="additions text">
         {messages.map((message, index) => (
           <article className={`message-block ${message.role}`} key={`${index}-${message.role}`}>
-            <div className={`msg ${message.role}`}>{message.text}</div>
+            <div className="msg-row">
+              {message.role === "bot" && <span className="avatar" aria-hidden="true">B</span>}
+              <div className={`msg ${message.role}`}>{message.text}</div>
+            </div>
+            {index === 0 && messages.length === 1 && (
+              <div className="suggestions" aria-label={tr(language, "message")}>
+                {suggestions(language).map((suggestion) => (
+                  <button className="chip" type="button" key={suggestion} disabled={busy} onClick={() => send(undefined, suggestion)}>
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            )}
             {message.role === "bot" && message.response && (
               <div className="msg-meta">
-                <OutcomeBadge outcome={message.response.outcome} language={language} />
+                {!message.response.case && <OutcomeBadge outcome={message.response.outcome} language={language} />}
                 {message.response.outcome === "clarify" && message.response.candidates && message.response.candidates.length > 0 && (
                   <CandidateCards
                     candidates={message.response.candidates}
@@ -129,7 +141,12 @@ export default function Chat({
             )}
           </article>
         ))}
-        {busy && <div className="msg bot" role="status">{tr(language, "typing")}</div>}
+        {busy && (
+          <div className="msg-row" role="status">
+            <span className="avatar" aria-hidden="true">B</span>
+            <div className="msg bot typing"><span className="dots" aria-hidden="true"><i /><i /><i /></span>{tr(language, "typing")}</div>
+          </div>
+        )}
       </div>
       {error && <div className="chat-error" role="alert">{error}</div>}
       <form className="composer" onSubmit={send}>
@@ -144,8 +161,9 @@ export default function Chat({
           autoComplete="off"
           required
         />
-        <button className="btn" type="submit" disabled={busy || !input.trim()}>
-          {tr(language, "send")}
+        <button className="btn send" type="submit" disabled={busy || !input.trim()} aria-label={tr(language, "send")}>
+          <span>{tr(language, "send")}</span>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
         </button>
       </form>
       {casesOpen && (
@@ -206,17 +224,20 @@ function CandidateCards({
 
 function VerifiedCaseCard({ caseData, language }: { caseData: DisputeCase; language: Language }) {
   const evidence = evidenceFromCase(caseData, language);
+  const shortId = caseData.case_id.slice(0, 8);
   return (
-    <section className="case-card" aria-label={`${tr(language, "case")} ${caseData.case_id}`}>
-      <div className="head">
-        <span>{tr(language, "case")}</span>
-        <code className="mono">{caseData.case_id}</code>
-        <span className={`badge badge-${caseData.status}`}>{caseData.status}</span>
-      </div>
-      <div className="sub">
-        {tr(language, "transaction")}: <span className="mono">{caseData.transaction_id || tr(language, "unlinkedTransaction")}</span>
+    <section className={`case-card status-${caseData.status}`} aria-label={`${tr(language, "case")} ${caseData.case_id}`}>
+      <header className="case-head">
+        <div>
+          <span className="case-kicker">{tr(language, "case")}</span>
+          <code className="case-id mono" title={caseData.case_id}>#{shortId}</code>
+        </div>
+        <span className={`badge badge-${caseData.status}`}>{caseStatusLabel(caseData.status, language)}</span>
+      </header>
+      <p className="case-sub">
+        {caseData.transaction_id ? <span className="mono">{caseData.transaction_id}</span> : tr(language, "unlinkedTransaction")}
         {caseData.resolved_at ? ` · ${formatDate(caseData.resolved_at, language)}` : ""}
-      </div>
+      </p>
       {evidence.length > 0 && (
         <EvidenceList variant="grid" label={evidenceLabel(language)}>
           {evidence.map((item) => (
@@ -232,10 +253,14 @@ function HandoffCard({ handoff, language }: { handoff: Handoff; language: Langua
   const request = language === "pt" ? handoff.request?.pt : handoff.request?.es;
   return (
     <section className="handoff">
-      <div className="head">{tr(language, "humanReview")}</div>
-      <div>{tr(language, "reason")}: {reasonLabel(handoff.reason, language)}</div>
-      {handoff.case_id && <div>{tr(language, "case")}: <code className="mono">{handoff.case_id}</code></div>}
-      {request && <p>{request}</p>}
+      <div className="handoff-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="8" r="3" /><path d="M3.5 19c.5-3 2.7-5 5.5-5s5 2 5.5 5M16 11l2 2 3.5-4" /></svg>
+      </div>
+      <div className="handoff-body">
+        <div className="head">{tr(language, "humanReview")}</div>
+        <div className="handoff-reason">{reasonLabel(handoff.reason, language)}</div>
+        {request && <p>{request}</p>}
+      </div>
     </section>
   );
 }
