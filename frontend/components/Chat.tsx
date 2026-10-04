@@ -1,16 +1,34 @@
 "use client";
 
-import { FormEvent, KeyboardEvent, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowDown,
+  ArrowUp,
+  Check,
+  Copy,
+  FolderOpen,
+  List,
+  Moon,
+  Plus,
+  SignOut,
+  SpinnerGap,
+  Sun,
+  UserCheck,
+  X,
+} from "@phosphor-icons/react";
 import CasesPanel from "@/components/CasesPanel";
 import { EvidenceItem, EvidenceList, evidenceFromCase, evidenceLabel } from "@/components/Evidence";
+import { ct } from "@/lib/chatText";
 import { caseStatusLabel, reasonLabel, suggestions, tr } from "@/lib/i18n";
 import type { Candidate, ChatResponse, DisputeCase, Handoff, Language } from "@/lib/types";
 import { formatCandidateAmount, formatDate } from "@/lib/types";
 
 type Message = {
+  id: number;
   role: "user" | "bot";
   text: string;
   response?: ChatResponse;
+  animate?: boolean;
 };
 
 export default function Chat({
@@ -24,16 +42,68 @@ export default function Chat({
   firstName?: string;
   onLogout: (expired?: boolean) => void;
 }) {
-  const [messages, setMessages] = useState<Message[]>([
-    { role: "bot", text: tr("es", "welcome") },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [language, setLanguage] = useState<Language>("es");
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [casesOpen, setCasesOpen] = useState(false);
-  const listRef = useRef<HTMLDivElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [showJump, setShowJump] = useState(false);
+  const [theme, setTheme] = useState<"light" | "dark" | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const stuck = useRef(true);
+  const nextId = useRef(1);
+
+  const scrollToBottom = useCallback((smooth = false) => {
+    const element = scrollRef.current;
+    if (!element) return;
+    element.scrollTo({ top: element.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+  }, []);
+
+  function onScroll() {
+    const element = scrollRef.current;
+    if (!element) return;
+    const away = element.scrollHeight - element.scrollTop - element.clientHeight;
+    stuck.current = away < 80;
+    setShowJump(away > 240);
+  }
+
+  // null follows the system; a choice made here is remembered for the next visit.
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("chat-theme");
+      if (saved === "light" || saved === "dark") setTheme(saved);
+    } catch {
+      /* storage can be blocked; the system theme applies */
+    }
+  }, []);
+
+  function toggleTheme() {
+    const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const effective = theme ?? (systemDark ? "dark" : "light");
+    const next = effective === "dark" ? "light" : "dark";
+    setTheme(next);
+    try {
+      window.localStorage.setItem("chat-theme", next);
+    } catch {
+      /* not remembered */
+    }
+  }
+
+  useEffect(() => {
+    if (stuck.current) scrollToBottom(true);
+  }, [messages.length, busy, scrollToBottom]);
+
+  // The composer grows with the text, up to about six lines.
+  useEffect(() => {
+    const element = inputRef.current;
+    if (!element) return;
+    element.style.height = "auto";
+    element.style.height = `${Math.min(element.scrollHeight, 168)}px`;
+  }, [input]);
 
   async function send(event?: FormEvent<HTMLFormElement>, preset?: string) {
     event?.preventDefault();
@@ -41,7 +111,8 @@ export default function Chat({
     if (!text || busy) return;
     setInput("");
     setError(null);
-    setMessages((previous) => [...previous, { role: "user", text }]);
+    stuck.current = true;
+    setMessages((previous) => [...previous, { id: nextId.current++, role: "user", text }]);
     setBusy(true);
     try {
       const response = await fetch(`${agentUrl}/chat`, {
@@ -60,121 +131,299 @@ export default function Chat({
       setLanguage(detected);
       setMessages((previous) => [
         ...previous,
-        { role: "bot", text: body.reply, response: body },
+        { id: nextId.current++, role: "bot", text: body.reply, response: body, animate: true },
       ]);
     } catch {
       setError(tr(language, "connectError"));
     } finally {
       setBusy(false);
-      requestAnimationFrame(() => {
-        if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
-      });
     }
   }
 
-  function onInputKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key === "Enter" && event.nativeEvent.isComposing) event.preventDefault();
+  function newConversation() {
+    setMessages([]);
+    setConversationId(null);
+    setError(null);
+    setInput("");
+    setMenuOpen(false);
+    inputRef.current?.focus();
   }
 
-  function useCandidate(candidate: Candidate) {
-    const amount = candidate.amount_usd_effective !== null && candidate.amount_usd_effective !== undefined
-      ? `${candidate.amount_usd_effective} USD`
-      : `${candidate.amount ?? ""} ${candidate.currency ?? ""}`.trim();
+  function onInputKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+      event.preventDefault();
+      void send();
+    }
+  }
+
+  function chooseCandidate(candidate: Candidate) {
+    const amount =
+      candidate.amount_usd_effective !== null && candidate.amount_usd_effective !== undefined
+        ? `${candidate.amount_usd_effective} USD`
+        : `${candidate.amount ?? ""} ${candidate.currency ?? ""}`.trim();
     const merchant = candidate.merchant_name;
-    const prompt = language === "pt"
-      ? `É a cobrança de ${amount ?? ""} ${merchant ? `em ${merchant}` : ""}`.trim()
-      : `Fue el cobro de ${amount ?? ""} ${merchant ? `en ${merchant}` : ""}`.trim();
+    const prompt =
+      language === "pt"
+        ? `É a cobrança de ${amount} ${merchant ? `em ${merchant}` : ""}`.trim()
+        : `Fue el cobro de ${amount} ${merchant ? `en ${merchant}` : ""}`.trim();
     setInput(prompt);
-    document.getElementById("chat-message")?.focus();
+    inputRef.current?.focus();
+  }
+
+  const initial = (firstName || "?").slice(0, 1).toUpperCase();
+
+  return (
+    <div className="gpt" data-theme={theme ?? undefined}>
+      <a className="skip-link" href="#chat-message">
+        {ct(language, "skip")}
+      </a>
+
+      <aside className={`gpt-side${menuOpen ? " open" : ""}`} aria-label={ct(language, "brand")}>
+        <div className="gpt-side-head">
+          <span className="gpt-mark" aria-hidden="true">L</span>
+          <span className="gpt-brand">{ct(language, "brand")}</span>
+          <button className="gpt-icon gpt-side-close" type="button" onClick={() => setMenuOpen(false)} aria-label={ct(language, "closeMenu")}>
+            <X size={20} />
+          </button>
+        </div>
+        <nav className="gpt-nav">
+          <button type="button" onClick={newConversation}>
+            <Plus size={18} aria-hidden="true" />
+            {ct(language, "newChat")}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setCasesOpen(true);
+              setMenuOpen(false);
+            }}
+          >
+            <FolderOpen size={18} aria-hidden="true" />
+            {ct(language, "cases")}
+          </button>
+        </nav>
+        <button className="gpt-theme" type="button" onClick={toggleTheme}>
+          <Sun className="icon-sun" size={18} aria-hidden="true" />
+          <Moon className="icon-moon" size={18} aria-hidden="true" />
+          {ct(language, "theme")}
+        </button>
+        <div className="gpt-user">
+          <span className="gpt-avatar" aria-hidden="true">{initial}</span>
+          <span className="gpt-user-name">{firstName}</span>
+          <button className="gpt-icon" type="button" onClick={() => onLogout(false)} aria-label={ct(language, "logout")} title={ct(language, "logout")}>
+            <SignOut size={18} />
+          </button>
+        </div>
+      </aside>
+      {menuOpen && <button className="gpt-scrim" type="button" aria-label={ct(language, "closeMenu")} onClick={() => setMenuOpen(false)} />}
+
+      <main className="gpt-main">
+        <header className="gpt-top">
+          <button className="gpt-icon gpt-menu" type="button" onClick={() => setMenuOpen(true)} aria-label={ct(language, "menu")}>
+            <List size={22} />
+          </button>
+          <h1>{ct(language, "tagline")}</h1>
+        </header>
+
+        <div className="gpt-scroll" ref={scrollRef} onScroll={onScroll}>
+          <div className="gpt-col" aria-live="polite" aria-relevant="additions text">
+            {messages.length === 0 && !busy && (
+              <section className="gpt-empty">
+                <span className="gpt-mark gpt-mark-lg" aria-hidden="true">L</span>
+                <h2>{ct(language, "emptyTitle")}</h2>
+                <p>{ct(language, "emptyBody")}</p>
+                <div className="gpt-suggestions">
+                  {suggestions(language).map((suggestion) => (
+                    <button className="gpt-suggestion" type="button" key={suggestion} onClick={() => send(undefined, suggestion)}>
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
+            {messages.map((message) =>
+              message.role === "user" ? (
+                <article className="turn turn-user" key={message.id}>
+                  <div className="turn-bubble">{message.text}</div>
+                </article>
+              ) : (
+                <AssistantMessage
+                  key={message.id}
+                  message={message}
+                  language={language}
+                  onSelect={chooseCandidate}
+                  onTick={() => stuck.current && scrollToBottom()}
+                />
+              ),
+            )}
+            {busy && (
+              <div className="turn turn-bot" role="status" aria-label={ct(language, "typing")}>
+                <span className="typing" aria-hidden="true"><i /><i /><i /></span>
+              </div>
+            )}
+            {error && <div className="gpt-error" role="alert">{error}</div>}
+          </div>
+        </div>
+
+        <div className="gpt-dock">
+          {showJump && (
+            <button className="gpt-jump" type="button" onClick={() => scrollToBottom(true)} aria-label={ct(language, "jump")}>
+              <ArrowDown size={18} />
+            </button>
+          )}
+          <form className="gpt-composer" onSubmit={send}>
+            <label className="sr-only" htmlFor="chat-message">{tr(language, "message")}</label>
+            <textarea
+              id="chat-message"
+              ref={inputRef}
+              name="message"
+              rows={1}
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={onInputKeyDown}
+              placeholder={ct(language, "placeholder")}
+              autoComplete="off"
+              enterKeyHint="send"
+            />
+            <button
+              className="gpt-send"
+              type="submit"
+              disabled={busy || !input.trim()}
+              aria-label={busy ? ct(language, "sending") : ct(language, "send")}
+            >
+              {busy ? <SpinnerGap className="spin" size={20} /> : <ArrowUp size={20} weight="bold" />}
+            </button>
+          </form>
+          <p className="gpt-note">{ct(language, "note")}</p>
+        </div>
+      </main>
+
+      {casesOpen && (
+        <CasesPanel agentUrl={agentUrl} token={token} language={language} onClose={() => setCasesOpen(false)} />
+      )}
+    </div>
+  );
+}
+
+function AssistantMessage({
+  message,
+  language,
+  onSelect,
+  onTick,
+}: {
+  message: Message;
+  language: Language;
+  onSelect: (candidate: Candidate) => void;
+  onTick: () => void;
+}) {
+  const [done, setDone] = useState(!message.animate);
+  const [copied, setCopied] = useState(false);
+  const response = message.response;
+
+  // The cards and actions appear after the text; keep the end of the conversation in view.
+  useEffect(() => {
+    if (done) requestAnimationFrame(onTick);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [done]);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(message.text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      /* clipboard can be blocked; nothing to recover */
+    }
   }
 
   return (
-    <main className="chat">
-      <a className="skip-link" href="#chat-message">
-        {language === "pt" ? "Pular para a mensagem" : "Ir al mensaje"}
-      </a>
-      <header className="appbar">
-        <h1><span className="mark" aria-hidden="true">B</span>{tr(language, "appTitle")}</h1>
-        <div className="appbar-actions">
-          {firstName && <span className="who">{firstName}</span>}
-          <button className="btn-ghost" type="button" onClick={() => setCasesOpen(true)}>
-            {tr(language, "myCases")}
-          </button>
-          <button className="btn-ghost" type="button" onClick={() => onLogout(false)}>
-            {tr(language, "logout")}
+    <article className="turn turn-bot">
+      <StreamingText text={message.text} animate={Boolean(message.animate)} onDone={() => setDone(true)} onTick={onTick} />
+      {done && response && (
+        <div className="turn-extras">
+          {!response.case && response.outcome !== "clarify" && <OutcomeBadge outcome={response.outcome} language={language} />}
+          {response.outcome === "clarify" && response.candidates && response.candidates.length > 0 && (
+            <CandidateCards candidates={response.candidates} language={language} onSelect={onSelect} />
+          )}
+          {response.case && <VerifiedCaseCard caseData={response.case} language={language} />}
+          {response.handoff && <HandoffCard handoff={response.handoff} language={language} />}
+        </div>
+      )}
+      {done && (
+        <div className="turn-actions">
+          <button className="gpt-icon" type="button" onClick={copy} aria-label={copied ? ct(language, "copied") : ct(language, "copy")} title={copied ? ct(language, "copied") : ct(language, "copy")}>
+            {copied ? <Check size={16} /> : <Copy size={16} />}
           </button>
         </div>
-      </header>
-      <div className="messages" ref={listRef} aria-label={tr(language, "appTitle")} aria-live="polite" aria-relevant="additions text">
-        {messages.map((message, index) => (
-          <article className={`message-block ${message.role}`} key={`${index}-${message.role}`}>
-            <div className="msg-row">
-              {message.role === "bot" && <span className="avatar" aria-hidden="true">B</span>}
-              <div className={`msg ${message.role}`}>{message.text}</div>
-            </div>
-            {index === 0 && messages.length === 1 && (
-              <div className="suggestions" aria-label={tr(language, "message")}>
-                {suggestions(language).map((suggestion) => (
-                  <button className="chip" type="button" key={suggestion} disabled={busy} onClick={() => send(undefined, suggestion)}>
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
-            )}
-            {message.role === "bot" && message.response && (
-              <div className="msg-meta">
-                {!message.response.case && <OutcomeBadge outcome={message.response.outcome} language={language} />}
-                {message.response.outcome === "clarify" && message.response.candidates && message.response.candidates.length > 0 && (
-                  <CandidateCards
-                    candidates={message.response.candidates}
-                    language={language}
-                    onSelect={useCandidate}
-                  />
-                )}
-                {message.response.case && (
-                  <VerifiedCaseCard caseData={message.response.case} language={language} />
-                )}
-                {message.response.handoff && (
-                  <HandoffCard handoff={message.response.handoff} language={language} />
-                )}
-              </div>
-            )}
-          </article>
-        ))}
-        {busy && (
-          <div className="msg-row" role="status">
-            <span className="avatar" aria-hidden="true">B</span>
-            <div className="msg bot typing"><span className="dots" aria-hidden="true"><i /><i /><i /></span>{tr(language, "typing")}</div>
-          </div>
-        )}
-      </div>
-      {error && <div className="chat-error" role="alert">{error}</div>}
-      <form className="composer" onSubmit={send}>
-        <label className="sr-only" htmlFor="chat-message">{tr(language, "message")}</label>
-        <input
-          id="chat-message"
-          name="message"
-          value={input}
-          onChange={(event) => setInput(event.target.value)}
-          onKeyDown={onInputKeyDown}
-          placeholder={tr(language, "messagePlaceholder")}
-          autoComplete="off"
-          required
-        />
-        <button className="btn send" type="submit" disabled={busy || !input.trim()} aria-label={tr(language, "send")}>
-          <span>{tr(language, "send")}</span>
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
-        </button>
-      </form>
-      {casesOpen && (
-        <CasesPanel
-          agentUrl={agentUrl}
-          token={token}
-          language={language}
-          onClose={() => setCasesOpen(false)}
-        />
       )}
-    </main>
+    </article>
+  );
+}
+
+/*
+ * The agent answers in one piece; this reveals it word by word so the reader follows it as it arrives, and the
+ * evidence cards appear once the text is complete. The two newest words are tinted. With reduced motion the
+ * text appears at once.
+ */
+function StreamingText({
+  text,
+  animate,
+  onDone,
+  onTick,
+}: {
+  text: string;
+  animate: boolean;
+  onDone: () => void;
+  onTick: () => void;
+}) {
+  const parts = useMemo(() => text.split(/(\s+)/), [text]);
+  const total = useMemo(() => parts.filter((part) => part && !/^\s+$/.test(part)).length, [parts]);
+  const [count, setCount] = useState(animate ? 0 : total);
+  const doneRef = useRef(onDone);
+  const tickRef = useRef(onTick);
+  doneRef.current = onDone;
+  tickRef.current = onTick;
+
+  useEffect(() => {
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!animate || reduce) {
+      setCount(total);
+      doneRef.current();
+      return;
+    }
+    let shown = 0;
+    const step = Math.max(1, Math.ceil(total / 55));
+    const timer = setInterval(() => {
+      shown = Math.min(total, shown + step);
+      setCount(shown);
+      tickRef.current();
+      if (shown >= total) {
+        clearInterval(timer);
+        doneRef.current();
+      }
+    }, 32);
+    return () => clearInterval(timer);
+  }, [animate, total]);
+
+  const out: React.ReactNode[] = [];
+  let word = 0;
+  parts.forEach((part, index) => {
+    if (!part) return;
+    if (/^\s+$/.test(part)) {
+      if (word > 0 && word < count) out.push(part);
+      return;
+    }
+    if (word >= count) return;
+    const fresh = animate && count < total && word >= count - 2;
+    out.push(<span className={fresh ? "w fresh" : "w"} key={index}>{part}</span>);
+    word += 1;
+  });
+
+  return (
+    <p className="turn-text">
+      {out}
+      {animate && count < total && <span className="caret" aria-hidden="true" />}
+    </p>
   );
 }
 
@@ -199,20 +448,13 @@ function CandidateCards({
         const amount = formatCandidateAmount(candidate, language);
         const label = `${tr(language, "chooseCandidate")}: ${merchant}, ${amount}, ${formatDate(candidate.transaction_date, language)}`;
         return (
-          <button
-            className="tx-card"
-            type="button"
-            key={candidate.transaction_id}
-            aria-label={label}
-            onClick={() => onSelect(candidate)}
-          >
+          <button className="tx-card" type="button" key={candidate.transaction_id} aria-label={label} onClick={() => onSelect(candidate)}>
             <span className="row">
               <span className="merchant">{merchant}</span>
               <span className="amount tnum">{amount}</span>
             </span>
             <span className="sub">
               <span>{formatDate(candidate.transaction_date, language)}</span>
-              <span>{candidate.transaction_status || "-"}</span>
               <span className="mono">{candidate.transaction_id}</span>
             </span>
           </button>
@@ -254,7 +496,7 @@ function HandoffCard({ handoff, language }: { handoff: Handoff; language: Langua
   return (
     <section className="handoff">
       <div className="handoff-icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="8" r="3" /><path d="M3.5 19c.5-3 2.7-5 5.5-5s5 2 5.5 5M16 11l2 2 3.5-4" /></svg>
+        <UserCheck size={20} />
       </div>
       <div className="handoff-body">
         <div className="head">{tr(language, "humanReview")}</div>
