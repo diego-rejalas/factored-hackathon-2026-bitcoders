@@ -17,6 +17,7 @@ The LATAM Bank transaction dispute assistant, for the Factored AI & Data Hackath
 | Deploy to production, step by step | [Deployment](DEPLOY.md) |
 | Check what the challenge asks for and what is left | [Criteria](CRITERIA.md) |
 | Run it on your machine | [Local development](LOCAL_DEV.md) |
+| Record the pitch video | [Video script](PITCH_VIDEO.md) |
 | Reach the GCP database and data (team) | [Onboarding](ONBOARDING.md) |
 
 ## Repository layout
