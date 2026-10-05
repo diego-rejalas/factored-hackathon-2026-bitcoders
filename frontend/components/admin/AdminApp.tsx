@@ -5,6 +5,7 @@ import AdminLogin from "@/components/admin/AdminLogin";
 import AdminCaseDetail from "@/components/admin/AdminCaseDetail";
 import AdminInbox from "@/components/admin/AdminInbox";
 import AdminMetrics from "@/components/admin/AdminMetrics";
+import { ChatCircleDots, SignOut } from "@phosphor-icons/react";
 import { tr } from "@/lib/i18n";
 
 type View = "inbox" | "case" | "metrics";
@@ -40,17 +41,25 @@ export default function AdminApp({ agentUrl }: { agentUrl: string }) {
       <header className="appbar">
         <h1><img className="mark mark-logo" src="/factored-logo.png" alt="" aria-hidden="true" />{tr("es", "adminTitle")}</h1>
         <div className="appbar-actions">
-          <span className="who">{session.username}</span>
-          <a className="btn-ghost appbar-link" href="/">Atención al cliente</a>
+          <span className="who-chip" title={session.username}>
+            <span className="who-avatar" aria-hidden="true">{session.username.slice(0, 1).toUpperCase()}</span>
+            <span className="who-name">{session.username}</span>
+          </span>
+          <a className="appbar-btn" href="/" aria-label="Atención al cliente">
+            <ChatCircleDots size={18} aria-hidden="true" />
+            <span>Atención al cliente</span>
+          </a>
           <button
-            className="btn-ghost"
+            className="appbar-btn"
             type="button"
+            aria-label={tr("es", "logout")}
             onClick={() => {
               setSession(null);
               setCaseId(null);
             }}
           >
-            {tr("es", "logout")}
+            <SignOut size={18} aria-hidden="true" />
+            <span>{tr("es", "logout")}</span>
           </button>
         </div>
       </header>

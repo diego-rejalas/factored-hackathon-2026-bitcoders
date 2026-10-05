@@ -329,6 +329,7 @@ button {
 
 .appbar-actions {
   display: flex;
+  align-items: center;
   gap: 0.5rem;
   flex: none;
 }
@@ -2610,4 +2611,81 @@ table.metrics-table tbody th {
 .mark-logo {
   object-fit: cover;
   background: #fff;
+}
+
+/* admin header: user chip and pill buttons */
+
+.who-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 14rem;
+  padding: 0.2rem 0.8rem 0.2rem 0.25rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e6ecf5;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.who-avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.who-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.appbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 38px;
+  padding: 0 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.appbar-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.appbar-btn:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+@media (max-width: 720px) {
+  .appbar-btn span,
+  .who-name {
+    display: none;
+  }
+
+  .appbar-btn {
+    padding: 0 0.6rem;
+  }
+
+  .who-chip {
+    padding: 0.2rem;
+  }
 }
