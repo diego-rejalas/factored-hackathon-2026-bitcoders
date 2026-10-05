@@ -1,24 +1,24 @@
-# Probar todo en local
+# Running everything locally
 
-[Índice](README.md) · [Workflow](WORKFLOW.md) · [Arquitectura](ARCHITECTURE.md) · [Datos](DATA.md) · [API](API.md)
+[Index](README.md) · [Workflow](WORKFLOW.md) · [Architecture](ARCHITECTURE.md) · [Data](DATA.md) · [API](API.md)
 
-Una base con datos de ejemplo, el backend y el agente en Docker, y el frontend en tu máquina (recarga al editar). No necesita nube, ni claves, ni la base real. Verificado el 2026-10-04 con la interfaz de Felix en un navegador real (cliente y consola del especialista) y los 11 escenarios de `infra/gcp/scripts/e2e.py`.
+A database with sample data, the backend and the agent in Docker, and the frontend on your machine (it reloads on edit). It needs no cloud, no keys and not the real database. Verified on 2026-10-04 in a real browser (customer and specialist console) and with the 11 scenarios of `infra/gcp/scripts/e2e.py`.
 
-## 1. Backend, agente y base
+## 1. Backend, agent and database
 
 ```bash
 docker compose -f docker-compose.dev.yml up --build
 ```
 
-| Servicio | Dirección | Qué es |
+| Service | Address | What it is |
 |---|---|---|
-| backend | http://localhost:8000/docs | API (`/v1` para la web, la raíz para el agente) |
-| agente | http://localhost:8001/health | el asistente |
-| base | `localhost:5433`, usuario `postgres`, clave `dev`, base `data` | PostgreSQL 18 |
+| backend | http://localhost:8000/docs | API (`/v1` for the web, the root for the agent) |
+| agent | http://localhost:8001/health | the assistant |
+| database | `localhost:5433`, user `postgres`, password `dev`, database `data` | PostgreSQL 18 |
 
-La base se crea la primera vez desde `backend/dev/gold_fixture.sql`. `docker compose -f docker-compose.dev.yml down -v` la tira y la próxima vez vuelve a empezar de cero (los casos creados se pierden).
+The database is created the first time from `backend/dev/gold_fixture.sql`. `docker compose -f docker-compose.dev.yml down -v` drops it, and the next start begins from scratch (created cases are lost).
 
-**Los datos no son los del organizador:** son tres clientes inventados con los mismos `customer_id`, documentos y montos que usa `e2e.py`, para poder probar cada ruta de la política.
+**The data is not the organizer's.** It is three invented customers with the same `customer_id`, documents and amounts that `e2e.py` uses, so every policy path can be tested.
 
 ## 2. Frontend
 
@@ -26,33 +26,33 @@ La base se crea la primera vez desde `backend/dev/gold_fixture.sql`. `docker com
 cd frontend
 cp -n .env.example .env.local        # NEXT_PUBLIC_AGENT_URL=http://localhost:8001
 PNPM_MANAGE_PACKAGE_MANAGER_VERSIONS=false pnpm install
-PNPM_MANAGE_PACKAGE_MANAGER_VERSIONS=false pnpm dev      # o: pnpm build && pnpm start
+PNPM_MANAGE_PACKAGE_MANAGER_VERSIONS=false pnpm dev      # or: pnpm build && pnpm start
 ```
 
-Abre http://localhost:3000. Debe ser el puerto **3000**: el agente solo acepta ese origen (`CORS_ALLOWED_ORIGINS`). Si Next elige otro porque está ocupado, el navegador bloqueará las llamadas.
+Open http://localhost:3000. It must be port **3000**: the agent accepts only that origin (`CORS_ALLOWED_ORIGINS`). If Next picks another port because 3000 is busy, the browser blocks the calls.
 
-`PNPM_MANAGE_PACKAGE_MANAGER_VERSIONS=false` evita que pnpm intente descargar su propia versión (`packageManager` fija la 11.1.3), cosa que falla en algunas redes.
+`PNPM_MANAGE_PACKAGE_MANAGER_VERSIONS=false` stops pnpm from trying to download its own version (`packageManager` pins 11.1.3), which fails on some networks.
 
-> **Para ver el panel "Mis casos", usa la versión compilada** (`pnpm build && pnpm start`). En modo desarrollo React monta cada componente dos veces y el `<dialog>` del panel se cierra al instante; es un artefacto de `pnpm dev`, no del producto.
+> **To see the "Mis casos" (My cases) panel, use the built version** (`pnpm build && pnpm start`). In development mode React mounts every component twice and the panel's `<dialog>` closes immediately. This is an artifact of `pnpm dev`, not of the product.
 
-## 3. Qué probar
+## 3. What to try
 
-**Cliente (`/`).** En el formulario, "Escenarios para demostración" rellena `customer_id` y documento y propone el mensaje. A mano:
+**Customer (`/`).** In the form, "Escenarios para demostración" (demo scenarios) fills in `customer_id` and document and suggests the message. By hand:
 
-| Cliente | customer_id | Documento | Mensaje | Resultado |
+| Customer | customer_id | Document | Message | Result |
 |---|---|---|---|---|
-| Ana | `CLI-00MT1OY089RA` | `17521506` | `No reconozco la transferencia de 4189.18 dólares` | **Escala** (sobre USD 500), con su caso |
-| Ana | | | `No reconozco la transferencia de 6783.64 dólares` | **Escala** (cobro ya aprobado) |
-| Bruno | `CLI-0064RNKCVQCN` | `0863503738` | `No reconozco el cobro de 256.10` | **Se resuelve** (rechazado; dice el motivo, código 51) |
-| Carla | `CLI-00232W4ZDQPP` | `57064351` | `No reconozco el cobro de 389.87` | **Se resuelve** (revertido) |
+| Ana | `CLI-00MT1OY089RA` | `17521506` | `No reconozco la transferencia de 4189.18 dólares` | **Escalates** (over USD 500), with its case |
+| Ana | | | `No reconozco la transferencia de 6783.64 dólares` | **Escalates** (already approved charge) |
+| Bruno | `CLI-0064RNKCVQCN` | `0863503738` | `No reconozco el cobro de 256.10` | **Resolves** (declined; states the reason, code 51) |
+| Carla | `CLI-00232W4ZDQPP` | `57064351` | `No reconozco el cobro de 389.87` | **Resolves** (reversed) |
 
-Cualquiera: `Me robaron la tarjeta, no fui yo` → escala por sospecha de fraude. **Mis casos** muestra los casos del cliente, y la barra lateral (**Recientes**) las conversaciones anteriores, que se guardan en la base local y se reabren.
+With any of them: `Me robaron la tarjeta, no fui yo` escalates for suspected fraud. **Mis casos** shows the customer's cases, and the sidebar (**Recientes**) shows earlier conversations, which are stored in the local database and can be reopened.
 
-**Especialista (`/admin`).** Usuario `ops-demo`, clave `Admin-Local-2026` (solo local). La bandeja muestra lo escalado; se puede **tomar** un caso y **cerrarlo** (nota y resolución obligatorias), y ver las **métricas**. Haz primero una escalada como cliente para que haya algo en la bandeja.
+**Specialist (`/admin`).** User `ops-demo`, password `Admin-Local-2026` (local only). The inbox shows what was escalated. You can **take** a case and **close** it (note and resolution required), and see the **metrics**. First escalate a case as a customer so the inbox has something in it.
 
-## 4. Probar el backend `/v1` solo
+## 4. Trying the backend `/v1` on its own
 
-Usuario y clave (las cuentas de demostración): `ana.demo`, `bruno.demo` y `carla.demo`, clave `Demo-Local-2026`.
+Username and password (the demo accounts): `ana.demo`, `bruno.demo` and `carla.demo`, password `Demo-Local-2026`.
 
 ```bash
 curl -s localhost:8000/v1/auth/demo-accounts
@@ -60,25 +60,28 @@ TOKEN=$(curl -s -X POST localhost:8000/v1/auth/login -H 'content-type: applicati
   -d '{"username":"ana.demo","password":"Demo-Local-2026"}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["session_token"])')
 curl -s localhost:8000/v1/me/summary  -H "Authorization: Bearer $TOKEN"
 curl -s localhost:8000/v1/me/products -H "Authorization: Bearer $TOKEN"
-curl -s "localhost:8000/v1/me/transactions?limit=3" -H "Authorization: Bearer $TOKEN"   # next_cursor para la página siguiente
+curl -s "localhost:8000/v1/me/transactions?limit=3" -H "Authorization: Bearer $TOKEN"   # next_cursor for the next page
 curl -s localhost:8000/v1/disputes    -H "Authorization: Bearer $TOKEN"
 ```
 
-Los escenarios del agente, de una vez: `AGENT_URL=http://localhost:8001 python3 infra/gcp/scripts/e2e.py`.
+All the agent scenarios at once: `AGENT_URL=http://localhost:8001 python3 infra/gcp/scripts/e2e.py`.
 
-## 5. Con un LLM de verdad
+## 5. With a real LLM
 
-Sin clave el agente responde con su texto determinista. Para que redacte con el modelo:
+Without a key the agent answers with its deterministic text. To have it draft with the model:
 
 ```bash
 OPENROUTER_API_KEY=sk-or-... docker compose -f docker-compose.dev.yml up --build
 ```
 
+The model is set by `OPENROUTER_MODEL` (default `anthropic/claude-haiku-4.5`, the one the [evaluation](EVALUATION.md) measured). If you keep the key in `agent/.env`, add `--env-file agent/.env` to the command. Recreating the containers without it silently turns the model off.
+
 ## Tests
 
 ```bash
-# Backend: rutas con un store en memoria, y el SQL real (incluido el de la consola) si hay un PostgreSQL
+# Backend: routes with an in-memory store, and the real SQL (including the console's) if there is a PostgreSQL
 cd backend && PG_TEST_HOST=localhost PG_TEST_PORT=5433 PG_TEST_USER=postgres PG_TEST_PASSWORD=dev python -m pytest
 cd agent && python -m pytest
 ```
-(el primero necesita la base del paso 1 arriba; sin `PG_TEST_HOST` se salta el SQL real).
+
+The first needs the database from step 1 above. Without `PG_TEST_HOST` the real SQL is skipped.

@@ -1,30 +1,30 @@
-# Arquitectura en Google Cloud (prod, us-east4)
+# Architecture on Google Cloud (prod, us-east4)
 
-![Arquitectura en Google Cloud](./gcp-architecture.png)
+![Architecture on Google Cloud](./gcp-architecture.png)
 
-Generado con la biblioteca `diagrams` (mingrammer): `python gcp_architecture.py` (requiere `pip install diagrams` y Graphviz). Salida: `gcp-architecture.png` y `.svg`.
+Generated with the `diagrams` library (mingrammer): `python gcp_architecture.py` (needs `pip install diagrams` and Graphviz). Output: `gcp-architecture.png` and `.svg`. The script embeds the icons in the SVG so that it renders anywhere.
 
-## Leyenda
-| N.º | Componente | Qué es |
+## Legend
+| No. | Component | What it is |
 |---|---|---|
-| 1 | Artifact Registry | Imágenes versionadas por commit |
-| 2 | Secret Manager | Claves, JWT y contraseñas; un acceso por servicio |
-| 3 | Cloud Storage | Lakehouse: bronze y silver en Parquet |
-| 4 | Cloud Logging y Monitoring | Registros y métricas de la VM y la base |
-| 5 | IAM | Una cuenta de servicio por componente |
-| 6 | Cloud IAP + OS Login | Único acceso a la VM, sin IP pública |
-| 7 | frontend | Interfaz web (Next.js) |
-| 8 | agent | Política de disputas (LangGraph) |
-| 9 | backend | API FastAPI de solo lectura sobre gold |
-| 10 | Job etl | El mismo pipeline, lanzado a demanda |
-| 11 | Airflow 3 + dbt | VM e2-standard-4, DAG de 7 tareas, apagada a las 03:00 |
-| 12 | Cloud NAT | Única salida a internet de la VM |
-| 13 | Cloud SQL | PostgreSQL 18, IP privada, SSL; solo se publica gold. Roles: `app` (pipeline), `backend_app` (lee gold), `agent_app` (auditoría) |
-| 14 | Cloud Armor | Reglas de inyección SQL, XSS y Log4j, y límite por IP |
-| 15 | ALB global | Única entrada pública: `/` al frontend y `/agent/*` al agente; el acceso directo está cerrado. El backend solo acepta la cuenta del agente |
+| 1 | Artifact Registry | Images versioned per commit |
+| 2 | Secret Manager | Keys, JWT and passwords, with one access per service |
+| 3 | Cloud Storage | Lakehouse: bronze and silver as Parquet |
+| 4 | Cloud Logging and Monitoring | Logs and default metrics of the VM and the database. No alerts are defined |
+| 5 | IAM | One service account per component |
+| 6 | Cloud IAP + OS Login | The only access to the VM, with no public IP |
+| 7 | frontend | The web UI (Next.js) |
+| 8 | agent | The dispute policy (LangGraph) |
+| 9 | backend | A FastAPI API, read-only on gold |
+| 10 | etl Job | The same pipeline, launched on demand |
+| 11 | Airflow 3 + dbt | An e2-standard-4 VM, a 7-task DAG, stopped at 03:00 |
+| 12 | Cloud NAT | The VM's only way out to the internet |
+| 13 | Cloud SQL | PostgreSQL 18, private IP, SSL. Only gold is published. Roles: `app` (pipeline), `backend_app` (reads gold), `agent_app` (audit) |
+| 14 | Cloud Armor | SQL injection, XSS and Log4j rules, and a per-IP limit |
+| 15 | Global ALB | The only public entry: `/` to the frontend and `/agent/*` to the agent. Direct access is closed. The backend accepts only the agent's account |
 
-## Límites
-- Cloud Run no vive literalmente dentro de la subred: se conecta con Direct VPC egress; se dibuja dentro para mostrar esa relación.
-- El navegador llama al agente por el mismo origen del ALB (`/agent/*`), por eso no hay flecha directa frontend → agente.
-- Un solo ambiente (prod). OpenRouter usa un ícono genérico (no hay uno oficial).
-- Las etiquetas de algunas flechas pueden quedar cerca de otros elementos: Graphviz coloca el layout solo.
+## Limits
+- Cloud Run does not literally live inside the subnet: it connects with Direct VPC egress, and it is drawn inside to show that relationship.
+- The browser calls the agent on the ALB's own origin (`/agent/*`), which is why there is no direct frontend to agent arrow.
+- A single environment (prod). OpenRouter uses a generic icon (there is no official one).
+- The labels of some arrows may sit close to other elements: Graphviz lays the diagram out on its own.

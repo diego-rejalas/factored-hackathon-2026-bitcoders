@@ -1,43 +1,43 @@
-# frontend/: chat del cliente y consola del especialista
+# frontend/: customer chat and specialist console
 
-Next.js 16 (App Router) y TypeScript, sin Tailwind. Corre en Cloud Run (`output: standalone`). Llama **solo al agente** desde el navegador (`POST /session`, `POST /chat`, `GET /me/*`, `GET /admin/*`): nunca al backend ni a Postgres.
+Next.js 16 (App Router) and TypeScript, with no Tailwind. It runs on Cloud Run (`output: standalone`). From the browser it calls **only the agent** (`POST /session`, `POST /chat`, `GET /me/*`, `GET /admin/*`), and never the backend or Postgres. The interface is in Spanish and Portuguese for customers and in Spanish for specialists, so the quoted UI labels below are in Spanish.
 
-## Cliente (`/`)
+## Customer (`/`)
 
-- **Ingreso:** `customer_id` más número de documento (sandbox, sin proveedor de identidad). Los **escenarios de demostración** vienen de `/meta/demo-scenarios` y se ven como tarjetas.
-- **Chat al estilo de un asistente:** barra lateral con *Nueva conversación*, *Mis casos* y las conversaciones recientes (se guardan en el agente y se reabren), columna central, compositor flotante que crece y envía con Enter, preguntas sugeridas, indicador de escritura y respuesta que aparece palabra por palabra.
-- **Tarjetas:** las transacciones candidatas para elegir, el caso con su evidencia (la transacción y lo decidido, con detalle al pasar el cursor) y el traspaso a una persona.
-- **Idioma:** español o portugués, según el que detecta el agente.
-- **Tema:** claro u oscuro; sigue el sistema y un botón lo cambia y lo recuerda.
-- **Sesión vencida:** un 401 del agente vuelve al ingreso con un aviso.
-- **Accesibilidad:** foco visible, navegación por teclado, `aria-live`, objetivos táctiles de 44 px y `prefers-reduced-motion`.
+- **Login:** `customer_id` plus a document number (a sandbox, with no identity provider). The **demo scenarios** come from `/meta/demo-scenarios` and appear as cards.
+- **An assistant-style chat:** a sidebar with *Nueva conversación* (new conversation), *Mis casos* (my cases) and recent conversations (stored in the agent and reopened), a central column, a floating composer that grows and sends on Enter, suggested questions, a typing indicator and a reply that appears word by word.
+- **Cards:** the candidate transactions to choose from, the case with its evidence (the transaction and what was decided, with detail on hover) and the handoff to a person.
+- **Language:** Spanish or Portuguese, following what the agent detects.
+- **Theme:** light or dark. It follows the system, and a button changes it and remembers the choice.
+- **Expired session:** a 401 from the agent returns to the login with a notice.
+- **Accessibility:** visible focus, keyboard navigation, `aria-live`, 44 px touch targets and `prefers-reduced-motion`.
 
-## Especialistas (`/admin`)
+## Specialists (`/admin`)
 
-- Ingreso de sandbox aparte (`ADMIN_USERS` en el backend).
-- Bandeja de casos escalados y en curso, con filtros; detalle con el traspaso, la auditoría y la traza del agente.
-- `claim → in_progress → close`: cerrar exige nota y resultado.
-- Métricas de backend y agente con sus denominadores; sin muestra suficiente muestran "No definido".
-- Sin proveedor de identidad real; el token vive solo en la memoria del navegador.
+- A separate sandbox login (`ADMIN_USERS` in the backend).
+- An inbox of escalated and in-progress cases, with filters, and a detail view with the handoff, the audit trail and the agent's trace.
+- `claim → in_progress → close`: closing requires a note and an outcome.
+- Backend and agent metrics with their denominators. Without enough sample they show "No definido" (not defined).
+- There is no real identity provider, and the token lives only in the browser's memory.
 
 ## Variables
 
-| Variable | Qué es |
+| Variable | What it is |
 |---|---|
-| `AGENT_URL` | URL del agente en tiempo de ejecución (Cloud Run). Es la única API que conoce el navegador |
-| `NEXT_PUBLIC_AGENT_URL` | Alternativa para desarrollo local |
+| `AGENT_URL` | The agent's URL at run time (Cloud Run). It is the only API the browser knows |
+| `NEXT_PUBLIC_AGENT_URL` | An alternative for local development |
 
-## Desarrollo y verificación
+## Development and verification
 
 ```bash
-pnpm install          # desde frontend/
-pnpm build            # compilación y tipos (también corre en el CI)
-pnpm dev              # servidor de desarrollo
-pnpm start            # sirve la compilación
+pnpm install          # from frontend/
+pnpm build            # compile and type check (also runs in CI)
+pnpm dev              # development server
+pnpm start            # serves the build
 ```
 
-`pnpm-workspace.yaml` fija `trustPolicyIgnoreAfter` para que `pnpm install` funcione con la política de confianza de pnpm 11 sin banderas locales. Si `pnpm` falla al descargar su propia versión, ver [`docs/LOCAL_DEV.md`](../docs/LOCAL_DEV.md).
+`pnpm-workspace.yaml` sets `trustPolicyIgnoreAfter` so that `pnpm install` works with pnpm 11's trust policy without local flags. If `pnpm` fails to download its own version, see [`docs/LOCAL_DEV.md`](../docs/LOCAL_DEV.md).
 
-## Despliegue
+## Deployment
 
-En GCP es el servicio de Cloud Run `frontend`; Terraform fija `AGENT_URL` al agente, detrás del balanceador. Para otro host, define `AGENT_URL` o `NEXT_PUBLIC_AGENT_URL`.
+On GCP it is the `frontend` Cloud Run service. Terraform sets `AGENT_URL` to the agent, behind the load balancer. For another host, define `AGENT_URL` or `NEXT_PUBLIC_AGENT_URL`.

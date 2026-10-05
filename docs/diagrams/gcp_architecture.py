@@ -26,7 +26,7 @@ cluster_attr = {"fontname": "Helvetica-Bold", "fontsize": "14", "labeljust": "l"
 edge_attr = {"fontname": "Helvetica", "fontsize": "11", "color": "#5F6368", "fontcolor": "#3C4043"}
 
 with Diagram(
-    "Arquitectura de referencia en Google Cloud (prod)",
+    "Reference architecture on Google Cloud (prod)",
     filename="gcp-architecture",
     outformat=["png", "svg"],
     show=False,
@@ -34,59 +34,59 @@ with Diagram(
     graph_attr=graph_attr,
     edge_attr=edge_attr,
 ):
-    cliente = Users("Cliente\n(navegador)")
-    operador = User("Operador\n(datos)")
+    cliente = Users("Customer\n(browser)")
+    operador = User("Operator\n(data)")
     gha = Github("GitHub Actions\nCI/CD")
-    s3 = S3("S3 del organizador\n(us-east-2)")
+    s3 = S3("Organizer S3\n(us-east-2)")
     llm = Rack("OpenRouter\n(LLM)")
 
     with Cluster("Google Cloud", graph_attr={**cluster_attr, "bgcolor": "#FFFFFF", "pencolor": "#4285F4"}):
-        with Cluster("Entrada (global)", graph_attr={**cluster_attr, "bgcolor": "#FDF3E3", "pencolor": "#F9AB00"}):
-            armor = Armor("14  Cloud Armor\nWAF y límite por IP")
-            lb = LoadBalancing("15  ALB global\nHTTPS, certificado gestionado")
-        with Cluster("Región us-east4", graph_attr={**cluster_attr, "bgcolor": "#F1F6FE", "pencolor": "#4285F4", "style": "dashed"}):
+        with Cluster("Entry (global)", graph_attr={**cluster_attr, "bgcolor": "#FDF3E3", "pencolor": "#F9AB00"}):
+            armor = Armor("14  Cloud Armor\nWAF and per-IP limit")
+            lb = LoadBalancing("15  Global ALB\nHTTPS, managed certificate")
+        with Cluster("Region us-east4", graph_attr={**cluster_attr, "bgcolor": "#F1F6FE", "pencolor": "#4285F4", "style": "dashed"}):
 
-            with Cluster("Servicios regionales", graph_attr={**cluster_attr, "bgcolor": "#F8F9FA", "pencolor": "#9AA0A6"}):
-                registry = ContainerRegistry("1  Artifact Registry\nimágenes por commit")
-                secrets = SecretManager("2  Secret Manager\nclaves y contraseñas")
+            with Cluster("Regional services", graph_attr={**cluster_attr, "bgcolor": "#F8F9FA", "pencolor": "#9AA0A6"}):
+                registry = ContainerRegistry("1  Artifact Registry\nimages per commit")
+                secrets = SecretManager("2  Secret Manager\nkeys and passwords")
                 lake = GCS("3  Cloud Storage\nlakehouse")
                 logs = Logging("4  Cloud Logging")
-                mon = Monitoring("4  Cloud Monitoring\nmétricas por defecto,\nsin alertas")
-                iam = Iam("5  IAM\ncuenta por servicio")
+                mon = Monitoring("4  Cloud Monitoring\ndefault metrics,\nno alerts")
+                iam = Iam("5  IAM\naccount per service")
 
             with Cluster("VPC  factored-prod", graph_attr={**cluster_attr, "bgcolor": "#E9F5EC", "pencolor": "#34A853"}):
-                iap = IAP("6  Cloud IAP + OS Login\nsin IP pública")
+                iap = IAP("6  Cloud IAP + OS Login\nno public IP")
 
-                with Cluster("Subred de aplicación  10.30.0.0/24", graph_attr={**cluster_attr, "bgcolor": "#F6FBF7", "pencolor": "#34A853", "style": "dashed"}):
+                with Cluster("Application subnet  10.30.0.0/24", graph_attr={**cluster_attr, "bgcolor": "#F6FBF7", "pencolor": "#34A853", "style": "dashed"}):
                     with Cluster("Cloud Run  (Direct VPC egress)", graph_attr={**cluster_attr, "bgcolor": "#FFFFFF", "pencolor": "#4285F4"}):
                         frontend = Run("7  frontend\nNext.js")
                         agent = Run("8  agent\nLangGraph")
-                        backend = Run("9  backend\nFastAPI, solo lectura")
-                        etl = Run("10  Job etl\na demanda")
-                    with Cluster("VM de orquestación", graph_attr={**cluster_attr, "bgcolor": "#FFFFFF", "pencolor": "#FBBC04"}):
-                        airflow = ComputeEngine("11  Airflow 3 + dbt\ne2-standard-4\napagada 03:00")
-                    nat = NAT("12  Cloud NAT\nsalida de la VM")
+                        backend = Run("9  backend\nFastAPI, read-only")
+                        etl = Run("10  etl Job\non demand")
+                    with Cluster("Orchestration VM", graph_attr={**cluster_attr, "bgcolor": "#FFFFFF", "pencolor": "#FBBC04"}):
+                        airflow = ComputeEngine("11  Airflow 3 + dbt\ne2-standard-4\nstopped at 03:00")
+                    nat = NAT("12  Cloud NAT\nVM egress")
 
-                with Cluster("Servicios privados  10.30.1.0/24  (Private Service Access)", graph_attr={**cluster_attr, "bgcolor": "#FDECEA", "pencolor": "#EA4335", "style": "dashed"}):
-                    sql = SQL("13  Cloud SQL\nPostgreSQL 18\nIP privada, SSL")
+                with Cluster("Private services  10.30.1.0/24  (Private Service Access)", graph_attr={**cluster_attr, "bgcolor": "#FDECEA", "pencolor": "#EA4335", "style": "dashed"}):
+                    sql = SQL("13  Cloud SQL\nPostgreSQL 18\nprivate IP, SSL")
 
     cliente >> Edge(label="HTTPS", color="#1A73E8", penwidth="2") >> armor >> lb
     lb >> Edge(label="/", color="#1A73E8") >> frontend
     lb >> Edge(label="/agent/*", color="#1A73E8") >> agent
-    agent >> Edge(label="herramientas HTTP\nID token (solo su cuenta)") >> backend
-    backend >> Edge(label="backend_app: solo lee gold") >> sql
-    agent >> Edge(label="razonamiento") >> llm
+    agent >> Edge(label="HTTP tools\nID token (its account only)") >> backend
+    backend >> Edge(label="backend_app: reads gold only") >> sql
+    agent >> Edge(label="reasoning") >> llm
 
-    operador >> Edge(label="túnel TCP 8080") >> iap >> airflow
+    operador >> Edge(label="TCP tunnel 8080") >> iap >> airflow
     s3 >> Edge(label="extract") >> nat >> airflow
     airflow >> Edge(label="Parquet") >> lake
     airflow >> Edge(label="publish_gold", color="#EA4335", penwidth="2") >> sql
-    etl >> Edge(label="alternativa", style="dashed") >> sql
+    etl >> Edge(label="alternative", style="dashed") >> sql
 
-    gha >> Edge(label="build y push") >> registry
-    registry >> Edge(label="imagen", style="dashed") >> airflow
-    secrets >> Edge(label="secretos", style="dashed") >> agent
-    airflow >> Edge(label="registros", style="dotted", color="#9AA0A6") >> logs
+    gha >> Edge(label="build and push") >> registry
+    registry >> Edge(label="image", style="dashed") >> airflow
+    secrets >> Edge(label="secrets", style="dashed") >> agent
+    airflow >> Edge(label="logs", style="dotted", color="#9AA0A6") >> logs
     logs - Edge(style="invis") - mon
     iam - Edge(style="invis") - secrets
 

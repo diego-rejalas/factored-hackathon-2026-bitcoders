@@ -1,68 +1,68 @@
-# agent/: agente y guardrail
+# agent/: agent and guardrail
 
-Servicio FastAPI con LangGraph. Habla con el cliente, decide con una política determinista, llama a las herramientas del backend, verifica y escala. Es la vertical 4 de [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md); la política completa está en [`docs/WORKFLOW.md`](../docs/WORKFLOW.md).
+A FastAPI service with LangGraph. It talks to the customer, decides with a deterministic policy, calls the backend's tools, verifies and escalates. It is vertical 4 of [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md), and the full policy is in [`docs/WORKFLOW.md`](../docs/WORKFLOW.md).
 
-**Nunca toca `gold.*`.** Todo dato bancario viaja por el backend HTTP, reenviando el token del cliente (la autorización se comprueba dos veces). Solo escribe sus propias tablas: `agent.trace_log` y `agent.conversation_messages`.
+**It never touches `gold.*`.** All banking data travels through the backend over HTTP, forwarding the customer's token (authorization is checked twice). It writes only its own tables: `agent.trace_log` and `agent.conversation_messages`.
 
-## Contrato
+## Contract
 
-El esquema exacto es `tests/contract/openapi.json` y una prueba falla si el código se desvía. Rutas del propio agente:
+The exact schema is `tests/contract/openapi.json`, and a test fails if the code drifts from it. The agent's own routes:
 
-| Ruta | Qué hace |
+| Route | What it does |
 |---|---|
-| `POST /chat` `{session_token, message, conversation_id?, transaction_id?}` | Devuelve `{reply, conversation_id, outcome, case_id, case_status, case, handoff, candidates, reason, language}`. `outcome` es `resolved`, `clarify`, `escalated` o `unavailable` |
-| `GET /me/conversations`, `GET /me/conversations/{id}` | El historial del cliente. Solo lo lee su dueño (el cliente sale del token); otro cliente recibe 404 |
-| `GET /admin/agent-metrics?window=<horas>` | Resultados, contención, latencia p50 y p95 por nodo, intenciones, idiomas y resultado de `verify`, desde `agent.trace_log` |
-| `GET /admin/conversations/{id}/trace` | Los pasos de una conversación. Nunca contiene texto del cliente |
+| `POST /chat` `{session_token, message, conversation_id?, transaction_id?}` | Returns `{reply, conversation_id, outcome, case_id, case_status, case, handoff, candidates, reason, language}`. `outcome` is `resolved`, `clarify`, `escalated`, `declined` or `unavailable` |
+| `GET /me/conversations`, `GET /me/conversations/{id}` | The customer's history. Only its owner reads it (the customer comes from the token), and another customer gets 404 |
+| `GET /admin/agent-metrics?window=<hours>` | Outcomes, containment, p50 and p95 latency per node, intents, languages and the `verify` result, from `agent.trace_log` |
+| `GET /admin/conversations/{id}/trace` | The steps of a conversation. It never contains customer text |
 | `GET /health` | Liveness |
 
-El resto son reenvíos delgados al backend con comprobaciones previas: `POST /session`, `POST /admin/session`, `GET /me/disputes`, `GET /disputes/{id}`, `GET /meta/demo-scenarios`, `GET /meta/data`, `GET /admin/disputes*`, `POST /admin/disputes/{id}/transition` y `GET /admin/metrics`.
+The rest are thin forwards to the backend with up-front checks: `POST /session`, `POST /admin/session`, `GET /me/disputes`, `GET /disputes/{id}`, `GET /meta/demo-scenarios`, `GET /meta/data`, `GET /admin/disputes*`, `POST /admin/disputes/{id}/transition` and `GET /admin/metrics`.
 
-## Grafo (`app/graph.py`)
+## Graph (`app/graph.py`)
 
-`understand → decide → act → verify → respond | escalate`, con aristas condicionales. El control de flujo es código; el modelo no decide nada.
+`understand → decide → act → verify → respond | escalate`, with conditional edges. Flow control is code, and the model decides nothing.
 
-- **`decide`** aplica el guardrail antes de cualquier herramienta.
-- **`verify`** relee el caso del backend antes de decir que se registró; si no coincide, escala (`verify_failed`).
-- **Fallas:** hasta 3 intentos por herramienta, con 2 s de conexión (peor caso ~6,9 s). Si el backend no responde, `outcome: unavailable` con un mensaje seguro y sin cambios.
+- **`decide`** applies the guardrail before any tool.
+- **`verify`** rereads the case from the backend before saying it was recorded, and escalates if it does not match (`verify_failed`).
+- **Failures:** up to 3 attempts per tool, with a 2 s connection timeout (worst case ~6.9 s). If the backend does not answer, `outcome: unavailable` with a safe message and no changes.
 
 ## Guardrail (`app/guardrail.py`)
 
-Una tabla de decisiones en código, no un prompt. Escala siempre ante: fraude o robo (es y pt), un cobro `Approved` o `Pending`, un monto efectivo en USD mayor o igual a `GUARDRAIL_MAX_USD` (500 por defecto) o desconocido, ambigüedad sin resolver tras 2 rondas de aclaración, y una confianza del clasificador menor que `INTENT_MIN_CONFIDENCE` (0,5 por defecto; el override de fraude se aplica antes de esta abstención). Una petición fuera de alcance se **declina** (`outcome: declined`, sin caso ni traspaso). Resuelve solo una transacción `Declined` o `Reversed` del propio cliente, única candidata y bajo el umbral. El detalle y el orden están en [`docs/WORKFLOW.md`](../docs/WORKFLOW.md).
+A decision table in code, not a prompt. It always escalates on: fraud or theft (es and pt), an `Approved` or `Pending` charge, an effective USD amount greater than or equal to `GUARDRAIL_MAX_USD` (500 by default) or unknown, ambiguity unresolved after 2 clarification rounds, and a classifier confidence below `INTENT_MIN_CONFIDENCE` (0.5 by default; the fraud override applies before this abstention). An out-of-scope request is **declined** (`outcome: declined`, with no case or handoff). It resolves alone only a `Declined` or `Reversed` transaction of the customer's own, which is the only candidate and is under the threshold. The detail and the order are in [`docs/WORKFLOW.md`](../docs/WORKFLOW.md).
 
-Cuando el pool de candidatas tiene 2 o más, `app/ranking.py` solo las **ordena** para ofrecer primero la más probable: no agrega ni quita candidatas y no cambia la decisión 0, 1 o 2 y más ni la corroboración exigida para resolver.
+When the candidate pool has 2 or more, `app/ranking.py` only **orders** them so that the most likely one is offered first. It adds or removes no candidates and does not change the 0, 1 or 2-and-more decision or the corroboration required to resolve.
 
-## Modelo de lenguaje (opcional)
+## Language model (optional)
 
-Con `OPENROUTER_API_KEY`, el modelo hace tres cosas, y nunca decide la política:
+With `OPENROUTER_API_KEY`, the model does three things, and never decides policy:
 
-1. **Clasificar la intención** de un mensaje (`app/intents.py`): una salida estructurada `{intent, language, confidence}`, con la versión del prompt en la traza. Sin clave, o si la respuesta no es válida, se usan las palabras clave en es y pt.
-2. **Una segunda lectura de fraude** (`LLM.flags_fraud`), a la vez que la clasificación, sobre mensajes que parecen una disputa o algo fuera de alcance. Solo puede sumar cautela: un "sí" pasa el caso a una persona; un "no" o un fallo dejan la lista de frases de `guardrail.py` como estaba.
-3. **Redactar la respuesta de un caso ya resuelto** (`app/llm.py`). El borrador pasa por `app/grounding.py` antes de enviarse: sin plazos ni promesas de dinero, sin números que no estén en los hechos, sin identificadores de cliente, con el número de caso. Si falla, sale la plantilla de `app/replies.py`. Escalaciones, aclaraciones y estados nunca los redacta el modelo.
+1. **Classifying the intent** of a message (`app/intents.py`): a structured output `{intent, language, confidence}`, with the prompt version in the trace. Without a key, or if the response is not valid, the es and pt keywords are used.
+2. **A second look for fraud** (`LLM.flags_fraud`), at the same time as the classification, on messages that look like a dispute or something out of scope. It can only add caution: a "yes" sends the case to a person, while a "no" or a failure leaves the phrase list in `guardrail.py` as it was.
+3. **Drafting the reply for an already resolved case** (`app/llm.py`). The draft passes through `app/grounding.py` before it is sent: no deadlines or money promises, no numbers that are not in the facts, no customer identifiers, and with the case number. If it fails, the template in `app/replies.py` is sent. A model never writes escalations, clarifications or statuses.
 
-El idioma lo fija la clasificación (si el modelo dice "mixto", lo resuelve el texto con una sola función, `replies.detect_language`). La traza registra fuente, versión del prompt, confianza y latencias. El cliente del modelo suma tokens y costo (`LLM.usage`).
+Language is set by the classification (if the model says "mixed", the text resolves it with a single function, `replies.detect_language`). The trace records the source, the prompt version, the confidence and the latencies. The model client adds up tokens and cost (`LLM.usage`).
 
-Los conjuntos retenidos y las evaluaciones están en `../ml/eval/` (clasificación de intención y ranking de transacciones) y en `eval/` (el sistema de punta a punta y el clasificador); los resultados, en [`docs/EVALUATION.md`](../docs/EVALUATION.md) y [`docs/ML_FINDINGS.md`](../docs/ML_FINDINGS.md).
+The held-out sets and evaluations are in `../ml/eval/` (intent classification and transaction ranking) and in `eval/` (the end-to-end system and the classifier). The results are in [`docs/EVALUATION.md`](../docs/EVALUATION.md) and [`docs/ML_FINDINGS.md`](../docs/ML_FINDINGS.md).
 
-## Otros módulos
+## Other modules
 
-- `app/tools.py`: clientes HTTP delgados al backend; cada llamada reenvía el token del cliente o del administrador.
-- `app/ranking.py`: ranker interpretable (difflib, monto, fecha y canal) que reordena pools ambiguos.
-- `app/tracing.py`: cada paso a `agent.trace_log`. Nunca guarda el texto del cliente ni el razonamiento del modelo. Es la evidencia de auditoría; un fallo de traza no rompe la conversación.
-- `app/conversations.py`: guarda cada turno en `agent.conversation_messages` (lo que escribió el cliente, la respuesta y sus tarjetas). Es la tabla a la que aplicaría la política de retención. Guardar es de mejor esfuerzo.
-- `app/observability.py`: `X-Request-ID` y registros JSON.
+- `app/tools.py`: thin HTTP clients to the backend. Each call forwards the customer's or the admin's token.
+- `app/ranking.py`: an interpretable ranker (difflib, amount, date and channel) that reorders ambiguous pools.
+- `app/tracing.py`: every step to `agent.trace_log`. It never stores customer text or the model's reasoning. It is the audit evidence, and a trace failure does not break the conversation.
+- `app/conversations.py`: stores each turn in `agent.conversation_messages` (what the customer wrote, the reply and its cards). It is the table a retention policy would apply to. Saving is best effort.
+- `app/observability.py`: `X-Request-ID` and JSON logs.
 
-## Configuración
+## Configuration
 
-Ver `.env.example`. Las principales: `BANK_URL`, `SESSION_JWT_SECRET` (compartida con el backend), `GUARDRAIL_MAX_USD`, `OPENROUTER_API_KEY` y `OPENROUTER_MODEL`, `CORS_ALLOWED_ORIGINS` (orígenes exactos, nunca `*`) y `PG_*` para las tablas del agente.
+See `.env.example`. The main ones: `BANK_URL`, `SESSION_JWT_SECRET` (shared with the backend), `GUARDRAIL_MAX_USD`, `OPENROUTER_API_KEY` and `OPENROUTER_MODEL`, `CORS_ALLOWED_ORIGINS` (exact origins, never `*`) and `PG_*` for the agent's tables.
 
-## Pruebas
+## Tests
 
 ```bash
-python -m pytest        # desde agent/, con pytest y httpx; el backend y el modelo van simulados
-PG_TEST_HOST=localhost PG_TEST_PORT=5433 PG_TEST_USER=postgres PG_TEST_PASSWORD=dev python -m pytest   # también el SQL del historial contra PostgreSQL
+python -m pytest        # from agent/, with pytest and httpx; the backend and the model are mocked
+PG_TEST_HOST=localhost PG_TEST_PORT=5433 PG_TEST_USER=postgres PG_TEST_PASSWORD=dev python -m pytest   # also the history SQL against PostgreSQL
 ```
 
-Cubren los tres caminos obligatorios, el guardrail y sus bordes (el umbral inclusive), la abstención por baja confianza y el orden de candidatas, el portugués, la sesión inválida, los reintentos, las comprobaciones del borrador del modelo, el aislamiento del historial entre clientes y el contrato OpenAPI.
+They cover the three mandatory paths, the guardrail and its edges (the inclusive threshold), abstention on low confidence and candidate ordering, Portuguese, an invalid session, the retries, the checks on the model's draft, the isolation of history between customers and the OpenAPI contract.
 
-Despliegue: Cloud Run, ver [`infra/gcp/envs/`](../infra/gcp/envs/).
+Deployment: Cloud Run, see [`infra/gcp/envs/`](../infra/gcp/envs/).

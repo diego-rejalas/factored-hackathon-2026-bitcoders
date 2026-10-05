@@ -1,52 +1,52 @@
-# Documentación
+# Documentation
 
-Asistente de disputas de transacciones de LATAM Bank, para el Factored AI & Data Hackathon 2026 (equipo bitcoders). Esta carpeta es la única de documentación del repositorio. El enunciado del reto está en [`challenge/`](challenge/) y no se edita.
+The LATAM Bank transaction dispute assistant, for the Factored AI & Data Hackathon 2026 (team bitcoders). This folder is the repository's only documentation. The challenge statement is in [`challenge/`](challenge/) and is not edited.
 
-## Por dónde empezar
+## Where to start
 
-| Si quieres... | Lee |
+| If you want to... | Read |
 |---|---|
-| Entender qué hace el asistente y cuándo escala | [Workflow](WORKFLOW.md) |
-| Ver cómo está construido y desplegado | [Arquitectura](ARCHITECTURE.md) |
-| Saber qué dice el dataset y qué limitaciones tiene | [Datos](DATA.md) |
-| Llamar a las APIs o revisar el contrato | [API](API.md) |
-| Revisar los controles y los hallazgos de seguridad | [Seguridad](SECURITY.md) |
-| Ver cómo se midió el sistema y con qué resultados | [Evaluación](EVALUATION.md) |
-| Ver la evaluación de los componentes de ML (intención y ranking) | [Componentes de ML](ML_FINDINGS.md) |
-| Saber qué falta para producción real | [Ruta a producción](PRODUCTION.md) |
-| Desplegar a producción, paso a paso | [Despliegue](DEPLOY.md) |
-| Comprobar qué pide el reto y qué falta | [Criterios](CRITERIA.md) |
-| Ejecutarlo en tu máquina | [Desarrollo local](LOCAL_DEV.md) |
-| Conectarte a la base de datos de GCP (equipo) | [Onboarding](ONBOARDING.md) |
+| Understand what the assistant does and when it escalates | [Workflow](WORKFLOW.md) |
+| See how it is built and deployed | [Architecture](ARCHITECTURE.md) |
+| Learn what the dataset says and its limits | [Data](DATA.md) |
+| Call the APIs or review the contract | [API](API.md) |
+| Review the controls and the security findings | [Security](SECURITY.md) |
+| See how the system was measured and the results | [Evaluation](EVALUATION.md) |
+| See the evaluation of the ML components (intent and ranking) | [ML components](ML_FINDINGS.md) |
+| Know what is missing for real production | [Path to production](PRODUCTION.md) |
+| Deploy to production, step by step | [Deployment](DEPLOY.md) |
+| Check what the challenge asks for and what is left | [Criteria](CRITERIA.md) |
+| Run it on your machine | [Local development](LOCAL_DEV.md) |
+| Reach the GCP database and data (team) | [Onboarding](ONBOARDING.md) |
 
-## Mapa del repositorio
+## Repository layout
 
-| Carpeta | Contenido |
+| Folder | Contents |
 |---|---|
-| `backend/` | Capa de herramientas: FastAPI, permisos por titularidad, casos y consola del especialista |
-| `agent/` | Agente conversacional: LangGraph, guardrail determinista, trazas e historial |
-| `frontend/` | Next.js: chat del cliente y consola `/admin` |
-| `data/` | Pipeline: etapas en `pipeline/` y proyecto dbt en `dbt/` |
-| `ml/eval/` | Conjuntos retenidos y evaluación de los componentes de ML (intención y ranking de transacciones) |
-| `agent/eval/` | Evaluación del sistema de punta a punta y del clasificador de intención |
-| `infra/gcp/` | Terraform por ambiente (`dev`, `qa`, `prod`) y módulos |
-| `infra/gcp/airflow/` | Imagen y DAG de Airflow que corre en la VM |
-| `docs/diagrams/` | Diagramas de arquitectura y de linaje |
+| `backend/` | Tool layer: FastAPI, ownership-based permissions, cases and the specialist console |
+| `agent/` | Conversational agent: LangGraph, deterministic guardrail, traces and history |
+| `frontend/` | Next.js: the customer chat and the `/admin` console |
+| `data/` | Pipeline: stages in `pipeline/` and the dbt project in `dbt/` |
+| `ml/eval/` | Held-out sets and evaluation of the ML components (intent and transaction ranking) |
+| `agent/eval/` | End-to-end evaluation of the system and of the intent classifier |
+| `infra/gcp/` | Terraform per environment (`dev`, `qa`, `prod`) and modules |
+| `infra/gcp/airflow/` | The Airflow image and DAG that run on the VM |
+| `docs/diagrams/` | Architecture, flow and lineage diagrams |
 
-## Diagramas
+## Diagrams
 
-Fuentes en [`diagrams/`](diagrams/): los flujos son Graphviz (`*.dot`), el despliegue es `gcp_architecture.py`.
+Sources are in [`diagrams/`](diagrams/): the flows are Graphviz (`*.dot`) and the deployment is `gcp_architecture.py`.
 
-**Agente**
+**Agent**
 
-![Flujo del agente](diagrams/agent-flow.svg)
+![Agent flow](diagrams/agent-flow.svg)
 
-**Pipeline de datos**
+**Data pipeline**
 
-![Flujo del pipeline](diagrams/pipeline-flow.svg)
+![Pipeline flow](diagrams/pipeline-flow.svg)
 
-**Despliegue en GCP**
+**Deployment on GCP**
 
-![Arquitectura en GCP](diagrams/gcp-architecture.svg)
+![GCP architecture](diagrams/gcp-architecture.svg)
 
-El linaje de las tablas del pipeline está en [`diagrams/dbt-lineage.svg`](diagrams/dbt-lineage.svg).
+The lineage of the pipeline tables is in [`diagrams/dbt-lineage.svg`](diagrams/dbt-lineage.svg).

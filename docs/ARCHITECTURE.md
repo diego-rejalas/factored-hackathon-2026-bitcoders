@@ -1,120 +1,121 @@
-# Arquitectura
+# Architecture
 
-[Índice](README.md) · [Workflow](WORKFLOW.md) · [Arquitectura](ARCHITECTURE.md) · [Datos](DATA.md) · [API](API.md)
+[Index](README.md) · [Workflow](WORKFLOW.md) · [Architecture](ARCHITECTURE.md) · [Data](DATA.md) · [API](API.md)
 
-El asistente de disputas de transacciones de LATAM Bank (workflow A, ver [Workflow](WORKFLOW.md)) corre en GCP. Este documento describe lo que está desplegado y por qué, por verticales. Lo que se descartó por el camino está al final.
+The LATAM Bank transaction dispute assistant (workflow A, see [Workflow](WORKFLOW.md)) runs on GCP. This document describes what is deployed and why, one vertical at a time. What was discarded along the way is at the end.
 
-## Panorama
+## Overview
 
 ```mermaid
 flowchart LR
-    USER((Cliente)) --> FE[frontend<br/>Next.js, Cloud Run]
-    SPEC((Especialista)) --> FE
-    FE -->|HTTPS, por el borde| AGENT
+    USER((Customer)) --> FE[frontend<br/>Next.js, Cloud Run]
+    SPEC((Specialist)) --> FE
+    FE -->|HTTPS, through the edge| AGENT
 
-    subgraph app["Aplicación (Cloud Run)"]
-        AGENT[agent<br/>FastAPI + LangGraph<br/>guardrail determinista]
-        BANK[backend<br/>FastAPI, privado<br/>capa de herramientas]
-        AGENT -->|HTTP con ID token| BANK
+    subgraph app["Application (Cloud Run)"]
+        AGENT[agent<br/>FastAPI + LangGraph<br/>deterministic guardrail]
+        BANK[backend<br/>FastAPI, private<br/>tool layer]
+        AGENT -->|HTTP with ID token| BANK
     end
 
-    subgraph db["Cloud SQL PostgreSQL 18 (IP privada)"]
+    subgraph db["Cloud SQL PostgreSQL 18 (private IP)"]
         GOLD[(gold.*)]
         APP[(app.disputes, app.credentials)]
         OPS[(ops.etl_runs)]
         AG[(agent.trace_log<br/>agent.conversation_messages)]
     end
 
-    BANK -->|rol backend_app| GOLD
+    BANK -->|backend_app role| GOLD
     BANK --> APP
     BANK --> OPS
-    AGENT -->|rol agent_app| AG
-    AGENT -.->|opcional| OR[OpenRouter]
+    AGENT -->|agent_app role| AG
+    AGENT -.->|optional| OR[OpenRouter]
 
-    S3[(S3 del organizador)] -->|DuckDB| VM[VM de Compute Engine<br/>Airflow 3 + dbt-duckdb]
-    VM -->|Parquet bronze y silver| LAKE[(Cloud Storage<br/>lakehouse)]
-    VM -->|publica gold| GOLD
+    S3[(Organizer S3)] -->|DuckDB| VM[Compute Engine VM<br/>Airflow 3 + dbt-duckdb]
+    VM -->|bronze and silver Parquet| LAKE[(Cloud Storage<br/>lakehouse)]
+    VM -->|publishes gold| GOLD
     VM --> OPS
 ```
 
-## Despliegue
+## Deployment
 
-Todo es Terraform en `infra/gcp/`, en tres ambientes (`dev`, `qa`, `prod`) con módulos compartidos. El detalle por módulo y por ambiente está en `infra/gcp/README.md`; aquí solo lo que importa para entender el diseño.
+Everything is Terraform in `infra/gcp/`, in three environments (`dev`, `qa`, `prod`) with shared modules. The per-module and per-environment detail is in `infra/gcp/README.md`; this section covers only what matters to understand the design. The deployment procedure is in [Deployment](DEPLOY.md).
 
-- **Borde.** Un Application Load Balancer con Cloud Armor (reglas WAF antes del límite de tasa) está delante del frontend y del agente. El backend no es público: el agente lo llama con un ID token de su cuenta de servicio.
-- **Red.** Una VPC por ambiente. Cloud Run sale por Direct VPC egress y Cloud SQL solo tiene IP privada (Private Service Access). La VM de Airflow no tiene IP externa y se entra por IAP.
-- **Identidades.** Cada servicio tiene su cuenta de servicio y lee solo los secretos que necesita. En la base cada servicio tiene su propio rol (`backend_app`, `agent_app`). El despliegue desde GitHub Actions usa federación de identidad, sin llaves guardadas.
-- **Imágenes y secretos.** Artifact Registry y Secret Manager. Las llaves del S3 del organizador y la de OpenRouter se cargan a mano; un `apply` no las pisa.
-- **Costo.** La VM de Airflow se apaga sola de noche y se enciende a demanda (`scripts/airflow_vm.sh`). Cloud SQL se puede pausar (`scripts/manage_db.sh`).
+- **Edge.** An Application Load Balancer with Cloud Armor (WAF rules before the rate limit) sits in front of the frontend and the agent. The backend is not public: the agent calls it with an ID token from its service account.
+- **Network.** One VPC per environment. Cloud Run egresses through Direct VPC egress and Cloud SQL has only a private IP (Private Service Access). The Airflow VM has no external IP and is reached through IAP.
+- **Identities.** Each service has its own service account and reads only the secrets it needs. In the database each service has its own role (`backend_app`, `agent_app`). Deployment from GitHub Actions uses identity federation, with no stored keys.
+- **Images and secrets.** Artifact Registry and Secret Manager. The organizer's S3 keys and the OpenRouter key are loaded by hand, and an `apply` does not overwrite them.
+- **Cost.** The Airflow VM stops by itself at night and starts on demand (`scripts/airflow_vm.sh`). Cloud SQL can be paused (`scripts/manage_db.sh`).
+- **Monitoring.** Cloud Run and Cloud SQL report their default metrics and logs. No alerts, dashboards or uptime checks are defined yet (see [Path to production](PRODUCTION.md)).
 
-## 1. Extracción y carga
+## 1. Extraction and loading
 
-**Responsabilidad:** llevar los CSV del organizador (S3) hasta tablas consultables, sin perder lo crudo, y dejar `gold` listo para el backend.
+**Responsibility:** take the organizer's CSV files (S3) to queryable tables without losing the raw data, and leave `gold` ready for the backend.
 
-Airflow 3 corre en la VM (`infra/gcp/airflow/`, DAG `latam_bank_gcp`). Cada corrida:
+Airflow 3 runs on the VM (`infra/gcp/airflow/`, DAG `latam_bank_gcp`). Each run:
 
-1. DuckDB lee los CSV de S3 en paralelo, sin bajar archivos, y escribe **bronze** como Parquet en el lakehouse, con el objeto de origen (`_source_key`) y la hora de carga como linaje.
-2. dbt (`dbt-duckdb`, en la misma VM) construye **silver** y **gold** en RAM: tipos reales, vacío a nulo, países conformados, y las pruebas de datos.
-3. Si las pruebas de silver pasan, publica solo `gold.*` en Cloud SQL y deja una fila en `ops.etl_runs`. Si fallan, `gold` conserva el último dato válido.
-4. Publica la documentación de dbt con el grafo de linaje (`scripts/lineage.sh`).
+1. DuckDB reads the CSV files from S3 without downloading them and writes **bronze** as Parquet in the lakehouse, with the source object (`_source_key`) and the load time as lineage.
+2. dbt (`dbt-duckdb`, on the same VM) builds **silver** and **gold** in memory: real types, empty to null, conformed countries, and the data tests.
+3. If the silver tests pass, it publishes only `gold.*` to Cloud SQL and writes a row to `ops.etl_runs`. If they fail, `gold` keeps the last valid data.
+4. It publishes the dbt documentation with the lineage graph (`scripts/lineage.sh`).
 
-Las etapas compartidas viven en `data/pipeline/` y las prueba su propia suite. El mismo código corre como Cloud Run Job (`infra/gcp/etl/`), el camino de respaldo si la VM no está.
+The shared stages live in `data/pipeline/` and have their own test suite. The same code runs as a Cloud Run Job (`infra/gcp/etl/`), the fallback path when the VM is not available.
 
-**Por qué DuckDB y Parquet:** el dato son 23,5 millones de filas en 13 tablas. Procesarlas en memoria y guardar lo intermedio como Parquet en Cloud Storage cuesta centavos al mes, mantiene Cloud SQL libre de tablas crudas y deja bronze y silver auditables. Con el job en Cloud Run se midieron ~2,5 minutos para leer y procesar todo.
+**Why DuckDB and Parquet:** the data is 23.5 million rows in 13 tables. Processing them in memory and storing the intermediate layers as Parquet in Cloud Storage costs cents per month, keeps raw tables out of Cloud SQL and leaves bronze and silver auditable. With the Cloud Run job, reading and processing everything took about 2.5 minutes.
 
-**Política de actualización y frescura.**
-- El dato es un snapshot cerrado: las tablas transaccionales van del 2023-06-17 al 2026-06-18 y no llega nada nuevo. Se verificó que no hay llegadas tardías ni cambios de esquema entre fechas.
-- La actualización es una recarga completa a demanda. Cada corrida reconstruye bronze desde S3.
-- "Fresco" significa la hora de la última corrida exitosa: queda en `ops.etl_runs`, la devuelve `GET /meta/data` y la muestra la consola. No hay umbral de antigüedad que vigilar porque la fuente no cambia.
-- Si el dato empezara a llegar: programar el DAG, pasar `transactions` y `digital_events` a incrementales por partición, y declarar `loaded_at_field: _ingested_at` en las fuentes para que `dbt source freshness` avise cuando una tabla se atrase.
+**Refresh and freshness policy.**
+- The data is a closed snapshot: the transactional tables run from 2023-06-17 to 2026-06-18 and nothing new arrives. No late arrivals or schema changes between dates were found.
+- A refresh is a full reload on demand. Each run rebuilds bronze from S3.
+- "Fresh" means the time of the last successful run. It is stored in `ops.etl_runs`, returned by `GET /meta/data` and shown in the console. There is no age threshold to watch because the source does not change.
+- If data started to arrive: schedule the DAG, make `transactions` and `digital_events` incremental by partition, and declare `loaded_at_field: _ingested_at` on the sources so that `dbt source freshness` warns when a table falls behind.
 
-**Escalabilidad.** La carga completa cabe en una VM de 4 CPU y 16 GB. Si el volumen creciera 10 veces, los puntos de extensión son filtrar por partición (`year/month/day` ya es una columna) y los modelos incrementales. Está documentado como camino, no implementado.
+**Scalability.** The full load fits on a VM with 4 CPUs and 16 GB. If volume grew 10 times, the extension points are filtering by partition (`year/month/day` is already a column) and incremental models. This is documented as a path, not implemented.
 
-## 2. Calidad de datos: dbt
+## 2. Data quality: dbt
 
-**Responsabilidad:** resolver lo que se encontró en [Datos](DATA.md) (nulos, MXN ausente, tipos, valores inconsistentes) y dejar `gold` en el contrato que consume el backend. Proyecto en `data/dbt/`.
+**Responsibility:** resolve what was found in [Data](DATA.md) (nulls, missing MXN, types, inconsistent values) and leave `gold` in the contract the backend consumes. The project is in `data/dbt/`.
 
-- Modelos `stg_*` en silver para las 13 tablas y un modelo por entidad en gold (sin prefijo `clean_`: la limpieza es de silver).
-- Las pruebas son los contratos: claves, claves foráneas entre todas las tablas, valores aceptados, rangos y reglas de negocio. Los defectos conocidos del dataset corren como advertencias con su conteo, para que aparezcan en cada corrida sin bloquearla.
-- `dbt build` prueba cada modelo antes de construir los que dependen de él.
+- `stg_*` models in silver for the 13 tables and one model per entity in gold (no `clean_` prefix: cleaning belongs to silver).
+- The tests are the contracts: keys, foreign keys across all tables, accepted values, ranges and business rules. Known dataset defects run as warnings with their counts, so they show up in every run without blocking it.
+- `dbt build` tests each model before building the ones that depend on it.
 
-## 3. Capa de herramientas: backend
+## 3. Tool layer: backend
 
-**Responsabilidad:** es el "service/tool layer" que el reto pide: los permisos se hacen cumplir aquí, no en el prompt. FastAPI con asyncpg, en `backend/`. El contrato endpoint por endpoint está en [API](API.md) y el de OpenAPI está versionado, con una prueba que falla si el código se desvía.
+**Responsibility:** this is the "service/tool layer" the challenge asks for. Permissions are enforced here, not in the prompt. FastAPI with asyncpg, in `backend/`. The endpoint-by-endpoint contract is in [API](API.md), and the OpenAPI document is versioned, with a test that fails if the code drifts from it.
 
-- **Sesión:** JWT firmado (HS256, emisor `backend-sandbox`) con vencimiento y rol `customer` o `admin`. Las cuentas de demostración usan contraseña con argon2id y bloqueo por intentos; la consola del especialista, hashes bcrypt guardados en Secret Manager. Es un sandbox y se presenta como tal.
-- **Titularidad:** toda consulta se filtra por el cliente del token. Pedir una transacción o un caso ajeno devuelve 404, no 403, para no confirmar que existe.
-- **Casos:** un caso por cliente y transacción (índice único parcial), con estados `open`, `auto_resolved`, `escalated`, `in_progress` y `closed`, sus eventos y la evidencia. Las migraciones están versionadas (`app/migrations/`, con candado de asesoría).
-- **Solo lectura sobre los datos:** el rol `backend_app` lee `gold` y escribe únicamente en `app.*`.
-- **Consola del especialista:** `/admin/*` para tomar, cerrar y resolver casos con transiciones auditadas, más métricas.
+- **Session:** a signed JWT (HS256, issuer `backend-sandbox`) with an expiry and a `customer` or `admin` role. The demo accounts use argon2id passwords with lockout after failed attempts. The specialist console uses bcrypt hashes stored in Secret Manager. It is a sandbox and is presented as one.
+- **Ownership:** every query is filtered by the customer in the token. Asking for someone else's transaction or case returns 404, not 403, so it does not confirm that it exists.
+- **Cases:** one case per customer and transaction (a partial unique index), with statuses `open`, `auto_resolved`, `escalated`, `in_progress` and `closed`, their events and the evidence. Migrations are versioned (`app/migrations/`, with an advisory lock).
+- **Read-only on the data:** the `backend_app` role reads `gold` and writes only to `app.*`.
+- **Specialist console:** `/admin/*` to take, close and resolve cases with audited transitions, plus metrics.
 
-## 4. Agente y guardrail
+## 4. Agent and guardrail
 
-**Responsabilidad:** hablar con el cliente, decidir, llamar a las herramientas, verificar y escalar. FastAPI con LangGraph, en `agent/`.
+**Responsibility:** talk to the customer, decide, call the tools, verify and escalate. FastAPI with LangGraph, in `agent/`.
 
-El flujo es `understand → decide → act → verify → respond | escalate`:
+The flow is `understand → decide → act → verify → respond | escalate`:
 
-- **`decide` es código, no un modelo.** El guardrail (`app/guardrail.py`) aplica la política: resuelve solo un cobro `Declined` o `Reversed` por debajo de USD 500; pide aclaración si hay cero o varias candidatas; escala un cobro aprobado, un posible fraude, un monto sobre el umbral, un monto desconocido y declina lo que está fuera de alcance, sin caso ni traspaso.
-- **`verify` relee el caso del backend** antes de decir que se registró. Si no coincide, escala. El agente no reporta lo que no comprobó.
-- **El modelo es opcional y no decide.** Con una clave de OpenRouter clasifica la intención de mensajes que las palabras clave no cubren, da una segunda lectura de fraude que solo puede sumar cautela (la lista de frases sigue siendo el piso) y redacta la respuesta de un caso ya resuelto. Ese borrador pasa por `app/grounding.py` (sin plazos ni promesas, sin números que no estén en los hechos, sin identificadores) y, si falla, sale la plantilla. Sin clave, el agente es determinista.
-- **Fallas:** tres intentos acotados por herramienta (peor caso ~6,9 s). Si el backend no responde, el resultado es `unavailable` con un mensaje seguro y sin cambios.
-- **Trazabilidad:** `agent.trace_log` guarda cada paso con su resultado y latencia, sin texto del cliente ni razonamiento del modelo. Es la evidencia de auditoría.
-- **Historial:** `agent.conversation_messages` guarda lo que el cliente escribió y lo que se le respondió, para que pueda volver a sus conversaciones. Es la tabla a la que aplicaría la política de retención, y solo la lee su dueño.
-- **Handoff:** entrega la solicitud, los hechos verificados, las acciones tomadas, la evidencia y las preguntas abiertas, no un volcado de la conversación.
-- **Datos de fraude:** `is_fraud` y `fraud_score` son verdad de referencia sintética y no son entrada del agente.
+- **`decide` is code, not a model.** The guardrail (`app/guardrail.py`) applies the policy. It resolves a `Declined` or `Reversed` charge below USD 500 on its own, asks for clarification when there are zero or several candidates, escalates an approved charge, suspected fraud, an amount over the threshold and an unknown amount, and declines what is out of scope, with no case or handoff.
+- **`verify` rereads the case from the backend** before saying it was recorded. If it does not match, it escalates. The agent does not report what it did not check.
+- **The model is optional and does not decide.** With an OpenRouter key it classifies the intent of messages the keywords do not cover, gives a second look for fraud that can only add caution (the phrase list stays the floor) and drafts the reply for an already resolved case. That draft passes through `app/grounding.py` (no deadlines or promises, no numbers that are not in the facts, no identifiers) and, if it fails, the template is sent. Without a key, the agent is deterministic.
+- **Failures:** three bounded attempts per tool (worst case about 6.9 s). If the backend does not answer, the result is `unavailable` with a safe message and no changes.
+- **Traceability:** `agent.trace_log` stores each step with its result and latency, with no customer text or model reasoning. It is the audit evidence.
+- **History:** `agent.conversation_messages` stores what the customer wrote and what they were answered, so they can return to their conversations. It is the table a retention policy would apply to, and only its owner reads it.
+- **Handoff:** it delivers the request, the verified facts, the actions taken, the evidence and the open questions, not a dump of the conversation.
+- **Fraud data:** `is_fraud` and `fraud_score` are synthetic ground truth and are not agent inputs.
 
 ## 5. Frontend
 
-Next.js 16 en Cloud Run (`output: standalone`, `AGENT_URL` en tiempo de ejecución). Chat del cliente con historial, tarjetas de evidencia y tema claro u oscuro, en español y portugués; consola del especialista en `/admin`; documentación de datos en `/data-docs`.
+Next.js 16 on Cloud Run (`output: standalone`, `AGENT_URL` read at run time). The customer chat has history, evidence cards and a light or dark theme, in Spanish and Portuguese. The specialist console is at `/admin` and the data documentation at `/data-docs`.
 
-## Qué falta para producción real
+## What is missing for real production
 
-El reto pide ser honesto aquí. Los controles que hoy son de sandbox y lo que se necesitaría están en `CRITERIA.md` (sección "Ruta a producción"); la falta principal es el documento que cubra capacidad, monitoreo, accesos, retención y separación de la base de datos de la aplicación y la del pipeline.
+The challenge asks for honesty here. [Path to production](PRODUCTION.md) lists what is sandbox today and what a real deployment would need: capacity, monitoring, access, retention and separating the application database from the pipeline's.
 
-## Lo que se descartó
+## What was discarded
 
-- **Railway y Vercel.** Se empezó ahí y se migró todo a GCP; el proyecto de Railway se eliminó. El código y las especificaciones viejas están en el historial de git.
-- **Airbyte.** Se intentó autoalojar Airbyte OSS para la extracción. Exigía Temporal, Elasticsearch y un Postgres aparte, y su único camino oficial hoy es un clúster de Kubernetes. Se reemplazó por DuckDB, que lee S3 y escribe en una sola sentencia.
-- **PydanticAI.** El agente se implementó con LangGraph; el flujo `understand → decide → act → verify` es un grafo explícito.
-- **TypeSafe (Jev).** Se evaluó como clasificador hospedado (la investigación de componentes). Nunca hubo clave y se quitó el código que lo llamaba.
-- **Workflow de crédito.** Descartado a favor de disputas (ver [Workflow](WORKFLOW.md)).
+- **Railway and Vercel.** The project started there and moved entirely to GCP. The Railway project was deleted. The old code and specifications are in the git history.
+- **Airbyte.** Self-hosting Airbyte OSS for extraction was tried. It needed Temporal, Elasticsearch and a separate Postgres, and its only official path today is a Kubernetes cluster. DuckDB replaced it, reading S3 and writing in a single statement.
+- **PydanticAI.** The agent was implemented with LangGraph. The `understand → decide → act → verify` flow is an explicit graph.
+- **TypeSafe (Jev).** It was evaluated as a hosted classifier (the component research). There was never a key, and the code that called it was removed.
+- **Credit workflow.** Dropped in favor of disputes (see [Workflow](WORKFLOW.md)).

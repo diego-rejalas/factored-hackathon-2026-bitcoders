@@ -1,35 +1,35 @@
-# Despliegue a producción
+# Deploying to production
 
-[Índice](README.md) · [Arquitectura](ARCHITECTURE.md) · [Ruta a producción](PRODUCTION.md) · [Seguridad](SECURITY.md)
+[Index](README.md) · [Architecture](ARCHITECTURE.md) · [Path to production](PRODUCTION.md) · [Security](SECURITY.md)
 
-*Qué cambia, qué hacer antes, cómo aplicar, qué hacer después y cómo volver atrás. Pensado para correrlo de arriba abajo. Cada paso dice quién lo hace y por qué.*
+*What changes, what to do before, how to apply, what to do after and how to roll back. Meant to be run top to bottom. Each step says who does it and why.*
 
-## Qué cambia
+## What changes
 
-Lo dice el `plan` de `prod`, que se corrió desde GitHub con la cuenta de solo lectura y no aplicó nada: **3 recursos nuevos, 5 cambios en sitio, 0 destruidos.**
+The `prod` `plan` says so. It ran from GitHub with the read-only account and applied nothing: **3 resources to add, 5 to change, 0 to destroy.**
 
-| Cambio | Qué es |
+| Change | What it is |
 |---|---|
-| Servicios `frontend`, `agent`, `backend` y el job `etl` | Imagen nueva (la del commit) y variables nuevas. El agente pasa a usar `anthropic/claude-haiku-4.5`, el modelo de la [Evaluación](EVALUATION.md) |
-| VM de Airflow | Solo cambia la etiqueta de la imagen en sus metadatos. La VM sigue apagada hasta que se use |
-| Secreto `factored-prod-admin-users` y su permiso de lectura para el backend | **Nuevo, vacío (`NOT_SET`)**: hay que cargarlo, o la consola `/admin` responde 503 |
+| `frontend`, `agent` and `backend` services and the `etl` job | A new image (the commit's) and new variables. The agent switches to `anthropic/claude-haiku-4.5`, the model the [Evaluation](EVALUATION.md) measured |
+| Airflow VM | Only the image tag in its metadata changes. The VM stays stopped until it is used |
+| Secret `factored-prod-admin-users` and its read permission for the backend | **New and empty (`NOT_SET`).** It has to be loaded, or the `/admin` console answers 503 |
 
-Un `plan` anterior mostraba 3 destrucciones: el acceso a la VM de Airflow de quien la opera. Eran permisos que un `apply` local había dado con una variable que el flujo de GitHub no pasaba. Ya la pasa, desde la variable del repositorio `AIRFLOW_ADMIN_MEMBERS`; sin ella, aplicar desde GitHub le quita el acceso a quien lo tenía.
+An earlier `plan` showed 3 destroys: the Airflow VM access of whoever operates it. Those were permissions that a local `apply` had granted with a variable the GitHub workflow did not pass. It now passes it, from the repository variable `AIRFLOW_ADMIN_MEMBERS`. Without it, applying from GitHub removes access from whoever had it.
 
-**Datos.** Las migraciones del backend corren al arrancar, una vez y con un candado:
+**Data.** The backend migrations run at startup, once and under a lock:
 
-- `0003` deja **un solo caso por cliente y transacción**: cierra los más antiguos si había duplicados. No se deshace.
-- `0005` permite casos sin transacción, admite el estado `in_progress` y repara traspasos guardados como texto.
+- `0003` leaves **a single case per customer and transaction**: it closes the older ones if there were duplicates. It cannot be undone.
+- `0005` allows cases with no transaction, admits the `in_progress` status and repairs handoffs stored as text.
 
-## Antes de aplicar
+## Before applying
 
-| # | Paso | Quién |
+| # | Step | Who |
 |---|---|---|
-| 1 | Mirar los duplicados que cerraría `0003` (abajo). Si son casos de prueba, no importa | Tú |
-| 2 | Opcional pero recomendado: en GitHub, **Settings, Environments, prod**, añadir revisores obligatorios. Hoy cualquiera con permiso de escritura puede aplicar a `prod` | Tú |
-| 3 | Confirmar que `AIRFLOW_ADMIN_MEMBERS` existe: `gh variable list` | Tú |
+| 1 | Look at the duplicates `0003` would close (below). If they are test cases, it does not matter | You |
+| 2 | Optional but recommended: in GitHub, **Settings, Environments, prod**, add required reviewers. Today anyone with write permission can apply to `prod` | You |
+| 3 | Confirm that `AIRFLOW_ADMIN_MEMBERS` exists: `gh variable list` | You |
 
-**Mirar los duplicados** (enciende la VM, consulta y la apaga):
+**Look at the duplicates** (this starts the VM, queries and stops it):
 
 ```bash
 ENVIRONMENT=prod ./infra/gcp/scripts/airflow_vm.sh start
@@ -39,46 +39,46 @@ import os, psycopg2
 c = psycopg2.connect(host=os.environ["PG_HOST"], port=os.environ["PG_PORT"], dbname=os.environ["PG_DATABASE"],
                      user=os.environ["PG_USER"], password=os.environ["PG_PASSWORD"], sslmode="require")
 cur = c.cursor()
-cur.execute("select count(*) from app.disputes"); print("casos:", cur.fetchone()[0])
+cur.execute("select count(*) from app.disputes"); print("cases:", cur.fetchone()[0])
 cur.execute("""select customer_id, transaction_id, count(*) from app.disputes
                where transaction_id is not null and status <> 'closed'
                group by 1, 2 having count(*) > 1""")
-print("transacciones con más de un caso abierto:", cur.fetchall())
+print("transactions with more than one open case:", cur.fetchall())
 PY
 ```
 
-## Aplicar
+## Apply
 
 ```bash
 gh workflow run "GCP deploy" --ref main -f environment=prod -f terraform_action=apply -f run_etl=false
-gh run watch            # elegir la corrida
+gh run watch            # pick the run
 ```
 
-Hace, en orden: crea el registro de imágenes si falta, construye las cinco imágenes con el commit como etiqueta, las sube, planifica, **revisa el plan con Checkov**, aplica el mismo plan y comprueba la salud (`/` y `/agent/health` por el balanceador, y que el backend responda 403 sin credenciales). Tarda unos 8 minutos. Solo aplica desde `main`.
+In order, it creates the image registry if missing, builds the five images with the commit as the tag, pushes them, plans, **checks the plan with Checkov**, applies that same plan and checks health (`/` and `/agent/health` through the load balancer, and that the backend answers 403 without credentials). It takes about 8 minutes. It applies only from `main`.
 
-`run_etl=true` además relanza el job que carga los datos. No hace falta: `gold` ya está cargado.
+`run_etl=true` also reruns the job that loads the data. It is not needed, because `gold` is already loaded.
 
-## Después de aplicar
+## After applying
 
-**1. Los permisos de base de datos.** `roles.sql` cambió (permisos de lectura para la consola). Con la VM encendida:
+**1. Database permissions.** `roles.sql` changed (read permissions for the console). With the VM on:
 
 ```bash
 ENVIRONMENT=prod ./infra/gcp/scripts/db_roles.sh
 ```
 
-**2. Los dos secretos.**
+**2. The two secrets.**
 
 ```bash
-# Consola de especialistas: usuario:hash de bcrypt, varios separados por coma. La clave no queda escrita en ningún sitio.
-python3 -c "import bcrypt,getpass; print('ops:'+bcrypt.hashpw(getpass.getpass('clave: ').encode(), bcrypt.gensalt()).decode())" \
+# Specialist console: user:bcrypt-hash, several separated by commas. The password is not written anywhere.
+python3 -c "import bcrypt,getpass; print('ops:'+bcrypt.hashpw(getpass.getpass('password: ').encode(), bcrypt.gensalt()).decode())" \
   | gcloud secrets versions add factored-prod-admin-users --data-file=- --project bitcoders-factored-hackathon
 
-# Modelo de lenguaje: sin esta clave el agente funciona sin modelo (90,6 % de las disputas, 82,8 % en portugués)
+# Language model: without this key the agent works without a model (90.6% of disputes, 82.8% in Portuguese)
 printf '%s' "$OPENROUTER_API_KEY" \
   | gcloud secrets versions add factored-prod-openrouter-api-key --data-file=- --project bitcoders-factored-hackathon
 ```
 
-**3. Que los servicios lean los secretos nuevos.** Cloud Run lee un secreto al arrancar una instancia:
+**3. Make the services read the new secrets.** Cloud Run reads a secret when an instance starts:
 
 ```bash
 for s in backend agent; do
@@ -87,32 +87,32 @@ for s in backend agent; do
 done
 ```
 
-**4. Verificar.**
+**4. Verify.**
 
 ```bash
-AGENT_URL="$(cd infra/gcp/envs/prod && terraform output -raw edge_url)/agent" python3 infra/gcp/scripts/e2e.py   # 11 escenarios, debe salir 0
+AGENT_URL="$(cd infra/gcp/envs/prod && terraform output -raw edge_url)/agent" python3 infra/gcp/scripts/e2e.py   # 11 scenarios, must exit 0
 ```
 
-Y a mano, en el navegador con la URL del balanceador: entrar como un cliente de demostración, un caso que se resuelve, uno que se escala, otro en portugués, y la consola `/admin` con el usuario cargado.
+And by hand, in the browser with the load balancer URL: sign in as a demo customer, then try a case that resolves, one that escalates, one in Portuguese, and the `/admin` console with the user you loaded.
 
-**5. Apagar la VM** si se encendió: `./infra/gcp/scripts/airflow_vm.sh stop` (también se apaga sola a las 03:00).
+**5. Stop the VM** if it was started: `./infra/gcp/scripts/airflow_vm.sh stop` (it also stops by itself at 03:00).
 
-## Volver atrás
+## Rolling back
 
-- **Servicios.** Cloud Run guarda las revisiones anteriores y el cambio es inmediato:
+- **Services.** Cloud Run keeps earlier revisions, and the switch is immediate:
 
   ```bash
   gcloud run revisions list --service factored-prod-agent --region us-east4 --project bitcoders-factored-hackathon
-  gcloud run services update-traffic factored-prod-agent --to-revisions=<revisión-anterior>=100 \
+  gcloud run services update-traffic factored-prod-agent --to-revisions=<previous-revision>=100 \
     --region us-east4 --project bitcoders-factored-hackathon
   ```
 
-  Igual para `backend` y `frontend`.
-- **Base de datos.** Las migraciones solo avanzan. Lo que hizo `0003` (cerrar casos duplicados) no vuelve; las copias de la base conservan el estado anterior si hiciera falta (recuperación a un instante en `prod`).
-- **Secretos.** Se vuelve a una versión anterior desactivando la nueva: `gcloud secrets versions disable <n> --secret ...`.
+  The same applies to `backend` and `frontend`.
+- **Database.** Migrations only move forward. What `0003` did (closing duplicate cases) does not come back. The database backups keep the earlier state if it is ever needed (point-in-time recovery in `prod`).
+- **Secrets.** To go back to an earlier version, disable the new one: `gcloud secrets versions disable <n> --secret ...`.
 
-## Lo que no está verificado
+## What is not verified
 
-- **El despliegue mismo.** El `plan` y las pruebas locales no sustituyen a un `apply` real: nada de esto se ha aplicado todavía.
-- **El camino por el balanceador** con esta versión: el certificado gestionado puede tardar en aprovisionarse tras cambios de dominio (en este despliegue el dominio no cambia).
-- **`e2e.py` contra el borde.** Sus 11 escenarios pasaron contra el stack local y contra `prod` en el despliegue anterior; con `AGENT_URL` apuntando a `/agent` del balanceador es la forma prevista, no la que se probó.
+- **The deployment itself.** The `plan` and the local tests do not replace a real `apply`. Check the result of the run before relying on any of this.
+- **The path through the load balancer** with this version. The managed certificate can take a while to provision after domain changes (this deployment does not change the domain).
+- **`e2e.py` against the edge.** Its 11 scenarios passed against the local stack and against `prod` in the earlier deployment. Pointing `AGENT_URL` at the load balancer's `/agent` is the intended way, not the one that was tested.

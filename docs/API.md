@@ -1,181 +1,181 @@
-# Contrato de las APIs
+# API contract
 
-[Índice](README.md) · [Workflow](WORKFLOW.md) · [Arquitectura](ARCHITECTURE.md) · [Datos](DATA.md) · [API](API.md)
+[Index](README.md) · [Workflow](WORKFLOW.md) · [Architecture](ARCHITECTURE.md) · [Data](DATA.md) · [API](API.md)
 
-Contrato del workflow A (disputas de transacciones) entre **la interfaz web**, **el agente** y **el backend**, incluida la consola del especialista. Fecha: 2026-10-04, ya con el trabajo de Felix (consola y casos del cliente) fusionado.
+The contract of workflow A (transaction disputes) between **the web UI**, **the agent** and **the backend**, including the specialist console. Date: 2026-10-04, with the console and the customer's cases merged.
 
-## Cómo se mantiene este contrato
+## How this contract is maintained
 
-| Fuente | Qué dice | Quién la hace cumplir |
+| Source | What it says | Who enforces it |
 |---|---|---|
-| `backend/tests/contract/openapi.json` y `agent/tests/contract/openapi.json` | Rutas, parámetros, cuerpos y esquemas de respuesta. **Lo genera el código** | Una prueba falla si el código genera algo distinto. Cambiar el contrato es una decisión que se revisa en el diff (`UPDATE_CONTRACT=1 python -m pytest tests/test_openapi_contract.py` lo regenera) |
-| **Este documento** | Lo que un esquema no puede decir: reglas, estados, orden de las llamadas, seguridad, límites y supuestos | Revisión |
+| `backend/tests/contract/openapi.json` and `agent/tests/contract/openapi.json` | Routes, parameters, bodies and response schemas. **The code generates it** | A test fails if the code generates something different. Changing the contract is a decision reviewed in the diff (`UPDATE_CONTRACT=1 python -m pytest tests/test_openapi_contract.py` regenerates it) |
+| **This document** | What a schema cannot say: rules, states, call order, security, limits and assumptions | Review |
 
-Si este documento y un OpenAPI se contradicen, **gana el OpenAPI**: es el que ejecutan las pruebas.
+If this document and an OpenAPI file contradict each other, **the OpenAPI wins**, because the tests run it.
 
-Lo que el contrato del backend hace cumplir con pruebas:
-- las operaciones que **no** piden sesión son exactamente: `GET /health`, `GET /ready`, `POST /session`, `POST /admin/session`, `POST /v1/auth/login`, `GET /v1/auth/demo-accounts` y `GET /meta/demo-scenarios`. Se comprobó haciendo público `/v1/me` y viendo fallar la prueba;
-- ninguna ruta de cliente recibe un `customer_id` del que llama (las de administrador pueden filtrar por cliente: el rol es lo que las autoriza);
-- ningún esquema tiene un campo para `is_fraud`, `fraud_score`, `password_hash`, `credit_score` ni `estimated_monthly_income`;
-- el cuerpo de `POST /chat` no puede nombrar a un cliente.
+What the backend contract enforces with tests:
+- the operations that do **not** require a session are exactly `GET /health`, `GET /ready`, `POST /session`, `POST /admin/session`, `POST /v1/auth/login`, `GET /v1/auth/demo-accounts` and `GET /meta/demo-scenarios`. This was checked by making `/v1/me` public and watching the test fail;
+- no customer route receives a `customer_id` from the caller (the admin ones can filter by customer, because the role is what authorizes them);
+- no schema has a field for `is_fraud`, `fraud_score`, `password_hash`, `credit_score` or `estimated_monthly_income`;
+- the body of `POST /chat` cannot name a customer.
 
-## 1. Quién llama a quién
+## 1. Who calls whom
 
 ```
-Navegador ─► ALB + Cloud Armor ─┬─► Frontend (Next.js)   páginas: / (cliente) y /admin (especialista)
-                                └─► Agente  (/agent/*)   ◄── el navegador lo llama directo, con el token de sesión
-                                         │
-                                         └─► Backend (privado, ID token de Cloud Run) ─► Cloud SQL
+Browser ─► ALB + Cloud Armor ─┬─► Frontend (Next.js)   pages: / (customer) and /admin (specialist)
+                              └─► Agent  (/agent/*)    ◄── the browser calls it directly, with the session token
+                                       │
+                                       └─► Backend (private, Cloud Run ID token) ─► Cloud SQL
 ```
 
-- **La interfaz web llama al agente desde el navegador** (`/session`, `/chat`, `/me/disputes`, `/disputes/{id}`, `/meta/demo-scenarios`, y `/admin/*` para la consola). El agente reenvía al backend lo que no es suyo.
-- **El backend es privado:** solo cuentas de servicio con `run.invoker` lo llaman, con su ID token en `X-Serverless-Authorization`. `Authorization` queda libre para el token de sesión.
-- **El agente** lee datos solo a través del backend; nunca toca la base de los clientes. Solo escribe su propia traza (`agent.trace_log`).
+- **The web UI calls the agent from the browser** (`/session`, `/chat`, `/me/disputes`, `/disputes/{id}`, `/meta/demo-scenarios`, and `/admin/*` for the console). The agent forwards to the backend whatever is not its own.
+- **The backend is private.** Only service accounts with `run.invoker` call it, with their ID token in `X-Serverless-Authorization`. `Authorization` stays free for the session token.
+- **The agent** reads data only through the backend and never touches the customers' database. It writes only its own trace (`agent.trace_log`) and the conversation history.
 
-## 2. Convenciones comunes
+## 2. Common conventions
 
-| Tema | Regla |
+| Topic | Rule |
 |---|---|
-| Formato | JSON en UTF-8. Fechas en ISO 8601 (las marcas con zona terminan en `Z`) |
-| Dinero | **Número** más `currency` aparte. `amount_usd_effective` es `amount_usd` o, si falta y la moneda es USD, `amount`. Es `null` si no se conoce: **nunca se trata como cero** |
-| Identificadores | Opacos. `case_id` es un UUID; los de transacción y producto son texto del dataset |
-| Sesión | `Authorization: Bearer <token>`. JWT HS256, emisor `backend-sandbox`. **Dos roles:** `customer` (`sub` = `customer_id`, 2 horas) y `admin` (`sub` = usuario, `role=admin`, 8 horas por defecto). **Un token de un rol no abre las rutas del otro** (`403`). La identidad sale siempre del token |
-| Trazabilidad | Toda respuesta del backend y del agente lleva `X-Request-ID`. Si la solicitud trae uno válido (8 a 100 caracteres de `A-Za-z0-9._-`) se conserva; si no, se crea. El agente lo reenvía al backend. Cada solicitud escribe una línea de registro JSON con `severity`; **no** se registra `Authorization`, la cadena de consulta ni ningún cuerpo |
-| Paginación | La API `/v1` pagina por **cursor** (`?limit=` de 1 a 100 y `?cursor=`); un cursor que el servicio no emitió da `422`. La bandeja del administrador usa `limit` y `offset` |
-| Un caso por transacción | Reportar de nuevo una transacción que ya tiene un caso (no `closed`) **devuelve ese caso**: la ruta responde `201` y el cuerpo es el caso que ya existía. Dos solicitudes simultáneas crean uno solo. Un caso **sin** transacción nunca es duplicado de otro |
-| Versiones | `/v1` solo admite cambios que no rompen. Las rutas de la raíz son las de la interfaz y el agente y están congeladas en su forma |
+| Format | JSON in UTF-8. Dates in ISO 8601 (timestamps with a zone end in `Z`) |
+| Money | A **number** plus a separate `currency`. `amount_usd_effective` is `amount_usd` or, if it is missing and the currency is USD, `amount`. It is `null` if unknown and is **never treated as zero** |
+| Identifiers | Opaque. `case_id` is a UUID. Transaction and product ids are dataset text |
+| Session | `Authorization: Bearer <token>`. JWT HS256, issuer `backend-sandbox`. **Two roles:** `customer` (`sub` = `customer_id`, 2 hours) and `admin` (`sub` = username, `role=admin`, 8 hours by default). **A token of one role does not open the other's routes** (`403`). Identity always comes from the token |
+| Traceability | Every backend and agent response carries `X-Request-ID`. If the request brings a valid one (8 to 100 characters of `A-Za-z0-9._-`) it is kept, and otherwise one is created. The agent forwards it to the backend. Each request writes one JSON log line with `severity`. `Authorization`, the query string and any body are **not** logged |
+| Pagination | The `/v1` API paginates by **cursor** (`?limit=` from 1 to 100 and `?cursor=`). A cursor the service did not issue gives `422`. The admin inbox uses `limit` and `offset` |
+| One case per transaction | Reporting again a transaction that already has a case (not `closed`) **returns that case**: the route answers `201` and the body is the case that already existed. Two simultaneous requests create only one. A case **without** a transaction is never a duplicate of another |
+| Versions | `/v1` admits only non-breaking changes. The root routes are the UI's and the agent's, and their shape is frozen |
 
-### Errores
+### Errors
 
-El cuerpo es `{"detail": "<texto>"}`. Los errores de validación (`422`) traen `{"detail": [{"loc": [...], "msg": "...", "type": "..."}]}`. El texto no incluye datos de otro cliente.
+The body is `{"detail": "<text>"}`. Validation errors (`422`) carry `{"detail": [{"loc": [...], "msg": "...", "type": "..."}]}`. The text includes no data from another customer.
 
-| Código | Cuándo |
+| Code | When |
 |---|---|
-| `401` | Falta el token, está mal formado o venció. También el login con credenciales erróneas (**la misma respuesta si el usuario no existe**) |
-| `403` | El token es de otro rol |
-| `404` | No existe **o no es del cliente**. Las dos cosas son indistinguibles a propósito |
-| `409` | `resolve` sobre un caso que no está `open`, o que cambió de estado mientras tanto |
-| `422` | Parámetro o cuerpo inválido |
-| `429` | Cinco intentos de login fallidos (`LOGIN_MAX_FAILED_ATTEMPTS`): la cuenta se bloquea 15 minutos. Trae `Retry-After` |
-| `503` | `GET /ready` sin base; el login de administrador si `ADMIN_USERS` está vacío |
+| `401` | The token is missing, malformed or expired. Also a login with wrong credentials (**the same response if the user does not exist**) |
+| `403` | The token belongs to another role |
+| `404` | It does not exist **or does not belong to the customer**. The two are indistinguishable on purpose |
+| `409` | `resolve` on a case that is not `open`, or that changed state in the meantime |
+| `422` | Invalid parameter or body |
+| `429` | Five failed login attempts (`LOGIN_MAX_FAILED_ATTEMPTS`): the account is locked for 15 minutes. It carries `Retry-After` |
+| `503` | `GET /ready` without a database. The admin login if `ADMIN_USERS` is empty |
 
 ## 3. Backend
 
-El esquema exacto está en `backend/tests/contract/openapi.json`. Aquí, lo que cada ruta hace y lo que el esquema no dice.
+The exact schema is in `backend/tests/contract/openapi.json`. Here is what each route does and what the schema does not say.
 
-### 3.1 Raíz, la que usan la interfaz y el agente
+### 3.1 Root: the routes the UI and the agent use
 
-| Ruta | Sesión | Hace |
+| Route | Session | Does |
 |---|---|---|
-| `POST /session` `{customer_id, document_number}` | no | Login de **sandbox** del cliente: valida contra `gold.customers`. No hay proveedor de identidad detrás |
-| `POST /admin/session` `{username, password}` | no | Login del especialista con `ADMIN_USERS` (hashes bcrypt, en Secret Manager). Cinco fallos por IP y usuario bloquean 60 s |
-| `GET /me`, `GET /me/transactions`, `GET /me/transactions/{id}` | cliente | Perfil mínimo y movimientos propios (lista simple). Cada movimiento trae `response_meaning` |
-| `GET /me/disputes` | cliente | Mis casos, más nuevos primero (incluye los cerrados y los que no tienen transacción) |
-| `GET /me/conversations` | cliente | Mis conversaciones, la más reciente primero, con el título (lo primero que escribió). Propias del agente: `agent.conversation_messages` |
-| `GET /me/conversations/{id}` | cliente | Una conversación completa (mensajes y las tarjetas de cada respuesta). 404 si no existe o es de otro cliente |
-| `POST /disputes` `{transaction_id?, reason_code, summary}` | cliente | Abre el caso. `transaction_id` es **opcional**: una escalada que no pudo atarse a una transacción es un caso sin transacción |
-| `GET /disputes/{case_id}` | cliente | El caso con su línea de tiempo (`events`) |
-| `POST /disputes/{case_id}/escalate` `{handoff}` | cliente | Lo llama el agente. Marca `escalated` y guarda el traspaso. Se puede llamar sobre un caso `open`, `auto_resolved` (el cliente disputa la resolución automática) o `escalated`. Sobre uno `in_progress` o `closed` responde `409` y no cambia nada: un especialista lo tiene o lo cerró, y un nuevo reporte no lo reabre |
-| `POST /disputes/{case_id}/resolve` `{resolution}` | cliente | Lo llama el agente. `resolution` es `no_charge_confirmed` o `reversal_confirmed`. Pasa `open` a `auto_resolved`; repetirlo sobre uno ya `auto_resolved` lo devuelve igual; sobre cualquier otro estado, `409`. **Los humanos nunca ponen `auto_resolved`** |
-| `GET /meta/demo-scenarios` | no | Hasta cuatro escenarios deterministas para la demo, calculados de los datos (umbral, fraude, auto-resuelto…). Público a propósito: solo expone lo que el login de prueba ya pide |
-| `GET /health`, `GET /ready` | no | El proceso vive / alcanza la base |
+| `POST /session` `{customer_id, document_number}` | no | The customer's **sandbox** login: it validates against `gold.customers`. There is no identity provider behind it |
+| `POST /admin/session` `{username, password}` | no | The specialist's login with `ADMIN_USERS` (bcrypt hashes, in Secret Manager). Five failures per IP and user lock it for 60 s |
+| `GET /me`, `GET /me/transactions`, `GET /me/transactions/{id}` | customer | Minimal profile and own transactions (a simple list). Each transaction carries `response_meaning` |
+| `GET /me/disputes` | customer | My cases, newest first (including closed ones and ones without a transaction) |
+| `GET /me/conversations` | customer | My conversations, most recent first, with the title (the first thing the customer wrote). They belong to the agent: `agent.conversation_messages` |
+| `GET /me/conversations/{id}` | customer | One full conversation (messages and the cards of each reply). 404 if it does not exist or belongs to another customer |
+| `POST /disputes` `{transaction_id?, reason_code, summary}` | customer | Opens the case. `transaction_id` is **optional**: an escalation that could not be tied to a transaction is a case without a transaction |
+| `GET /disputes/{case_id}` | customer | The case with its timeline (`events`) |
+| `POST /disputes/{case_id}/escalate` `{handoff}` | customer | Called by the agent. It marks `escalated` and stores the handoff. It can be called on a case that is `open`, `auto_resolved` (the customer disputes the automatic resolution) or `escalated`. On one that is `in_progress` or `closed` it answers `409` and changes nothing: a specialist has it or closed it, and a new report does not reopen it |
+| `POST /disputes/{case_id}/resolve` `{resolution}` | customer | Called by the agent. `resolution` is `no_charge_confirmed` or `reversal_confirmed`. It moves `open` to `auto_resolved`. Repeating it on one already `auto_resolved` returns it unchanged, and on any other state it gives `409`. **Humans never set `auto_resolved`** |
+| `GET /meta/demo-scenarios` | no | Up to four deterministic demo scenarios, computed from the data (threshold, fraud, auto-resolved...). Public on purpose: it exposes only what the test login already asks for |
+| `GET /health`, `GET /ready` | no | The process is alive / reaches the database |
 
-### 3.2 Administrador (`role=admin`)
+### 3.2 Admin (`role=admin`)
 
-| Ruta | Hace |
+| Route | Does |
 |---|---|
-| `GET /admin/disputes?status=&customer_id=&limit=&offset=` | Bandeja con cliente, idioma y motivo del traspaso. `status=active` incluye `escalated` e `in_progress` |
-| `GET /admin/disputes/{case_id}` | Detalle: traspaso, `conversation_id` y eventos auditados |
-| `POST /admin/disputes/{case_id}/transition` `{action, note, resolution?}` | `claim`: `open` o `escalated` → `in_progress`. `close`: `in_progress` → `closed`, con **nota obligatoria y resolución obligatoria**. Cada transición agrega un evento |
-| `GET /admin/metrics?window=<horas>` | Totales por estado, resolución automática segura **con su denominador**, escalamientos, cierres humanos, idioma y motivo. Sin casos la tasa es `null` ("no definida"), no cero |
-| `GET /meta/data` | Frescura: conteos de `gold.*`, el borde del snapshot y la última corrida de `ops.etl_runs` |
+| `GET /admin/disputes?status=&customer_id=&limit=&offset=` | Inbox with customer, language and handoff reason. `status=active` includes `escalated` and `in_progress` |
+| `GET /admin/disputes/{case_id}` | Detail: handoff, `conversation_id` and audited events |
+| `POST /admin/disputes/{case_id}/transition` `{action, note, resolution?}` | `claim`: `open` or `escalated` to `in_progress`. `close`: `in_progress` to `closed`, with a **required note and a required resolution**. Each transition adds an event |
+| `GET /admin/metrics?window=<hours>` | Totals by status, safe automatic resolution **with its denominator**, escalations, human closures, language and reason. With no cases the rate is `null` ("not defined"), not zero |
+| `GET /meta/data` | Freshness: `gold.*` counts, the snapshot edge and the last run in `ops.etl_runs` |
 
-### 3.3 `/v1`, la superficie para una aplicación web que no usa el agente directo
+### 3.3 `/v1`: the surface for a web app that does not use the agent directly
 
-La interfaz actual **no la usa**; se conserva porque está cubierta por pruebas y por este contrato, y es el camino para un BFF futuro.
+The current UI **does not use it**. It is kept because tests and this contract cover it, and it is the path to a future BFF.
 
-| Ruta | Hace |
+| Route | Does |
 |---|---|
-| `POST /v1/auth/login` `{username, password}` | Usuario y clave (argon2id). Cinco fallos bloquean la cuenta; un acceso correcto la reinicia. La misma respuesta si el usuario no existe |
-| `GET /v1/auth/demo-accounts` | Cuentas de demostración y su clave compartida (pública a propósito). **`404` salvo `DEMO_ACCOUNTS_ENABLED=true`** |
-| `GET /v1/me`, `/v1/me/summary` | Perfil, y saldos por moneda (**depósitos y crédito separados, nunca neteados**) con los últimos movimientos y los casos activos |
-| `GET /v1/me/products` y `/{id}` | Productos con el número **enmascarado** (`****1234`) y `kind` (`deposit`, `credit`, `other`) |
-| `GET /v1/me/transactions` y `/{id}` | `{items, next_cursor}` con filtros `product_id`, `status`, `merchant`, `from`, `to`. Cada fila trae `case_id`, `dispute_status` y `response_meaning` |
-| `GET /v1/disputes`, `/v1/disputes/{id}`, `POST /v1/disputes…` | Las mismas rutas de disputas de la raíz |
+| `POST /v1/auth/login` `{username, password}` | Username and password (argon2id). Five failures lock the account, and a successful login resets the count. The same response if the user does not exist |
+| `GET /v1/auth/demo-accounts` | Demo accounts and their shared password (public on purpose). **`404` unless `DEMO_ACCOUNTS_ENABLED=true`** |
+| `GET /v1/me`, `/v1/me/summary` | Profile, and balances by currency (**deposits and credit kept apart, never netted**) with the latest transactions and the active cases |
+| `GET /v1/me/products` and `/{id}` | Products with the number **masked** (`****1234`) and `kind` (`deposit`, `credit`, `other`) |
+| `GET /v1/me/transactions` and `/{id}` | `{items, next_cursor}` with filters `product_id`, `status`, `merchant`, `from`, `to`. Each row carries `case_id`, `dispute_status` and `response_meaning` |
+| `GET /v1/disputes`, `/v1/disputes/{id}`, `POST /v1/disputes…` | The same dispute routes as the root |
 
-**`response_meaning`** (`{es, pt}` o `null`) es el significado estándar (ISO 8583) del `response_code`. **Es un supuesto:** el organizador no define los códigos; el dataset solo trae `00`, `05`, `14`, `51` y `54` (y vacío en ~5 %). Un código vacío o desconocido da `null`: no se inventa un motivo.
+**`response_meaning`** (`{es, pt}` or `null`) is the standard (ISO 8583) meaning of `response_code`. **It is an assumption:** the organizer does not define the codes, and the dataset has only `00`, `05`, `14`, `51` and `54` (and empty in ~5%). An empty or unknown code gives `null`, and no reason is invented.
 
-**`kind` y los saldos:** el diccionario del organizador tampoco define `current_balance`. En un depósito es lo que el cliente tiene; **en crédito se infiere que es lo que debe** (hay 7.510 productos de crédito con saldo mayor que su límite, lo que solo tiene sentido si el saldo es lo usado).
+**`kind` and balances:** the organizer's dictionary does not define `current_balance` either. For a deposit it is what the customer holds. **For credit it is inferred to be what they owe** (there are 7,510 credit products with a balance above their limit, which only makes sense if the balance is the amount used).
 
-## 4. Estados del caso y quién los cambia
+## 4. Case states and who changes them
 
 ```
-              ┌─── resolve (agente) ──► auto_resolved ──┐
-   open ──────┤                                          ├── escalate (agente) ──► escalated ── claim (especialista) ──► in_progress ── close ──► closed
-              └──────────── escalate (agente) ──────────┘
+              ┌─── resolve (agent) ──► auto_resolved ──┐
+   open ──────┤                                         ├── escalate (agent) ──► escalated ── claim (specialist) ──► in_progress ── close ──► closed
+              └──────────── escalate (agent) ──────────┘
 ```
 
-| Estado | Significa | Lo pone |
+| State | Means | Set by |
 |---|---|---|
-| `open` | Recién abierto, en proceso | `POST /disputes` |
-| `auto_resolved` | La política lo resolvió **y quedó registrado** (`no_charge_confirmed` o `reversal_confirmed`) | solo el agente, por `resolve` |
-| `escalated` | Espera a un especialista, con su traspaso | el agente, por `escalate` |
-| `in_progress` | Un especialista lo tomó | el especialista, por `claim` |
-| `closed` | El especialista lo cerró, con nota y resolución | el especialista, por `close`. **Un caso `closed` no cuenta**: la transacción se puede reportar de nuevo |
+| `open` | Just opened, in progress | `POST /disputes` |
+| `auto_resolved` | The policy resolved it **and it was recorded** (`no_charge_confirmed` or `reversal_confirmed`) | only the agent, through `resolve` |
+| `escalated` | Waiting for a specialist, with its handoff | the agent, through `escalate` |
+| `in_progress` | A specialist took it | the specialist, through `claim` |
+| `closed` | The specialist closed it, with a note and a resolution | the specialist, through `close`. **A `closed` case does not count**: the transaction can be reported again |
 
-Las escaladas **sin transacción** (fraude sin una transacción elegida, ambigüedad que no se resolvió) son casos con `transaction_id` nulo: así llegan igual a la bandeja del especialista. Un caso escalado no tiene `resolved_at`: eso es solo para lo que se resolvió.
+Escalations **without a transaction** (fraud with no chosen transaction, ambiguity that was not resolved) are cases with a null `transaction_id`, so they reach the specialist's inbox just the same. An escalated case has no `resolved_at`: that is only for what was resolved.
 
-La línea de tiempo (`events`) solo crece: `created`, y luego `auto_resolved`, `escalated`, `claimed`, `closed`.
+The timeline (`events`) only grows: `created`, then `auto_resolved`, `escalated`, `claimed`, `closed`.
 
-## 5. Agente
+## 5. Agent
 
-El esquema exacto está en `agent/tests/contract/openapi.json`.
+The exact schema is in `agent/tests/contract/openapi.json`.
 
 ### `POST /chat`
 
-Pide: `{session_token, message, conversation_id?, transaction_id?}`. El token va en el cuerpo, no en una cabecera.
+Request: `{session_token, message, conversation_id?, transaction_id?}`. The token goes in the body, not in a header.
 
-- **`transaction_id`** es el movimiento que el cliente eligió. Identifica la transacción mejor que cualquier texto: no se busca ni se pide confirmar. **Todo lo demás sigue aplicando** (umbral de USD 500, cobro ya aprobado, monto desconocido). El backend verifica que sea del cliente; **uno ajeno se ignora** como si no se hubiera elegido, sin error y sin datos ajenos. No se hereda al siguiente turno. *La interfaz actual no lo usa: arma una frase ("Fue el cobro de X en Y") al elegir un candidato.*
-- **`conversation_id`** continúa una conversación; si falta, se crea y se devuelve.
+- **`transaction_id`** is the transaction the customer picked. It identifies the transaction better than any text: it is not searched for and the customer is not asked to confirm it. **Everything else still applies** (the USD 500 threshold, an already approved charge, an unknown amount). The backend verifies that it belongs to the customer, and **someone else's is ignored** as if nothing had been picked, with no error and no data from another customer. It is not carried into the next turn. *The current UI does not use it: it builds a sentence ("It was the charge of X at Y") when a candidate is picked.*
+- **`conversation_id`** continues a conversation. If it is missing, one is created and returned.
 
-Responde: `{reply, conversation_id, outcome, handoff, case_id, case_status, case, candidates, reason, language}`. `case_id` y `case_status` son el caso que este turno abrió o encontró; `case`, `candidates`, `reason` y `language` son los que la interfaz usa para sus tarjetas.
+Response: `{reply, conversation_id, outcome, handoff, case_id, case_status, case, candidates, reason, language}`. `case_id` and `case_status` are the case that this turn opened or found. `case`, `candidates`, `reason` and `language` are what the UI uses for its cards.
 
-| `outcome` | Significa | Caso |
+| `outcome` | Means | Case |
 |---|---|---|
-| `resolved` | La política resolvió, o el agente respondió (saludo, estado de un caso) | `auto_resolved` si hubo disputa |
-| `clarify` | Hay 0 o varias transacciones candidatas, o falta el dato clave (con `candidates` si hay). Una pregunta por turno, máximo 2; luego escala | ninguno |
-| `escalated` | Pasa a una persona | **el caso, `escalated`**, atado a la transacción si se pudo; sin transacción si no |
-| `declined` | La petición no es una disputa (un préstamo, el saldo, el clima…). Se responde con un texto fijo en su idioma, **sin caso y sin traspaso**: no se dice que una persona lo tiene, porque nadie lo tendría | ninguno |
-| `unavailable` | **No se pudo verificar** por un fallo del servicio bancario tras los reintentos. No se cambió nada: el cliente puede reintentar | ninguno |
+| `resolved` | The policy resolved it, or the agent answered (a greeting, the status of a case) | `auto_resolved` if there was a dispute |
+| `clarify` | There are 0 or several candidate transactions, or the key detail is missing (with `candidates` if there are any). One question per turn, at most 2, then it escalates | none |
+| `escalated` | Goes to a person | **the case, `escalated`**, tied to the transaction if possible and with no transaction if not |
+| `declined` | The request is not a dispute (a loan, the balance, the weather...). It is answered with a fixed text in the customer's language, **with no case and no handoff**. It does not say a person has it, because nobody would | none |
+| `unavailable` | **It could not be verified** because the banking service failed after the retries. Nothing was changed, and the customer can retry | none |
 
-**La resolución automática se cierra o escala.** Después de abrir el caso, el agente lo relee y lo marca `auto_resolved` por `resolve`, y lo relee de nuevo. **Si no se puede marcar, el turno se vuelve una escalada con motivo `verify_failed`**: "resuelto" nunca es una promesa que nadie registró.
+**Automatic resolution is closed or escalated.** After opening the case, the agent rereads it, marks it `auto_resolved` through `resolve`, and rereads it again. **If it cannot be marked, the turn becomes an escalation with reason `verify_failed`.** "Resolved" is never a promise that nobody recorded.
 
-`unavailable` llega con `200` y un texto simple en el idioma del cliente (es o pt), no con un `502`. Una sesión vencida sigue siendo `401`.
+`unavailable` arrives with `200` and a plain text in the customer's language (es or pt), not with a `502`. An expired session is still `401`.
 
-`handoff` (cuando `outcome` es `escalated`): `reason`, `limitation`, `request` (`{es, pt}`), `customer_language`, `conversation_id`, `verified_facts`, `actions_taken`, `evidence`, `open_questions`, y `case_id` y `escalated_in_backend` si hubo caso. Razones: `amount_threshold`, `amount_unknown`, `posted_charge_disputed`, `fraud_suspected`, `out_of_scope`, `ambiguity_unresolved`, `verify_failed`.
+`handoff` (when `outcome` is `escalated`): `reason`, `limitation`, `request` (`{es, pt}`), `customer_language`, `conversation_id`, `verified_facts`, `actions_taken`, `evidence`, `open_questions`, and `case_id` and `escalated_in_backend` if there was a case. Reasons: `amount_threshold`, `amount_unknown`, `posted_charge_disputed`, `fraud_suspected`, `out_of_scope`, `ambiguity_unresolved`, `verify_failed`.
 
-**Motivo del rechazo:** si la transacción está `Declined` y su código es conocido, la respuesta lo dice con el código y aclarando que es el significado estándar. Con un código vacío o desconocido no agrega nada.
+**Decline reason:** if the transaction is `Declined` and its code is known, the reply states it with the code and says it is the standard meaning. With an empty or unknown code it adds nothing.
 
-**Reintentos del agente al backend:** hasta 3 intentos con esperas cortas, ante fallo de conexión o `502`, `503`, `504`; **nunca** ante un `4xx`. Es seguro repetir todo porque las escrituras son idempotentes. La conexión tiene su propio límite de 2 s; **el peor caso medido, con el backend caído, fue 6,9 s** hasta responder `unavailable`.
+**The agent's retries to the backend:** up to 3 attempts with short waits, on a connection failure or `502`, `503`, `504`, and **never** on a `4xx`. Repeating everything is safe because the writes are idempotent. The connection has its own 2 s limit, and **the worst case measured, with the backend down, was 6.9 s** until `unavailable` was returned.
 
-### El resto de las rutas del agente
+### The agent's other routes
 
-Son reenvíos delgados al backend con la misma sesión, con comprobaciones previas que fallan rápido: `GET /me/disputes`, `GET /disputes/{id}`, `GET /meta/demo-scenarios`, `GET /meta/data` y, para el especialista, `POST /admin/session`, `GET /admin/disputes`, `GET /admin/disputes/{id}` y `POST /admin/disputes/{id}/transition`, más `GET /admin/metrics`. **Dos rutas son del propio agente**: `GET /admin/agent-metrics` (resultados, contención, latencia p50 y p95, intenciones e idiomas, de `agent.trace_log`) y `GET /admin/conversations/{id}/trace` (los pasos de una conversación). También son del agente las del cliente `GET /me/conversations` y `GET /me/conversations/{id}`: guardan lo que el cliente escribió y lo que se le respondió, y solo se leen con el cliente que sale del token verificado (la tabla es la que lleva la política de retención; `trace_log` sigue sin texto de usuario). `POST /session` reenvía el login del backend.
+They are thin forwards to the backend with the same session, with up-front checks that fail fast: `GET /me/disputes`, `GET /disputes/{id}`, `GET /meta/demo-scenarios`, `GET /meta/data` and, for the specialist, `POST /admin/session`, `GET /admin/disputes`, `GET /admin/disputes/{id}` and `POST /admin/disputes/{id}/transition`, plus `GET /admin/metrics`. **Two routes belong to the agent itself:** `GET /admin/agent-metrics` (outcomes, containment, p50 and p95 latency, intents and languages, from `agent.trace_log`) and `GET /admin/conversations/{id}/trace` (the steps of one conversation). The customer routes `GET /me/conversations` and `GET /me/conversations/{id}` also belong to the agent. They store what the customer wrote and what they were answered, and are read only with the customer from the verified token (this table carries the retention policy, and `trace_log` still has no user text). `POST /session` forwards the backend's login.
 
-## 6. Flujos de punta a punta
+## 6. End-to-end flows
 
-**Cliente:** `POST /session` → `POST /chat` (con `message` y, si lo eligió, `transaction_id`) → `resolved` con su caso, o `escalated` con su caso y su traspaso → `GET /me/disputes` para "Mis casos" y `GET /me/conversations` para las conversaciones recientes, que se reabren con `GET /me/conversations/{id}`.
+**Customer:** `POST /session`, then `POST /chat` (with `message` and, if they picked one, `transaction_id`), then `resolved` with its case, or `escalated` with its case and handoff. After that, `GET /me/disputes` for "Mis casos" and `GET /me/conversations` for recent conversations, which reopen with `GET /me/conversations/{id}`.
 
-**Especialista:** `POST /admin/session` → `GET /admin/disputes?status=active` → detalle (traspaso y eventos) → `claim` → `close` con nota y resolución → `GET /admin/metrics`.
+**Specialist:** `POST /admin/session`, then `GET /admin/disputes?status=active`, then the detail (handoff and events), then `claim`, then `close` with a note and a resolution, then `GET /admin/metrics`.
 
-## 7. Evolución posible: un servidor intermedio (BFF) para la web
+## 7. A possible evolution: a backend-for-frontend (BFF) for the web
 
-No existe, y no hace falta para la entrega. Si la interfaz dejara de llamar al agente desde el navegador, el servidor de Next sería quien guardara el token en una cookie `httpOnly` y llamara a `/v1` y a `/chat`. Eso **forzaría cambios de infraestructura**: hoy el agente solo acepta tráfico del balanceador, así que el servidor de Next no podría llamarlo; el agente tendría que volverse privado como el backend, con el frontend como invocador. Por eso `/v1` se mantiene.
+It does not exist, and the submission does not need it. If the UI stopped calling the agent from the browser, the Next server would store the token in an `httpOnly` cookie and call `/v1` and `/chat`. That would **force infrastructure changes**: today the agent accepts only the load balancer's traffic, so the Next server could not call it. The agent would have to become private like the backend, with the frontend as the invoker. That is why `/v1` is kept.
 
-## 8. Límites y supuestos
+## 8. Limits and assumptions
 
-- **El motivo del rechazo (`response_meaning`) es el estándar ISO 8583**, no una definición del organizador. Se dice así en la respuesta.
-- **El saldo de un producto de crédito se interpreta como lo adeudado** (inferido). El dataset no tiene MXN aunque la mitad de los clientes es mexicana: la moneda se muestra como está guardada.
-- **No hay un servicio de identidad real.** El login del cliente (`customer_id` y documento) y el del especialista son de demostración, El del especialista tiene un límite de intentos por proceso. El contrato lo declara; no lo disimula.
-- **El estado de la conversación del agente vive en la memoria de cada instancia.** Con más de una instancia, un turno puede caer en otra y perder el hilo (se pierde el contexto de la aclaración, no los casos, que están en la base). Producción real necesita un almacén compartido.
-- **El límite de intentos del login del especialista vive en la memoria de cada proceso** (con varias instancias, cada una cuenta aparte). El de `POST /v1/auth/login` está en la base, por cuenta. `POST /session` (cliente y documento) no tiene límite de intentos.
+- **The decline reason (`response_meaning`) is the ISO 8583 standard**, not a definition from the organizer. The reply says so.
+- **A credit product's balance is interpreted as the amount owed** (inferred). The dataset has no MXN although half of the customers are Mexican, so the currency is shown as stored.
+- **There is no real identity service.** The customer's login (`customer_id` and document) and the specialist's are demo logins. The specialist's has an attempt limit per process. The contract declares this and does not hide it.
+- **The agent's conversation state lives in each instance's memory.** With more than one instance, a turn can land on another one and lose the thread (the clarification context is lost, not the cases, which are in the database). Real production needs a shared store.
+- **The specialist login's attempt limit lives in each process's memory** (with several instances, each one counts separately). The limit of `POST /v1/auth/login` is in the database, per account. `POST /session` (customer and document) has no attempt limit.

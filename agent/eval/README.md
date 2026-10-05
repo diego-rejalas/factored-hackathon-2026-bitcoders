@@ -1,34 +1,34 @@
-# Evaluación
+# Evaluation
 
-Código, conjuntos de casos y resultados de la evaluación. El informe, con las cifras y sus límites, está en
-[`docs/EVALUATION.md`](../../docs/EVALUATION.md). Aquí, cómo repetirla.
+Code, case sets and results of the evaluation. The report, with the figures and their limits, is in
+[`docs/EVALUATION.md`](../../docs/EVALUATION.md). This file covers how to repeat it.
 
 ```
 eval/
-  datasets/    los casos (inventados por el equipo, rotulados como tales)
-  results/     una línea por caso y un resumen por corrida: todo número del informe se recalcula de aquí
-  stats.py     intervalos de Wilson, prueba de McNemar exacta, percentiles, matriz de confusión
-  fixture.py   clientes y transacciones inventados, con semilla, y la política restablecida como oráculo
-  generate_intent_set.py   el conjunto ciego de intenciones (lo escribe un modelo que no es el clasificador)
-  generate_policy_set.py   los casos de punta a punta, derivados del fixture
-  run_intent.py            componente: palabras clave contra modelo
-  run_policy.py            sistema: configuración sin modelo contra configuración con modelo
+  datasets/    the cases (invented by the team, labeled as such)
+  results/     one line per case and a summary per run: every number in the report is recomputed from here
+  stats.py     Wilson intervals, the exact McNemar test, percentiles, confusion matrix
+  fixture.py   invented customers and transactions, with a seed, and the policy restated as the oracle
+  generate_intent_set.py   the blind intent set (written by a model that is not the classifier)
+  generate_policy_set.py   the end-to-end cases, derived from the fixture
+  run_intent.py            component: keywords against model
+  run_policy.py            system: the configuration without a model against the one with a model
 ```
 
-## Repetirla
+## Repeating it
 
-Hace falta el stack local (`docker compose -f docker-compose.dev.yml up -d --build`), una clave de OpenRouter y la
-misma `SESSION_JWT_SECRET` del compose.
+You need the local stack (`docker compose -f docker-compose.dev.yml up -d --build`), an OpenRouter key and the
+same `SESSION_JWT_SECRET` as the compose file.
 
 ```bash
 cd agent
-python -m eval.fixture --load                                  # clientes de evaluación en la base local
+python -m eval.fixture --load                                  # evaluation customers in the local database
 OPENROUTER_API_KEY=... OPENROUTER_MODEL=anthropic/claude-haiku-4.5 python -m eval.run_intent
 SESSION_JWT_SECRET=... BANK_URL=http://localhost:8000 python -m eval.run_policy baseline
 SESSION_JWT_SECRET=... BANK_URL=http://localhost:8000 OPENROUTER_API_KEY=... OPENROUTER_MODEL=anthropic/claude-haiku-4.5 python -m eval.run_policy system
 ```
 
-Los generadores (`generate_*`) se corrieron una vez y sus archivos están versionados: volver a correrlos produce otro
-conjunto, no el mismo. Las pruebas de la propia evaluación (`tests/test_eval_*.py`) corren con el resto de la suite.
+The generators (`generate_*`) were run once and their files are versioned. Running them again produces a different
+set, not the same one. The evaluation's own tests (`tests/test_eval_*.py`) run with the rest of the suite.
 
-La corrida vacía y reconstruye `app.disputes` de la base **local**; no la apuntes a una base real.
+The run empties and rebuilds `app.disputes` in the **local** database. Do not point it at a real one.

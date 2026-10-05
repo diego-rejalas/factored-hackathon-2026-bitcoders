@@ -1,148 +1,148 @@
-# infra/gcp/ — infraestructura en GCP por ambientes
+# infra/gcp/: GCP infrastructure by environment
 
-Terraform de GCP separado en **tres ambientes** (`dev`, `qa`, `prod`) que comparten módulos. Cada ambiente tiene su propio estado, sus propios recursos (todos con el prefijo `factored-<ambiente>`) y valores por defecto adecuados a su rol.
+GCP Terraform split into **three environments** (`dev`, `qa`, `prod`) that share modules. Each environment has its own state, its own resources (all prefixed `factored-<environment>`) and defaults suited to its role. The deployment procedure for `prod` is in [`docs/DEPLOY.md`](../../docs/DEPLOY.md).
 
 ```text
 infra/gcp/
 ├── envs/
 │   ├── dev/    backend.tf provider.tf main.tf variables.tf outputs.tf terraform.tfvars.example
-│   ├── qa/     (mismo contenido; cambian los valores por defecto de variables.tf)
+│   ├── qa/     (same contents; only the defaults in variables.tf change)
 │   └── prod/
 ├── modules/
-│   ├── foundation/         APIs del proyecto + Artifact Registry
-│   ├── network/            VPC, subred, Private Service Access, firewall de IAP y NAT opcional
-│   ├── cloudsql/           Cloud SQL Postgres 18 (base `data`, usuario `app`)
-│   ├── secrets/            Secret Manager: JWT, contraseña de la base, claves de LLM y de S3
-│   ├── lakehouse/          bucket de GCS para el Parquet de bronze y silver
-│   ├── cloud_run_service/  un servicio de Cloud Run con su propia cuenta de servicio
-│   ├── edge/               Application Load Balancer global + Cloud Armor delante del frontend y el agente
-│   ├── airflow_vm/         la VM de Airflow
-│   └── etl_job/            el Cloud Run Job del ETL
-├── bootstrap/              federación de identidad de GitHub (se aplica a mano, una vez)
-├── sql/                    roles.sql: permisos de los roles de base de cada servicio
-├── scripts/                setup-backend.sh · manage_db.sh · db_roles.sh · airflow_vm.sh · e2e.py
-├── docs/                   TEAM_ONBOARDING.md
-└── etl/                    Dockerfile y run_pipeline.py de la imagen del job
+│   ├── foundation/         project APIs + Artifact Registry
+│   ├── network/            VPC, subnet, Private Service Access, IAP firewall and optional NAT
+│   ├── cloudsql/           Cloud SQL Postgres 18 (database `data`, user `app`)
+│   ├── secrets/            Secret Manager: JWT, database password, LLM and S3 keys
+│   ├── lakehouse/          GCS bucket for the bronze and silver Parquet
+│   ├── cloud_run_service/  one Cloud Run service with its own service account
+│   ├── edge/               global Application Load Balancer + Cloud Armor in front of the frontend and the agent
+│   ├── airflow_vm/         the Airflow VM
+│   └── etl_job/            the ETL Cloud Run Job
+├── bootstrap/              GitHub identity federation (applied by hand, once)
+├── sql/                    roles.sql: permissions of each service's database role
+├── scripts/                setup-backend.sh · manage_db.sh · db_roles.sh · airflow_vm.sh · grant_access.sh · e2e.py
+├── airflow/                Airflow image and the DAG that runs on the VM
+└── etl/                    Dockerfile and run_pipeline.py of the job image
 ```
 
-`main.tf` es idéntico en los tres ambientes (así no divergen); lo que cambia es `backend.tf` (prefijo del estado) y los valores por defecto de `variables.tf`.
+`main.tf` is identical in the three environments (so they do not diverge). What changes is `backend.tf` (the state prefix) and the defaults in `variables.tf`.
 
-## Qué despliega cada ambiente
+## What each environment deploys
 
-`foundation` → `network` → `cloudsql`, `secrets`, `lakehouse` → servicios `backend`, `agent`, `frontend` y el job `etl`. Un `plan` real contra el proyecto da **54 recursos en cada ambiente** (7 son la red y dos APIs).
+`foundation` → `network` → `cloudsql`, `secrets`, `lakehouse` → services `backend`, `agent`, `frontend` and the `etl` job. A real `plan` against the project gives **54 resources in each environment** (7 are the network and two APIs).
 
 | | dev | qa | prod |
 |---|---|---|---|
-| Cloud SQL | `db-f1-micro`, 20 GB | `db-g1-small`, 20 GB | `db-custom-2-7680`, 50 GB, recuperación a un instante |
-| Conectividad a la base (`db_connectivity`) | `private_ip`: sin IP pública, por la VPC (antes `dev` usaba IP pública abierta; se cambió tras el análisis de seguridad) | `private_ip` | `private_ip` |
-| Airflow (`enable_airflow`) | apagado | apagado | **encendido**: VM `e2-standard-4`, apagada de noche y a demanda (`scripts/airflow_vm.sh`) |
-| Rangos de red | `10.10.0.0/24` y `10.10.1.0/24` | `10.20.0.0/24` y `10.20.1.0/24` | `10.30.0.0/24` y `10.30.1.0/24` |
-| Protección contra borrado (base y Cloud Run) | no | no | **sí** |
-| Instancias mínimas (backend, agent) | 0 | 0 | 1 |
-| Bucket del lago | se puede destruir con datos | se puede destruir con datos | **no** |
+| Cloud SQL | `db-f1-micro`, 20 GB | `db-g1-small`, 20 GB | `db-custom-2-7680`, 50 GB, point-in-time recovery |
+| Database connectivity (`db_connectivity`) | `private_ip`: no public IP, over the VPC (`dev` used an open public IP before, and was changed after the security analysis) | `private_ip` | `private_ip` |
+| Airflow (`enable_airflow`) | off | off | **on**: an `e2-standard-4` VM, stopped at night and started on demand (`scripts/airflow_vm.sh`) |
+| Network ranges | `10.10.0.0/24` and `10.10.1.0/24` | `10.20.0.0/24` and `10.20.1.0/24` | `10.30.0.0/24` and `10.30.1.0/24` |
+| Deletion protection (database and Cloud Run) | no | no | **yes** |
+| Minimum instances (backend, agent) | 0 | 0 | 1 |
+| Lake bucket | can be destroyed with data | can be destroyed with data | **no** |
 
-Las diferencias salen de variables (`db_tier`, `use_cloud_sql_connector`, `db_deletion_protection`, `agent_min_instances`, ...): se pueden cambiar en un `terraform.tfvars` sin tocar el código.
+The differences come from variables (`db_tier`, `use_cloud_sql_connector`, `db_deletion_protection`, `agent_min_instances`, ...). They can be changed in a `terraform.tfvars` without touching the code.
 
-## Mejoras respecto al Terraform plano anterior
+## Improvements over the earlier flat Terraform
 
-- **Cada servicio tiene su propia cuenta de servicio** y puede leer solo los secretos que se le asignan. Antes los tres usaban la cuenta de cómputo por defecto, con acceso a todos los secretos del proyecto.
-- **La contraseña de la base va en Secret Manager** y se monta como variable de entorno. Antes se escribía en claro en la definición de cada servicio.
-- **Red propia por ambiente** (`modules/network`): una VPC, una subred de aplicación con Private Google Access, y Private Service Access para que Cloud SQL tenga IP privada. En qa y prod la base **no tiene dirección pública**.
-- **Tres modos de llegar a la base** (`db_connectivity`): `public_ip` (lo del stack original), `connector` (Cloud SQL connector por socket, sin lista de redes; las apps leen `PG_HOST` como host de libpq o asyncpg y ambos aceptan un directorio de socket) y `private_ip`. Se cambia con una variable.
-- **Cloud Run usa Direct VPC egress** con `PRIVATE_RANGES_ONLY`: solo el tráfico hacia rangos privados pasa por la VPC; el resto sale a internet normal, así que **no hace falta Cloud NAT** para el ETL (S3) ni para el agente (OpenRouter).
-- **Estado separado por ambiente** (`env/<ambiente>`, en `bitcoders-factored-hackathon-tfstate`) y bloqueo de GCS por defecto.
-- Las llaves de S3 del organizador se cargan a mano como una versión nueva del secreto; un `apply` posterior no la revierte.
-- Bucket del lago con versionado y acceso público prohibido.
-- Se quitó el permiso `run.invoker` de la cuenta del ETL sobre su propio job: no cumplía ninguna función.
-- Región por defecto `us-east4` (la más cercana a `us-east-2`, donde está el bucket del organizador), en lugar de `us-central1`.
+- **Each service has its own service account** and can read only the secrets assigned to it. Before, all three used the default compute account, with access to every secret in the project.
+- **The database password is in Secret Manager** and mounted as an environment variable. Before, it was written in clear text in each service's definition.
+- **Its own network per environment** (`modules/network`): a VPC, an application subnet with Private Google Access, and Private Service Access so that Cloud SQL has a private IP. In qa and prod the database **has no public address**.
+- **Three ways to reach the database** (`db_connectivity`): `public_ip` (the original stack), `connector` (the Cloud SQL connector over a socket, with no network list; the apps read `PG_HOST` as the libpq or asyncpg host and both accept a socket directory) and `private_ip`. It is changed with a variable.
+- **Cloud Run uses Direct VPC egress** with `PRIVATE_RANGES_ONLY`: only traffic to private ranges goes through the VPC, and the rest leaves to the internet as usual, so **Cloud NAT is not needed** for the ETL (S3) or for the agent (OpenRouter).
+- **State separated per environment** (`env/<environment>`, in `bitcoders-factored-hackathon-tfstate`) and GCS locking by default.
+- The organizer's S3 keys are loaded by hand as a new secret version. A later `apply` does not revert it.
+- A lake bucket with versioning and public access prohibited.
+- The ETL account's `run.invoker` permission on its own job was removed, because it served no purpose.
+- Default region `us-east4` (the closest to `us-east-2`, where the organizer's bucket is), instead of `us-central1`.
 
-## Prerequisitos (una vez por proyecto)
+## Prerequisites (once per project)
 
-1. Proyecto de GCP con facturación, y `gcloud` y `terraform >= 1.6` instalados. Autenticarte: `gcloud auth login && gcloud config set project <PROJECT_ID>`.
-2. Crear el bucket de estado (compartido por los tres ambientes):
+1. A GCP project with billing, and `gcloud` and `terraform >= 1.6` installed. Authenticate: `gcloud auth login && gcloud config set project <PROJECT_ID>`.
+2. Create the state bucket (shared by the three environments):
    ```bash
    PROJECT_ID=<PROJECT_ID> ./infra/gcp/scripts/setup-backend.sh
    ```
-3. Para el despliegue por CI (sin llave guardada, con Workload Identity Federation): aplicar una vez `infra/gcp/bootstrap` (a mano, con una cuenta administradora) y copiar sus tres salidas a variables del repositorio: `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_PLAN_SA` y `GCP_DEPLOY_SA`, junto con `GCP_PROJECT_ID` y `GCP_STATE_BUCKET` (y opcionalmente `GCP_REGION`). Ver `.github/workflows/gcp-deploy.yml`.
+3. For CI deployment (with no stored key, using Workload Identity Federation): apply `infra/gcp/bootstrap` once (by hand, with an admin account) and copy its three outputs to repository variables: `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_PLAN_SA` and `GCP_DEPLOY_SA`, together with `GCP_PROJECT_ID` and `GCP_STATE_BUCKET` (and optionally `GCP_REGION`). See `.github/workflows/gcp-deploy.yml`.
 
-## Desplegar un ambiente a mano
+## Deploying an environment by hand
 
 ```bash
-cd infra/gcp/envs/dev                      # o qa, prod
-cp terraform.tfvars.example terraform.tfvars   # editar project_id y, si quieres, las claves
-terraform init        # el bucket y el prefijo ya están en backend.tf
+cd infra/gcp/envs/dev                      # or qa, prod
+cp terraform.tfvars.example terraform.tfvars   # edit project_id and, if you want, the keys
+terraform init        # the bucket and the prefix are already in backend.tf
 
-# 1. APIs y registro de imágenes
+# 1. APIs and the image registry
 terraform apply -target=module.foundation
 
-# 2. Construir y subir las imágenes (desde la raíz del repo)
+# 2. Build and push the images (from the repo root)
 REG=us-east4-docker.pkg.dev/<PROJECT_ID>/factored-dev
 gcloud auth configure-docker us-east4-docker.pkg.dev
 for s in backend agent frontend; do docker build . -f $s/Dockerfile -t $REG/$s:latest && docker push $REG/$s:latest; done
 docker build . -f infra/gcp/etl/Dockerfile -t $REG/etl:latest && docker push $REG/etl:latest
 
-# 3. El resto
+# 3. The rest
 terraform apply
 ```
 
-Después del primer `apply`, copiar las llaves de S3 del organizador al Secret Manager (nunca a git ni a variables de Terraform):
+After the first `apply`, copy the organizer's S3 keys to Secret Manager (never to git or to Terraform variables):
 
 ```bash
 printf '%s' "$LATAM_BANK_AWS_ACCESS_KEY_ID"     | gcloud secrets versions add factored-dev-latam-bank-aws-id     --data-file=-
 printf '%s' "$LATAM_BANK_AWS_SECRET_ACCESS_KEY" | gcloud secrets versions add factored-dev-latam-bank-aws-secret --data-file=-
 ```
 
-Ejecutar el ETL: `gcloud run jobs execute factored-dev-etl --region us-east4 --wait`.
+Run the ETL: `gcloud run jobs execute factored-dev-etl --region us-east4 --wait`.
 
-## Por CI
+## Through CI
 
-`.github/workflows/gcp-deploy.yml`: un `push` a `main` hace el build de las imágenes y un `plan` de **dev**. Con `workflow_dispatch` se elige el ambiente (`dev`, `qa`, `prod`) y `plan` o `apply`, y opcionalmente se ejecuta el ETL. Como el job usa `environment:` de GitHub, se puede exigir una aprobación manual para `prod` desde la configuración del repositorio.
+`.github/workflows/gcp-deploy.yml`: a `push` to `main` builds the images and runs a **dev** `plan`. With `workflow_dispatch` you choose the environment (`dev`, `qa`, `prod`) and `plan` or `apply`, and optionally run the ETL. Because the job uses a GitHub `environment:`, a manual approval can be required for `prod` in the repository settings.
 
-## Prueba de punta a punta
+## End-to-end test
 
-`scripts/e2e.py` ejecuta 11 escenarios contra un agente desplegado (login, rechazos de token, y las rutas de la política: resuelve, pregunta, escala por monto, por transacción ya cobrada, por fraude, inyección, datos de otro cliente; en español y portugués). Sale con código 0 solo si todos se comportan como se espera:
+`scripts/e2e.py` runs 11 scenarios against a deployed agent (login, token rejections, and the policy paths: resolves, asks, escalates for amount, for an already posted transaction, for fraud, injection, another customer's data; in Spanish and Portuguese). It exits with code 0 only if all of them behave as expected:
 
 ```bash
 AGENT_URL=$(terraform output -raw agent_uri) python infra/gcp/scripts/e2e.py
 ```
 
-Los clientes son filas del dataset sintético del organizador; las expectativas suponen el umbral por defecto de USD 500.
+The customers are rows of the organizer's synthetic dataset, and the expectations assume the default USD 500 threshold.
 
-## Entrada y permisos (prod)
+## Entry and permissions (prod)
 
-- **Entrada:** `https://<ip>.sslip.io` (variable `edge_domain` para un dominio propio). Un Application Load Balancer con certificado gestionado y Cloud Armor (límite por IP y reglas de inyección SQL, XSS y Log4j) envía `/` al frontend y `/agent/*` al agente: el navegador llama al agente en el mismo origen. Con `edge_lockdown` el frontend y el agente solo aceptan tráfico del balanceador. Se enciende en dos fases: `enable_edge` crea el balanceador, y cuando su certificado está `ACTIVE` (15 a 60 minutos) `edge_lockdown` cierra el acceso directo. Las reglas de Cloud Armor tardan unos 3 minutos en propagarse.
-- **Backend cerrado:** solo la cuenta de servicio del agente es `run.invoker`; el agente manda un ID token en `X-Serverless-Authorization`. Sin credenciales responde 403.
-- **Un rol de base por servicio:** `backend_app` (lee `gold`, es dueño de `app`) y `agent_app` (dueño de `agent`, sin acceso a `gold`). Orden de despliegue: `apply` (crea los usuarios) → `scripts/db_roles.sh` (aplica `sql/roles.sql` desde la VM) → `apply` con `service_db_users=true`. El pipeline otorga `SELECT` en `gold` al backend después de cada publicación (`GOLD_READER_ROLES`).
-- **Despliegue desde GitHub sin llave guardada:** `bootstrap/` crea el pool de Workload Identity y dos cuentas de servicio (plan de solo lectura; despliegue solo desde `main`).
+- **Entry:** `https://<ip>.sslip.io` (the `edge_domain` variable for your own domain). An Application Load Balancer with a managed certificate and Cloud Armor (an IP rate limit and SQL injection, XSS and Log4j rules) sends `/` to the frontend and `/agent/*` to the agent, so the browser calls the agent on the same origin. With `edge_lockdown` the frontend and the agent accept traffic only from the load balancer. It is switched on in two phases: `enable_edge` creates the load balancer, and once its certificate is `ACTIVE` (15 to 60 minutes) `edge_lockdown` closes direct access. Cloud Armor rules take about 3 minutes to propagate.
+- **A closed backend:** only the agent's service account is `run.invoker`, and the agent sends an ID token in `X-Serverless-Authorization`. Without credentials it answers 403.
+- **One database role per service:** `backend_app` (reads `gold`, owns `app`) and `agent_app` (owns `agent`, no access to `gold`). Deployment order: `apply` (creates the users), then `scripts/db_roles.sh` (applies `sql/roles.sql` from the VM), then `apply` with `service_db_users=true`. The pipeline grants `SELECT` on `gold` to the backend after every publication (`GOLD_READER_ROLES`).
+- **Deployment from GitHub with no stored key:** `bootstrap/` creates the Workload Identity pool and two service accounts (a read-only plan account, and deployment only from `main`).
 
-## Seguridad
+## Security
 
-Los hallazgos de Checkov y Trivy, lo que se corrigió, lo que se acepta y cómo se repite están en `docs/SECURITY.md`. Resumen de lo que aplica a esta carpeta: SSL obligatorio y registro en Cloud SQL, base sin IP pública en los tres ambientes, registro de flujo en la subred, y el plan de cada despliegue se escanea con Checkov antes de aplicarse.
+The Checkov and Trivy findings, what was fixed, what is accepted and how to repeat the scans are in `docs/SECURITY.md`. A summary of what applies to this folder: mandatory SSL and logging in Cloud SQL, a database with no public IP in the three environments, flow logs on the subnet, and each deployment's plan is scanned with Checkov before it is applied.
 
-## Ahorro de costos
+## Saving costs
 
 ```bash
-ENVIRONMENT=dev ./infra/gcp/scripts/manage_db.sh pause    # la base deja de cobrar cómputo
-ENVIRONMENT=dev ./infra/gcp/scripts/manage_db.sh resume   # vuelve en ~60 s con los datos
+ENVIRONMENT=dev ./infra/gcp/scripts/manage_db.sh pause    # the database stops billing for compute
+ENVIRONMENT=dev ./infra/gcp/scripts/manage_db.sh resume   # it is back in ~60 s with the data
 ENVIRONMENT=dev ./infra/gcp/scripts/manage_db.sh status
 ```
 
-Cloud Run a 0 instancias cuesta casi nada; Cloud SQL es el único costo permanente.
+Cloud Run at 0 instances costs almost nothing, and Cloud SQL is the only permanent cost.
 
-## Estado y qué falta
+## State and what is missing
 
-**Verificado:** `terraform fmt` y `validate` pasan en los tres ambientes. **`prod` está aplicado** (borde con Cloud Armor, backend privado, un rol de base por servicio, la VM de Airflow y el despliegue desde GitHub) y `scripts/e2e.py` pasó 11 de 11 contra él.
+**Verified:** `terraform fmt` and `validate` pass in the three environments. **`prod` was applied** (edge with Cloud Armor, private backend, one database role per service, the Airflow VM and deployment from GitHub), and `scripts/e2e.py` passed 11 of 11 against it. The current code version was applied from GitHub on 2026-10-05 (workflow run 37258119421). The steps that follow an apply (database roles, secrets, new revisions, the end-to-end check) are in [`docs/DEPLOY.md`](../../docs/DEPLOY.md).
 
-**No verificado:**
-- **La versión actual del código no está desplegada en `prod`.** Lo desplegado es anterior a la consola del especialista, al historial de conversaciones y a los cambios del agente posteriores. Al desplegar, las migraciones del backend (`0003` y `0005`) corren sobre la base de `prod`: `0003` cierra los casos duplicados por transacción, así que conviene revisar antes los datos de prueba que hay ahí.
-- `dev` y `qa` solo se validaron con `plan`; `connector` (el conector de Cloud SQL) no se probó.
+**Not verified:**
+- **The current version has not been checked on `prod` after the apply.** The backend migrations (`0003` and `0005`) run on `prod`'s database at startup. `0003` closes duplicate cases per transaction, so the test data there should have been reviewed first.
+- `dev` and `qa` were validated only with `plan`, and `connector` (the Cloud SQL connector) was not tested.
 
-**Pendiente de endurecer:**
-- Presupuesto con alerta y monitoreo.
-- **Acceso humano a una base privada:** desde un portátil no se llega a una instancia sin IP pública (ni con `cloud-sql-proxy`, que debe estar dentro de la VPC). Se entra por IAP a la VM de Airflow (el firewall de `modules/network` permite el rango de IAP para instancias con la etiqueta `iap`) y se conecta desde ahí.
-- El secreto `typesafe-api-key` sigue declarado y vacío: ya no lo usa nada. Quitarlo es un `apply` que destruye un secreto, y se deja para un cambio deliberado.
-- Los contenedores `backend`, `agent` y `frontend` corren como `root` (ver [`docs/SECURITY.md`](../../docs/SECURITY.md)).
+**Still to harden:**
+- A budget with an alert, and monitoring. No alert, dashboard or uptime check is defined.
+- **Human access to a private database:** from a laptop you cannot reach an instance with no public IP (not even with `cloud-sql-proxy`, which would have to be inside the VPC). You enter through IAP to the Airflow VM (the firewall in `modules/network` allows the IAP range for instances with the `iap` tag) and connect from there. See [`docs/ONBOARDING.md`](../../docs/ONBOARDING.md).
+- The `typesafe-api-key` secret is still declared and empty, and nothing uses it any more. Removing it is an `apply` that destroys a secret, and it is left for a deliberate change.
+- The `backend`, `agent` and `frontend` containers run as `root` (see [`docs/SECURITY.md`](../../docs/SECURITY.md)).
 
-## Un stack anterior
+## An earlier stack
 
-Antes de separar los ambientes existió un despliegue con nombres antiguos (`factored-hackathon`, `us-central1`) y estado sin prefijo. Los ambientes actuales son despliegues **nuevos** y no lo reemplazan ni lo destruyen. Si todavía existe, se retira con `terraform destroy` desde el commit `62a97b1` y su estado, después de verificar el ambiente nuevo.
+Before the environments were split, a deployment existed with the old names (`factored-hackathon`, `us-central1`) and unprefixed state. The current environments are **new** deployments and do not replace or destroy it. If it still exists, it is retired with `terraform destroy` from commit `62a97b1` and its state, after the new environment has been verified.
