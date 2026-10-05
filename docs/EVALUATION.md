@@ -192,4 +192,5 @@ The failures that remained in set 2 (a leaked password, a phishing link, a lost 
 - **The baseline was not strengthened**, as said above.
 - **A single load configuration:** local, concurrency 4, one test client per case.
 - **The second fraud look was not measured against false positives outside the evaluation.** Within it, none of the 92 disputes the policy lets it resolve alone was over-escalated. With real messages, a model may escalate too much. That costs an escalation, not a risk, but it has to be watched.
+- **A draft check was added after the evaluation and was not re-measured.** A draft that shows an internal name (`auto_resolved`, `Reversed` and similar) is now replaced by the fixed template. A model draft in the demo did exactly that. The check can only swap a draft for the template, so it cannot add risk, but the 548 of 549 figure was measured without it.
 - **It is an offline measurement.** There is no business savings projection, and no improvement is presented as measured in production.
