@@ -43,18 +43,18 @@ export function LinkRow({ to, children, icon }: { to: LinkKey; children: React.R
   const dim = href ? "" : "opacity-60";
   const inner = (
     <>
-      <span className={`text-2xl text-primary ${dim}`}>{icon}</span>
-      <span className={`text-lg font-semibold ${dim}`}>{children}</span>
+      <span className={`text-2xl ${dim}`}>{icon}</span>
+      <span className={`text-xl font-medium ${dim}`}>{children}</span>
       <span className="ml-auto inline-flex items-center gap-2 text-sm text-muted-foreground">
         {!href && <Badge variant="outline" className="border-foreground/40 text-foreground">Soon</Badge>}
         <ArrowUpRight size={20} aria-hidden className={dim} />
       </span>
     </>
   );
-  const base = "flex items-center gap-4 border-b border-border py-5 transition-all first:border-t";
+  const base = "flex items-center gap-4 border-b border-ink py-3 transition-all first:border-t";
   if (!href) return <div aria-disabled="true" className={base}>{inner}</div>;
   return (
-    <a href={href} className={`${base} hover:pl-3 hover:text-primary focus-visible:rounded-lg focus-visible:ring-2 focus-visible:ring-ring`}>
+    <a href={href} className={`${base} hover:pl-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2`}>
       {inner}
     </a>
   );
