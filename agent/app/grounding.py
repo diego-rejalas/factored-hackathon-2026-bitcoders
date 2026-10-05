@@ -18,6 +18,11 @@ UUID = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-
 NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
 # An identifier of a customer, or anything that looks like a document number, must never be repeated.
 IDENTITY = re.compile(r"\bCLI-[A-Z0-9]+\b|\b\d{7,}\b")
+# Names the system uses inside (case states, resolutions, transaction statuses). A customer must not read them: the
+# fixed templates say the same thing in plain words.
+INTERNAL_NAME = re.compile(
+    r"\b(auto_resolved|in_progress|escalated|no_charge_confirmed|reversal_confirmed|Approved|Declined|Pending|Reversed)\b"
+)
 MAX_LENGTH = 900
 
 
@@ -38,6 +43,8 @@ def check(draft: str, facts: list[str], message: str, case_id: str | None) -> st
         return "promise"
     if IDENTITY.search(draft):
         return "identity"
+    if INTERNAL_NAME.search(draft):
+        return "internal_name"
     allowed = numbers(" ".join(facts) + " " + message)
     # A year, a day or the decline code appear in the facts; anything else is something nobody verified.
     invented = numbers(draft) - allowed

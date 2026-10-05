@@ -225,3 +225,12 @@ def test_a_security_matter_the_classifier_calls_out_of_scope_still_reaches_a_per
     assert result["outcome"] == "escalated" and result["reason"] == "fraud_suspected"
     graph = build_graph(tools, NullTracer(), OutOfScopeFraud(False))
     assert run(graph, "Quero aumentar o limite do cartão")["outcome"] == "declined"
+
+
+@pytest.mark.parametrize("draft", [
+    'A transação está com o estado "Reversed" e o caso foi verificado em estado "auto_resolved".',
+    "Su caso se encuentra en estado auto_resolved.",
+    "La transacción figura como Declined.",
+])
+def test_a_draft_that_shows_an_internal_name_is_rejected(draft):
+    assert grounding.check(draft, ["transacción TXN-1 figura como Declined"], "No reconozco el cobro", "case-1") == "internal_name"
