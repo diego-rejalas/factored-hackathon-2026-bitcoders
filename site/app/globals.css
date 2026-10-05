@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+/* The theme follows the system. Dark is the product's own look. Radius rule: pills for actions, 16px for surfaces. */
+:root {
+  --background: #0a1628;
+  --foreground: #f2f5fb;
+  --card: #142338;
+  --card-foreground: #f2f5fb;
+  --muted: #101f36;
+  --muted-foreground: #a3b2c8;
+  --border: #263954;
+  --primary: #7b97ff;
+  --primary-foreground: #0a1628;
+  --ring: #7b97ff;
+  --ok: #3ccf82;
+  --warn: #f2b04a;
+  --radius: 1rem;
+  --shadow-frame: 0 30px 80px rgb(2 8 20 / 0.55);
+  color-scheme: dark light;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --background: #f6f8fc;
+    --foreground: #0a1628;
+    --card: #ffffff;
+    --card-foreground: #0a1628;
+    --muted: #eaeff7;
+    --muted-foreground: #44546e;
+    --border: #d4dcea;
+    --primary: #2f4fd8;
+    --primary-foreground: #ffffff;
+    --ring: #2f4fd8;
+    --ok: #12834a;
+    --warn: #a65f08;
+    --shadow-frame: 0 30px 70px rgb(10 22 40 / 0.16);
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-ring: var(--ring);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --font-sans: var(--font-plex), system-ui, sans-serif;
+  --shadow-frame: var(--shadow-frame);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.55;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+}

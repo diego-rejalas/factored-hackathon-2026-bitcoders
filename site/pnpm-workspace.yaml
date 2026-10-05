@@ -1,0 +1,16 @@
+# pnpm 11 reads project settings from this file (not .npmrc). Two supply-chain
+# policies bite plain installs in fresh environments (CI, containers):
+# - trustPolicy "no-downgrade": @types/node 20.x latest carries no provenance
+#   while earlier releases did (a DefinitelyTyped attestation gap, not an
+#   active incident) → ignore downgrades for packages published over a day ago.
+# - minimumReleaseAge (24h default): rejects lockfile entries published less
+#   than a day before the build — flaky for a repo that refreshes its lockfile
+#   (bit us with caniuse-lite/source-map-js). Disabled; the lockfile itself is
+#   the pin we trust, and stricter environments can re-enable it.
+trustPolicyIgnoreAfter: 1440
+minimumReleaseAge: 0
+# The multi-stage Dockerfile installs in the deps stage and builds in the next
+# one; pnpm's implicit "verify deps before run" misreads that as stale modules
+# and tries to purge node_modules (no TTY in docker build → hard failure).
+# The install itself is --frozen-lockfile, so the check adds nothing here.
+verifyDepsBeforeRun: false
