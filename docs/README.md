@@ -17,6 +17,7 @@ Asistente de disputas de transacciones de LATAM Bank, para el Factored AI & Data
 | Desplegar a producción, paso a paso | [Despliegue](DEPLOY.md) |
 | Comprobar qué pide el reto y qué falta | [Criterios](CRITERIA.md) |
 | Ejecutarlo en tu máquina | [Desarrollo local](LOCAL_DEV.md) |
+| Conectarte a la base de datos de GCP (equipo) | [Onboarding](ONBOARDING.md) |
 
 ## Mapa del repositorio
 
