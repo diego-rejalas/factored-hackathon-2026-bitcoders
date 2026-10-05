@@ -38,7 +38,7 @@ export default function AdminApp({ agentUrl }: { agentUrl: string }) {
     <div className="admin-shell">
       <a className="skip-link" href="#admin-content">Ir al contenido principal</a>
       <header className="appbar">
-        <h1><span className="mark" aria-hidden="true">B</span>{tr("es", "adminTitle")}</h1>
+        <h1><img className="mark mark-logo" src="/factored-logo.png" alt="" aria-hidden="true" />{tr("es", "adminTitle")}</h1>
         <div className="appbar-actions">
           <span className="who">{session.username}</span>
           <a className="btn-ghost appbar-link" href="/">Atención al cliente</a>
