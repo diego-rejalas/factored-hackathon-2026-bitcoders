@@ -1,59 +1,59 @@
-# ml/eval — sets retenidos y evaluación de los componentes ML
+# ml/eval: held-out sets and evaluation of the ML components
 
-Sets **generados por el equipo**, sintéticos, sin PII y **sin columnas de
-fraude** (`is_fraud`/`fraud_score` se eliminan y el generador lo verifica).
-Rotulados como pide el reto (doc línea 54): la evaluación de un componente
-preentrenado exige etiquetas propias, prevención de fuga y set retenido.
+**Team-generated** sets, synthetic, with no PII and **no fraud columns** (`is_fraud` and `fraud_score` are removed and the
+generator verifies it). They are labeled as the challenge asks (`docs/challenge/`, line 54): evaluating a pretrained
+component requires its own labels, leakage prevention and a held-out set.
 
-| archivo | componente | contenido |
+| File | Component | Contents |
 |---|---|---|
-| `data/intent_set.jsonl` | A: intención + idioma | 840 mensajes (720 normales, 60 por celda intent×idioma; 120 adversarios: inyección, ambigüedad, typos, trampas). Splits dev/test estratificados (20/40 por celda). 10% marcado `review_sample` para doble revisión manual. |
-| `data/dispute_set.jsonl` | B: transacción disputada | 399 casos: reclamo con ruido controlado → etiqueta = `transaction_id` (o None en 40 casos `unrelated` que miden el "no encuentra"). **Split por cliente**: train y test no comparten clientes. Pool de transacciones sintético con las distribuciones medidas (estados 92/5/2/1, merchant nulo 76,7%, `amount_usd_effective` nulo ~57%, USD/COP/ARS, ventana 90 días al corte 2026-06-18). |
+| `data/intent_set.jsonl` | A: intent + language | 840 messages (720 normal, 60 per intent×language cell; 120 adversaries: injection, ambiguity, typos, traps). Stratified dev/test splits (20/40 per cell). 10% marked `review_sample` for manual double review. |
+| `data/dispute_set.jsonl` | B: disputed transaction | 399 cases: a claim with controlled noise, and the label is the `transaction_id` (or None in 40 `unrelated` cases that measure "not found"). **Split by customer**: train and test share no customers. A synthetic transaction pool with the measured distributions (statuses 92/5/2/1, null merchant 76.7%, null `amount_usd_effective` ~57%, USD/COP/ARS, a 90-day window to the 2026-06-18 cutoff). |
 
-Reproducir:
+Reproduce:
 
 ```bash
-python3 ml/eval/gen_intent_set.py          # semilla 20261004, determinista
-python3 ml/eval/gen_dispute_set.py         # idem; --source duckdb:<ruta> o --source postgres para pool real
+python3 ml/eval/gen_intent_set.py          # seed 20261004, deterministic
+python3 ml/eval/gen_dispute_set.py         # same; --source duckdb:<path> or --source postgres for a real pool
 uv venv .venv && uv pip install scikit-learn pandas numpy httpx pytest
 .venv/bin/python -m pytest ml/eval/test_eval_cost.py
 .venv/bin/python ml/eval/eval_intent.py --split test --candidate all --final
 .venv/bin/python ml/eval/eval_ranker.py  --split test --final
 ```
 
-El candidato LLM del componente A necesita `OPENROUTER_API_KEY`
-(clasificación estructurada, temperatura 0, 3 corridas para variabilidad):
+Component A's LLM candidate needs `OPENROUTER_API_KEY`
+(structured classification, temperature 0, 3 runs for variability):
 
 ```bash
 OPENROUTER_API_KEY=... .venv/bin/python ml/eval/eval_intent.py --split test --candidate llm --runs 3 --final
 ```
 
-El costo se calcula por llamada desde `usage.cost` cuando OpenRouter lo
-devuelve. Si no está disponible, se puede estimar con tarifas por millón de
-tokens, **solo con un modelo fijado** (`--model`) y ambas variables definidas:
+Cost is computed per call from `usage.cost` when OpenRouter returns it. If it is not available, it can be estimated
+with per-million-token rates, **only with a fixed model** (`--model`) and both variables defined:
 
 ```bash
 OPENROUTER_API_KEY=... \
 INTENT_EVAL_INPUT_PRICE_PER_1M_USD=... \
 INTENT_EVAL_OUTPUT_PRICE_PER_1M_USD=... \
-.venv/bin/python ml/eval/eval_intent.py --split test --candidate llm --model proveedor/modelo --runs 3 --final
+.venv/bin/python ml/eval/eval_intent.py --split test --candidate llm --model provider/model --runs 3 --final
 ```
 
-Sin costo del proveedor ni ambas tarifas para el modelo fijado, el informe deja
-costo p50/p95 como **N/A** (no imputa precios). El costo LLM de esta entrega
-queda pendiente porque no había clave ni tarifas en el entorno.
+Without the provider's cost or both rates for the fixed model, the report leaves p50/p95 cost as **N/A** (it does not
+impute prices). The LLM cost of this set has not been measured. The system's own evaluation measured the model's cost
+on its own cases (see `docs/EVALUATION.md`).
 
-Estado de la evaluación (2026-10-04):
+State of the evaluation (2026-10-04):
 
-- **Baseline del componente A medido** en dev y test (ver
-  `reports/intent_eval.md`); LLM y embeddings quedan como comandos listos,
-  pendientes de la clave del equipo (riesgo previsto en el plan).
-- **Componente B medido completo** (baseline vs weighted vs GBM) en
-  `reports/ranker_eval.md`; decisión de integración: el ranker weighted
-  (stdlib) **solo ordena** el pool ambiguo en `agent/app/ranking.py`.
-- Umbrales: el de abstención de intención (`INTENT_MIN_CONFIDENCE`, default
-  0.5 por `DISPUTE_WORKFLOW` §4) y el piso de "no encuentra" del ranker se
-  calibran con `--split dev` / `--split train`; **el test nunca los ajusta**.
-- Pendiente humano: la muestra `review_sample` del set de intención (84 casos)
-  está generada para doble revisión manual; el verificador automático
-  (segundo léxico independiente) ya corrió y su acuerdo queda en el informe.
+- **Component A's baseline was measured** on dev and test (see
+  `reports/intent_eval.md`). The LLM and embeddings candidates remain as ready commands that have not been
+  run on this set.
+- **Component B was measured in full** (baseline vs weighted vs GBM) in
+  `reports/ranker_eval.md`. Integration decision: the weighted ranker
+  (stdlib) **only orders** the ambiguous pool in `agent/app/ranking.py`.
+- Thresholds: the intent abstention threshold (`INTENT_MIN_CONFIDENCE`, default
+  0.5, see `docs/WORKFLOW.md`) and the ranker's "not found" floor are
+  calibrated with `--split dev` / `--split train`. **The test never adjusts them.**
+- Pending a human: the `review_sample` of the intent set (84 cases)
+  is generated for manual double review. The automatic checker
+  (an independent second lexicon) has already run and its agreement is in the report.
+
+The reports in `reports/` are generated by the scripts and keep the Spanish wording they were written with.

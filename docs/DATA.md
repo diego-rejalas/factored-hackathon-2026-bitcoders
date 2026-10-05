@@ -1,70 +1,70 @@
-# Datos
+# Data
 
-*Qué contiene el dataset de LATAM Bank, qué se verificó a escala completa y qué limitaciones cambian el diseño.*
+*What the LATAM Bank dataset contains, what was verified at full scale and which limits change the design.*
 
-[Índice](README.md) · [Workflow](WORKFLOW.md) · [Arquitectura](ARCHITECTURE.md)
+[Index](README.md) · [Workflow](WORKFLOW.md) · [Architecture](ARCHITECTURE.md)
 
-## Procedencia
+## Provenance
 
-Todo lo que entra al sistema es **sintético y lo entrega el organizador**: el dataset LATAM Bank v1.0.0, 13 tablas en un bucket de S3 de solo lectura. No hay datos reales ni de-identificados. Los nombres, documentos, teléfonos y correos son ficticios. Lo que el equipo genere (casos de evaluación, enunciados de usuario) se rotula aparte como generado por el equipo.
+Everything that enters the system is **synthetic and supplied by the organizer**: the LATAM Bank dataset v1.0.0, 13 tables in a read-only S3 bucket. There is no real or de-identified data. Names, ID numbers, phone numbers and emails are fictitious. Anything the team generates (evaluation cases, user utterances) is labeled separately as team-generated.
 
-## Volúmenes
+## Volumes
 
-Cargados y verificados contra S3, tabla por tabla.
+Loaded and verified against S3, table by table.
 
-| Tabla | Filas | | Tabla | Filas |
+| Table | Rows | | Table | Rows |
 |---|---:|---|---|---:|
-| `digital_events` | 15.620.994 | | `call_transcripts` | 171.321 |
-| `transactions` | 4.425.008 | | `customers` | 150.000 |
-| `campaign_sends` | 1.746.801 | | `complaints` | 67.095 |
-| `call_center_interactions` | 686.296 | | `daily_exchange_rates` | 13.164 |
-| `products` | 400.000 | | `service_agents` / `branches` / `marketing_campaigns` | 1.200 / 350 / 200 |
-| `satisfaction_surveys` | 212.759 | | **Total** | **~23,5 millones** |
+| `digital_events` | 15,620,994 | | `call_transcripts` | 171,321 |
+| `transactions` | 4,425,008 | | `customers` | 150,000 |
+| `campaign_sends` | 1,746,801 | | `complaints` | 67,095 |
+| `call_center_interactions` | 686,296 | | `daily_exchange_rates` | 13,164 |
+| `products` | 400,000 | | `service_agents` / `branches` / `marketing_campaigns` | 1,200 / 350 / 200 |
+| `satisfaction_surveys` | 212,759 | | **Total** | **~23.5 million** |
 
-Las cifras del resumen del organizador son nominales y no coinciden con el contenido (por ejemplo, ~5 millones de transacciones y ~10 millones de eventos). Se verificó que las filas leídas de los CSV son idénticas a las cargadas en las 13 tablas. Hay 1.097 archivos por tabla particionada (uno por día), salvo `campaign_sends`, que tiene 1.083. Todos los archivos de una tabla comparten un único encabezado: no hay cambios de esquema entre fechas.
+The figures in the organizer's summary are nominal and do not match the contents (for example, ~5 million transactions and ~10 million events). The rows read from the CSV files were verified to be identical to the ones loaded into the 13 tables. Each partitioned table has 1,097 files (one per day), except `campaign_sends`, which has 1,083. All files of a table share a single header, so there are no schema changes between dates.
 
-## Lo que cambió el diseño
+## What changed the design
 
-| Hallazgo | Evidencia | Consecuencia |
+| Finding | Evidence | Consequence |
 |---|---|---|
-| **El texto histórico es plantilla** | `call_transcripts`: 95 % con la misma intención, `consulta_general`; `complaints.description` siempre `"Queja relacionada con {categoría}"` | No se puede entrenar ni evaluar un clasificador de intención sobre el texto histórico. Se usa el texto vivo de la conversación y los campos estructurados como línea base |
-| **No hay duplicados exactos** | 0 `transaction_id` repetidos; 0 grupos con mismo cliente, monto y comercio | Se descartó el caso "cargo duplicado". El caso auto-resuelto pasó a ser una transacción `Declined` o `Reversed` que el cliente cree cobrada: **266 mil** candidatas |
-| **`affected_product_id` es inservible** | Apunta al producto de otro cliente en 44.570 de 44.570 quejas con valor | La transacción de una disputa nunca sale de `complaints` |
-| **La titularidad sí es fiable** | Transacción a producto a cliente: 4.425.008 de 4.425.008 consistentes | Es la base para autorizar acceso a los movimientos propios |
-| **No hay MXN** | 0 filas en MXN en transacciones y productos, aunque el 49,9 % de los clientes es mexicano; sí existe el par MXN en tipos de cambio | Se documenta, no se convierte. México tiene 66.236 productos de crédito, todos en USD |
-| **`amount_usd` nulo en el 57 %** | 100 % nulo si la moneda es USD (el monto ya está en dólares) y ~5 % en ARS y COP | `amount_effective_usd` se deriva; si no se conoce, nunca cuenta como cero |
-| **`merchant_name` nulo en el 76,7 %** | Medido sobre transacciones | La identificación usa monto aproximado, fecha y estado; el comercio suma solo si existe |
-| **`is_fraud` y `fraud_score` son verdad de referencia** | ~0,13 % de transacciones marcadas fraude en una muestra | Nunca son entrada del agente: sería fuga de etiquetas |
-| **No hay portugués en los datos** | Ninguna tabla, ni clientes ni transcripciones; solo 129 de 1.200 agentes hablan portugués | El portugués se resuelve en la capa del agente |
-| **El rechazo no se explica con el producto** | Las 4.425.008 transacciones están sobre productos `Active` | Explicar un rechazo se limita al significado del código de respuesta |
+| **Historical text is templated** | `call_transcripts`: 95% share the same intent, `consulta_general`; `complaints.description` is always `"Queja relacionada con {category}"` | An intent classifier cannot be trained or evaluated on the historical text. The live conversation text and the structured fields serve as the baseline |
+| **There are no exact duplicates** | 0 repeated `transaction_id`; 0 groups with the same customer, amount and merchant | The "duplicate charge" case was dropped. The auto-resolved case became a `Declined` or `Reversed` transaction that the customer believes was charged: **266 thousand** candidates |
+| **`affected_product_id` is unusable** | It points to another customer's product in 44,570 of 44,570 complaints with a value | The transaction of a dispute never comes from `complaints` |
+| **Ownership is reliable** | Transaction to product to customer: 4,425,008 of 4,425,008 consistent | It is the basis for authorizing access to a customer's own transactions |
+| **There is no MXN** | 0 MXN rows in transactions and products, although 49.9% of customers are Mexican. The MXN pair does exist in exchange rates | Documented, not converted. Mexico has 66,236 credit products, all in USD |
+| **`amount_usd` is null in 57%** | 100% null when the currency is USD (the amount is already in dollars) and ~5% in ARS and COP | `amount_effective_usd` is derived. If it is unknown, it never counts as zero |
+| **`merchant_name` is null in 76.7%** | Measured on transactions | Identification uses approximate amount, date and status. The merchant helps only when present |
+| **`is_fraud` and `fraud_score` are ground truth** | ~0.13% of transactions flagged as fraud in a sample | They are never agent inputs, since that would leak labels |
+| **There is no Portuguese in the data** | No table has it, neither customers nor transcripts. Only 129 of 1,200 agents speak Portuguese | Portuguese is handled in the agent layer |
+| **A decline is not explained by the product** | All 4,425,008 transactions sit on `Active` products | Explaining a decline is limited to the meaning of the response code |
 
-## Transacciones
+## Transactions
 
-- Estados: `Approved` 91,99 %, `Declined` 5,00 %, `Pending` 2,00 %, `Reversed` 1,01 %.
-- Códigos de rechazo repartidos casi por igual entre `51` (fondos insuficientes), `14` (tarjeta inválida), `54` (tarjeta vencida) y `05` (no autorizada por el emisor); vacío en ~5 %. Los significados son los del estándar ISO 8583 y son un supuesto del equipo: el organizador no define los códigos.
-- Cobertura del 2023-06-17 al 2026-06-18, un snapshot cerrado. No hay llegadas tardías (`process_date - transaction_date` vale 0 o -1 día, nunca positivo).
+- Statuses: `Approved` 91.99%, `Declined` 5.00%, `Pending` 2.00%, `Reversed` 1.01%.
+- Decline codes are split almost evenly between `51` (insufficient funds), `14` (invalid card), `54` (expired card) and `05` (not authorized by the issuer), and empty in ~5%. The meanings come from the ISO 8583 standard and are a team assumption: the organizer does not define the codes.
+- Coverage runs from 2023-06-17 to 2026-06-18, a closed snapshot. There are no late arrivals (`process_date - transaction_date` is 0 or -1 day, never positive).
 
-## Sin señal predictiva de mora
+## No predictive signal for delinquency
 
-Sobre `products` y `customers`, la mora (30 o más días, o bloqueado o suspendido) es plana frente a `credit_score` (17,4 % con puntaje menor a 550; 16,6 % con 780 o más), el ingreso y la utilización. La correlación entre `credit_score` y `days_past_due` es -0,004. Por eso, un modelo de riesgo de crédito sobre estos datos no tendría qué aprender. Además, no hay reglas de elegibilidad aprobadas por el organizador: cualquier política de crédito sería sintética.
+On `products` and `customers`, delinquency (30 or more days past due, or blocked or suspended) is flat against `credit_score` (17.4% with a score below 550; 16.6% with 780 or more), income and utilization. The correlation between `credit_score` and `days_past_due` is -0.004. A credit risk model on this data would have nothing to learn. There are also no eligibility rules approved by the organizer, so any credit policy would be synthetic.
 
-## Otras limitaciones registradas
+## Other recorded limits
 
-| Tabla | Limitación |
+| Table | Limit |
 |---|---|
-| `customers` | `registration_branch_id`: solo 5 de 150.000 existen en `branches`. Nulos altos en `landline_phone` (50 %), `detected_accent` (30 %), `estimated_monthly_income` (20 %), `credit_score` (15 %) |
-| `complaints` | `origin_interaction_id` siempre vacío; `claimed_amount` no coincide con ninguna transacción; las 5 categorías pesan casi lo mismo (17,7 % a 18,3 %), así que "cargo no reconocido más cobro indebido = 36,5 %" es un artefacto de uniformidad |
-| `call_center_interactions` | `contact_reason` es idéntico a `reason_category`. Resolución en el primer contacto 76,6 % y escalamiento 10,0 %, planos por motivo |
-| `branches` | 100 % "Urbana"; la documentación habla de urbana, suburbana y rural |
-| Reglas de negocio | 7.510 productos de crédito con saldo mayor al límite; 772 quejas cerradas sin fecha de cierre; 52.454 interacciones a la vez escaladas y resueltas |
-| Tipos | Seis columnas enteras llegan como decimal (`"26.0"`), siempre con `.0`; se convierten sin pérdida |
+| `customers` | `registration_branch_id`: only 5 of 150,000 exist in `branches`. High nulls in `landline_phone` (50%), `detected_accent` (30%), `estimated_monthly_income` (20%) and `credit_score` (15%) |
+| `complaints` | `origin_interaction_id` is always empty. `claimed_amount` matches no transaction. The 5 categories weigh almost the same (17.7% to 18.3%), so "unrecognized charge plus improper charge = 36.5%" is an artifact of uniformity |
+| `call_center_interactions` | `contact_reason` is identical to `reason_category`. First-contact resolution is 76.6% and escalation 10.0%, both flat across reasons |
+| `branches` | 100% "Urbana", while the documentation mentions urban, suburban and rural |
+| Business rules | 7,510 credit products with a balance above the limit; 772 closed complaints with no close date; 52,454 interactions both escalated and resolved |
+| Types | Six integer columns arrive as decimals (`"26.0"`), always with `.0`. They are converted without loss |
 
-## Qué se modeló y qué no
+## What was modeled and what was not
 
-Cinco de las 13 tablas llegan a `gold` (`customers`, `products`, `transactions`, `complaints`, `call_center_interactions`). Es deliberado: ninguna de las otras aportó señal útil a un workflow candidato y el reto premia profundidad sobre cobertura.
+Five of the 13 tables reach `gold` (`customers`, `products`, `transactions`, `complaints`, `call_center_interactions`). This is deliberate: none of the others gave a useful signal to a candidate workflow, and the challenge rewards depth over coverage.
 
-## Pendiente de verificar
+## Still to verify
 
-- La moneda real del ingreso por país (se asume MXN para México).
-- Los 14 días sin archivo en `campaign_sends`: no se sabe si es intencional; es irrelevante para este workflow.
-- La distribución de valores entre particiones: el encabezado no cambia, pero no se comparó el contenido por fecha.
+- The real income currency by country (MXN is assumed for Mexico).
+- The 14 days with no file in `campaign_sends`. It is unknown whether this is intentional, and it is irrelevant to this workflow.
+- The distribution of values across partitions. The header does not change, but contents were not compared by date.

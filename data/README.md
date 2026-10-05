@@ -1,8 +1,8 @@
-# data/ — lógica de datos (no infraestructura)
+# data/: data logic (not infrastructure)
 
-Separado de `../infra/` a propósito: acá vive **qué hace** el pipeline (contenido), no **cómo se despliega** (eso es `infra/gcp/airflow/`). Ver `../docs/ARCHITECTURE.md` para el razonamiento.
+Kept apart from `../infra/` on purpose. This folder holds **what** the pipeline does (the content), not **how it is deployed** (that is `infra/gcp/airflow/`). See `../docs/ARCHITECTURE.md` for the reasoning.
 
-- `pipeline/` — etapas del pipeline (S3 → bronze → silver) que usa el DAG y el job.
-- `dbt/` — proyecto dbt (transformación `bronze.*` → `silver.*` → `gold.*`).
+- `pipeline/`: the pipeline stages (S3 → bronze → silver) that the DAG and the job use.
+- `dbt/`: the dbt project (the `bronze.*` → `silver.*` → `gold.*` transformation).
 
-Ambas carpetas se hornean dentro de la imagen de `../infra/gcp/airflow/` en build time.
+Both folders are baked into the `../infra/gcp/airflow/` image at build time.

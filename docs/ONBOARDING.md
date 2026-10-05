@@ -1,21 +1,21 @@
-# Onboarding del equipo: acceso a GCP y a los datos
+# Team onboarding: access to GCP and the data
 
-[Índice](README.md) · [Arquitectura](ARCHITECTURE.md) · [Despliegue](DEPLOY.md)
+[Index](README.md) · [Architecture](ARCHITECTURE.md) · [Deployment](DEPLOY.md)
 
-> **Proyecto:** `bitcoders-factored-hackathon` · **Región:** `us-east4` · **Ambiente:** `prod` (`dev` y `qa` usan el mismo esquema de nombres: `factored-<ambiente>`).
+> **Project:** `bitcoders-factored-hackathon` · **Region:** `us-east4` · **Environment:** `prod` (`dev` and `qa` follow the same naming scheme: `factored-<environment>`).
 >
-> Los scripts de `infra/gcp/scripts/` toman `ENVIRONMENT=dev|qa|prod` (por defecto `dev`). Para `prod`, anteponlo: `ENVIRONMENT=prod ./infra/gcp/scripts/...`.
+> The scripts in `infra/gcp/scripts/` read `ENVIRONMENT=dev|qa|prod` (default `dev`). For `prod`, put it in front: `ENVIRONMENT=prod ./infra/gcp/scripts/...`.
 
-Cómo autenticarte y llegar a la base de datos PostgreSQL, al lakehouse en Cloud Storage y a los servicios de Cloud Run. Quien da los accesos es el dueño del proyecto (`infra/gcp/scripts/grant_access.sh`).
+How to authenticate and reach the PostgreSQL database, the lakehouse in Cloud Storage and the Cloud Run services. The project owner grants access (`infra/gcp/scripts/grant_access.sh`).
 
 ---
 
-## 1. Prerrequisitos en tu Computadora
+## 1. Prerequisites on your computer
 
-Instala las siguientes herramientas básicas (si aún no las tienes):
-1. **Google Cloud CLI (`gcloud`):** [Instrucciones de instalación](https://cloud.google.com/sdk/docs/install).
-2. **Cliente de Base de Datos:** [DBeaver](https://dbeaver.io/) (recomendado), DataGrip, pgAdmin o `psql`.
-3. **Cloud SQL Auth Proxy** (solo para `dev`; en `prod` la base es privada):
+Install these basic tools (if you do not have them yet):
+1. **Google Cloud CLI (`gcloud`):** [installation instructions](https://cloud.google.com/sdk/docs/install).
+2. **A database client:** [DBeaver](https://dbeaver.io/) (recommended), DataGrip, pgAdmin or `psql`.
+3. **Cloud SQL Auth Proxy** (only for `dev`; in `prod` the database is private):
    * **macOS (Homebrew):** `brew install cloud-sql-proxy`
    * **Linux:**
      ```bash
@@ -23,59 +23,58 @@ Instala las siguientes herramientas básicas (si aún no las tienes):
      chmod +x cloud-sql-proxy
      sudo mv cloud-sql-proxy /usr/local/bin/
      ```
-   * **Windows:** Descargar el ejecutable desde [Google Cloud SQL Proxy](https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.0/cloud-sql-proxy.x64.exe).
+   * **Windows:** download the executable from [Google Cloud SQL Proxy](https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.0/cloud-sql-proxy.x64.exe).
 
 ---
 
+## 2. Authenticate with Google Cloud
 
-## 2. Autenticación en Google Cloud
-
-Abre tu terminal y autentícate con la cuenta de Google (Gmail) a la que se le dio acceso:
+Open a terminal and sign in with the Google account that was given access:
 
 ```bash
-# 1. Iniciar sesión en GCP
+# 1. Sign in to GCP
 gcloud auth login
 
-# 2. Habilitar credenciales de aplicación local (necesario para consultar el Lakehouse y Storage)
+# 2. Enable local application credentials (needed to query the lakehouse and Storage)
 gcloud auth application-default login
 
-# 3. Fijar el proyecto activo
+# 3. Set the active project
 gcloud config set project bitcoders-factored-hackathon
 ```
 
 ---
 
-## 3. La base de datos (`data`)
+## 3. The database (`data`)
 
-En `prod` Cloud SQL tiene **solo IP privada**: no hay IP pública ni lista de redes autorizadas, así que el Auth Proxy desde tu computadora **no llega**. Se entra por la VM de Airflow, que está dentro de la red y a la que se llega por IAP (sin IP externa).
+In `prod` Cloud SQL has a **private IP only**. There is no public IP and no authorized-networks list, so the Auth Proxy from your computer **cannot reach it**. You get in through the Airflow VM, which is inside the network and is reached through IAP (it has no external IP).
 
 ```bash
-# 1. Enciende la VM (se apaga sola a las 03:00) y espera ~1 minuto
+# 1. Start the VM (it stops by itself at 03:00) and wait about a minute
 ENVIRONMENT=prod ./infra/gcp/scripts/airflow_vm.sh start
 
-# 2. Una consulta desde el contenedor del scheduler, que ya tiene las credenciales del pipeline
+# 2. Run a query from the scheduler container, which already has the pipeline's credentials
 gcloud compute ssh factored-prod-airflow --zone us-east4-a --project bitcoders-factored-hackathon \
     --tunnel-through-iap --command "sudo docker exec airflow-scheduler-1 python -c \"import os,psycopg2; c=psycopg2.connect(host=os.environ['PG_HOST'],dbname=os.environ['PG_DATABASE'],user=os.environ['PG_USER'],password=os.environ['PG_PASSWORD'],sslmode='require'); cur=c.cursor(); cur.execute('select count(*) from gold.transactions'); print(cur.fetchone())\""
 
-# 3. Al terminar
+# 3. When you are done
 ENVIRONMENT=prod ./infra/gcp/scripts/airflow_vm.sh stop
 ```
 
-Esa cuenta es la del pipeline (escribe `gold`): úsala solo para consultar. Un cliente gráfico (DBeaver, DataGrip) no llega a la base en `prod`; para explorar datos sin tocar la VM, usa el lakehouse (apartado 4).
+That account is the pipeline's (it writes `gold`), so use it only to query. A graphical client (DBeaver, DataGrip) cannot reach the database in `prod`. To explore data without touching the VM, use the lakehouse (section 4).
 
-Si el dueño del proyecto te dio acceso a `dev`, esa base y sus scripts (`manage_db.sh`) siguen su propia configuración: pregúntale cómo se entra.
+If the project owner gave you access to `dev`, that database and its scripts (`manage_db.sh`) follow their own configuration. Ask the owner how to connect.
 
-#### Esquemas
-* `gold.*`: tablas de negocio para el servicio (`customers`, `products`, `transactions`, `complaints`, `call_center_interactions`).
-* `ops.etl_runs`: historial de corridas del pipeline.
-* `agent.trace_log` y `agent.conversation_messages`: traza del agente (sin texto del cliente) e historial de conversaciones.
-* `app.*`: casos de disputa y sus eventos.
+#### Schemas
+* `gold.*`: business tables for the service (`customers`, `products`, `transactions`, `complaints`, `call_center_interactions`).
+* `ops.etl_runs`: history of pipeline runs.
+* `agent.trace_log` and `agent.conversation_messages`: the agent's trace (with no customer text) and the conversation history.
+* `app.*`: dispute cases and their events.
 
 ---
 
-## 4. El lakehouse (Cloud Storage, Parquet)
+## 4. The lakehouse (Cloud Storage, Parquet)
 
-**Bronze** (datos crudos) y **Silver** (estandarizados y tipados) están en Parquet con compresión ZSTD en `gs://factored-prod-lakehouse-bitcoders-factored-hackathon` (`bronze/<tabla>/`, `silver/<tabla>/` y `docs/`). No necesita la VM ni la base: lo lees desde tu máquina con DuckDB.
+**Bronze** (raw data) and **Silver** (standardized and typed) are stored as Parquet with ZSTD compression in `gs://factored-prod-lakehouse-bitcoders-factored-hackathon` (`bronze/<table>/`, `silver/<table>/` and `docs/`). It needs neither the VM nor the database. You read it from your machine with DuckDB.
 
 ```python
 import duckdb
@@ -91,30 +90,30 @@ print(con.execute(f"SELECT * FROM read_parquet('{bucket}/silver/transactions/**/
 
 ---
 
-## 5. Los servicios (Cloud Run)
+## 5. The services (Cloud Run)
 
-La interfaz y el agente salen por el balanceador (Cloud Armor delante); el backend es **privado** (solo el agente lo llama, con su identidad).
+The UI and the agent are served through the load balancer (with Cloud Armor in front). The backend is **private**, and only the agent calls it, with its own identity.
 
 ```bash
-cd infra/gcp/envs/prod && terraform output edge_url      # https://<dominio>/  y  /agent/*
+cd infra/gcp/envs/prod && terraform output edge_url      # https://<domain>/  and  /agent/*
 gcloud beta run services logs tail factored-prod-agent --region us-east4 --project bitcoders-factored-hackathon
 gcloud beta run services logs tail factored-prod-backend --region us-east4 --project bitcoders-factored-hackathon
 ```
 
-| Servicio | Cómo se llega | Qué es |
+| Service | How to reach it | What it is |
 |---|---|---|
-| `factored-prod-frontend` | `/` del balanceador | Chat del cliente y consola `/admin` |
-| `factored-prod-agent` | `/agent/*` del balanceador (`POST /agent/chat`) | Agente y guardrail |
-| `factored-prod-backend` | Privado (token de identidad) | API de herramientas bancarias |
+| `factored-prod-frontend` | `/` on the load balancer | Customer chat and the `/admin` console |
+| `factored-prod-agent` | `/agent/*` on the load balancer (`POST /agent/chat`) | Agent and guardrail |
+| `factored-prod-backend` | Private (identity token) | Banking tools API |
 
 ---
 
-## 6. Preguntas Frecuentes y Solución de Problemas
+## 6. FAQ and troubleshooting
 
-* **Error: `connection refused` o timeout al conectar a PostgreSQL:**
-  * En `dev`, asegúrate de que el Cloud SQL Proxy esté corriendo en una terminal.
-  * En `dev`, mira si la base está hibernada (`./infra/gcp/scripts/manage_db.sh status`; si está en `NEVER`, `resume`). En `prod` no se llega con el proxy: ver el apartado 3.
+* **Error: `connection refused` or a timeout when connecting to PostgreSQL:**
+  * In `dev`, make sure the Cloud SQL Proxy is running in a terminal.
+  * In `dev`, check whether the database is hibernating (`./infra/gcp/scripts/manage_db.sh status`; if it shows `NEVER`, run `resume`). In `prod` the proxy cannot reach it: see section 3.
 * **Error: `password authentication failed for user`:**
-  * Revisa que estés ingresando el usuario y contraseña exactos que te proporcionaron en el aprovisionamiento.
-* **Error: `Bucket not found` al consultar en GCS:**
-  * Verifica haber ejecutado `gcloud auth application-default login` para que DuckDB y librerías cliente tomen tus credenciales locales.
+  * Check that you are entering the exact user and password you were given when your access was set up.
+* **Error: `Bucket not found` when querying GCS:**
+  * Check that you ran `gcloud auth application-default login`, so that DuckDB and the client libraries pick up your local credentials.

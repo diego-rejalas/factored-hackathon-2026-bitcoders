@@ -1,37 +1,37 @@
-# data/dbt/ — dbt (bronze. → silver. → gold.)
+# data/dbt/: dbt (bronze → silver → gold)
 
-Vertical 2 de `../../docs/ARCHITECTURE.md`. Transforma `bronze.*` (que carga el DAG `latam_bank_gcp` con DuckDB, ver `../../infra/gcp/airflow/`) en `silver.*` y `gold.*` (lo que lee `../../backend/`), dentro de la base `data` de Postgres.
+Vertical 2 of `../../docs/ARCHITECTURE.md`. It transforms `bronze.*` (loaded by the `latam_bank_gcp` DAG with DuckDB, see `../../infra/gcp/airflow/`) into `silver.*` and `gold.*` (what `../../backend/` reads), inside Postgres's `data` database.
 
-Contenido de datos, no de infraestructura: cómo se despliega dbt vive en `../../infra/gcp/airflow/` (VM) y `../../infra/gcp/etl/` (Cloud Run Job).
+This is data content, not infrastructure: how dbt is deployed lives in `../../infra/gcp/airflow/` (the VM) and `../../infra/gcp/etl/` (the Cloud Run Job).
 
-**dbt corre dentro de la imagen de Airflow en GCP** (`dbt-duckdb`), no como servicio aparte. El proyecto también compila contra Postgres (`--target postgres`) para pruebas locales.
+**dbt runs inside the Airflow image on GCP** (`dbt-duckdb`), not as a separate service. The project also compiles against Postgres (`--target postgres`) for local tests.
 
-## Estructura
+## Structure
 
-- `models/staging/stg_*.sql` — una vista por cada una de las 13 tablas de bronze: cast de tipos reales, `''` → `NULL`, sin lógica de negocio salvo conformar valores (`macros/normalize_country.sql` unifica 'Mexico' y 'México'). Vistas en el schema `silver`.
-- `models/staging/sources.yml` — declara las 13 tablas de `bronze.*` como fuente, con los hallazgos de `../../docs/DATA.md` documentados por tabla.
-- `models/staging/schema.yml` — tests (`not_null`, `unique`, `accepted_values`, `relationships`, `accepted_range`, `unique_combination`) — son los "contratos de datos" que pide el reto. Los defectos conocidos de los datos corren con `severity: warn`: no frenan la corrida, pero aparecen con su conteo en cada build.
-- `tests/generic/` — tests genéricos propios (`accepted_range`, `unique_combination`); `tests/*.sql` — reglas de negocio (titularidad transacción-producto, defectos medidos de quejas, saldo sobre límite, etc.).
-- `models/gold/<entidad>.sql` — tablas materializadas en el schema `gold`, lo que lee el tool layer (`backend/`). Sin prefijo `clean_`: medallion reserva la limpieza (casts, nulls) para silver — gold nombra por entidad/consumidor de negocio. Por ahora son pass-through de silver (sin joins todavía) — los joins/agregaciones específicos de workflow se agregan cuando el equipo vote entre las opciones A/B/C/D.
-- `models/gold/schema.yml` — mismos tests sobre la capa final.
+- `models/staging/stg_*.sql`: one view for each of the 13 bronze tables. It casts to real types, turns `''` into `NULL`, and has no business logic except conforming values (`macros/normalize_country.sql` unifies 'Mexico' and 'México'). Views in the `silver` schema.
+- `models/staging/sources.yml`: declares the 13 `bronze.*` tables as a source, with the findings from `../../docs/DATA.md` documented per table.
+- `models/staging/schema.yml`: tests (`not_null`, `unique`, `accepted_values`, `relationships`, `accepted_range`, `unique_combination`). These are the "data contracts" the challenge asks for. Known data defects run with `severity: warn`, so they do not stop the run but appear with their count in every build.
+- `tests/generic/`: our own generic tests (`accepted_range`, `unique_combination`). `tests/*.sql`: business rules (transaction-to-product ownership, measured complaint defects, balance over limit, and so on).
+- `models/gold/<entity>.sql`: tables materialized in the `gold` schema, which the tool layer (`backend/`) reads. There is no `clean_` prefix: the medallion pattern reserves cleaning (casts, nulls) for silver, and gold is named by business entity or consumer. Today they are pass-throughs of silver (no joins yet).
+- `models/gold/schema.yml`: the same tests on the final layer.
 
-## Decisiones de calidad de datos ya tomadas (no reinventar al escribir modelos nuevos)
+## Data quality decisions already made (do not reinvent them when writing new models)
 
-- **`gold.transactions` excluye `is_fraud`/`fraud_score`** — son ground truth de evaluación, nunca input del agente (leakage). Si un modelo nuevo necesita fraude como feature, es un bug.
-- **`currency` nunca corrige la ausencia de MXN** — se documenta como limitación de datos real (ver `../../docs/DATA.md`), no se inventa una conversión.
-- **`contact_reason`/`reason_category`** en `call_center_interactions` son el mismo campo en la práctica — no asumir que dan más granularidad de la real.
+- **`gold.transactions` excludes `is_fraud` and `fraud_score`.** They are evaluation ground truth and never agent input (leakage). If a new model needs fraud as a feature, that is a bug.
+- **`currency` never corrects the absence of MXN.** It is documented as a real data limit (see `../../docs/DATA.md`), and no conversion is invented.
+- **`contact_reason` and `reason_category`** in `call_center_interactions` are the same field in practice. Do not assume they give more granularity than they do.
 
-## Correr localmente
+## Running locally
 
 ```bash
 cd data/dbt
-cp .env.example .env   # completar con las credenciales del Postgres local
+cp .env.example .env   # fill in the local Postgres credentials
 export $(cat .env | xargs)
-dbt build   # modelos + tests, cada modelo se prueba antes de construir lo que depende de él
+dbt build   # models + tests, each model is tested before building what depends on it
 ```
 
-Con el destino `postgres` necesita que `bronze.*` ya esté cargado en esa base. En GCP no hace falta: el DAG construye todo en memoria con `dbt-duckdb` y solo publica `gold.*`.
+With the `postgres` target it needs `bronze.*` to be already loaded in that database. On GCP it is not needed: the DAG builds everything in memory with `dbt-duckdb` and publishes only `gold.*`.
 
 ## Great Expectations
 
-Evaluado y descartado por ahora — se solapa con los tests de dbt de arriba (mismo tipo de chequeo: not_null, valores aceptados, unicidad). Lo único que aportaría es un reporte HTML (Data Docs) para el video pitch; si el equipo lo quiere por eso, agregar después, no reemplaza los tests de dbt.
+Evaluated and dropped for now. It overlaps with the dbt tests above (the same kind of check: not_null, accepted values, uniqueness). The only thing it would add is an HTML report (Data Docs) for the pitch video. If the team wants it for that, add it later. It does not replace the dbt tests.

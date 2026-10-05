@@ -1,120 +1,120 @@
-# Criterios del reto (Factored AI & Data Hackathon 2026)
+# Challenge criteria (Factored AI & Data Hackathon 2026)
 
-[Índice](README.md) · [Workflow](WORKFLOW.md) · [Arquitectura](ARCHITECTURE.md) · [Datos](DATA.md) · [API](API.md)
+[Index](README.md) · [Workflow](WORKFLOW.md) · [Architecture](ARCHITECTURE.md) · [Data](DATA.md) · [API](API.md)
 
-Lo que el reto exige, extraído de `docs/challenge/Factored AI & Data Hackathon 2026.md` y `docs/challenge/Datathon_2026_Kickoff.pdf`, y en qué estado está cada ítem. Cada ítem cumplido dice dónde está la evidencia. **Se actualizó el 2026-10-04 contra el código y los documentos de esta carpeta.**
+What the challenge requires, taken from `docs/challenge/Factored AI & Data Hackathon 2026.md` and `docs/challenge/Datathon_2026_Kickoff.pdf`, and the state of each item. Every met item says where its evidence is. **Last updated on 2026-10-04 against the code and the documents in this folder.**
 
-## De un vistazo
+## At a glance
 
-| Sección | Cumplidos | Abiertos |
+| Section | Met | Open |
 |---|---:|---:|
-| Alcance obligatorio | 6 | 0 |
-| Sistema funcional (requisitos mínimos) | 5 | 0 |
-| Automatización controlada | 4 | 0 |
-| Datos y ML | 4 | 0 |
-| Medición de calidad y manejo de fallas | 3 | 0 |
-| Ruta a producción (honestidad, no implementación real) | 4 | 0 |
-| Fronteras de datos y ejecución | 6 | 1 |
-| Entrega (submission, antes de Oct 5) | 0 | 6 |
+| Mandatory scope | 6 | 0 |
+| Working system (minimum requirements) | 5 | 0 |
+| Controlled automation | 4 | 0 |
+| Data and ML | 4 | 0 |
+| Quality measurement and failure handling | 3 | 0 |
+| Path to production (honesty, not a real implementation) | 4 | 0 |
+| Data and execution boundaries | 6 | 1 |
+| Submission (before Oct 5) | 0 | 6 |
 | **Total** | **32** | **7** |
 
-Lo abierto, en orden de impacto: el **despliegue** de esta versión y la **entrega** (repositorio público, diapositivas, video y envío). La evaluación está en [Evaluación](EVALUATION.md) y la ruta a producción en [Ruta a producción](PRODUCTION.md).
+What is open, in order of impact: the **deployment** of this version and the **submission** (public repository, slides, video and sending). The evaluation is in [Evaluation](EVALUATION.md) and the path to production in [Path to production](PRODUCTION.md). The deployment procedure is in [Deployment](DEPLOY.md).
 
-## Alcance obligatorio
+## Mandatory scope
 
-- [x] Un solo workflow bancario coherente (cuentas/pagos, tarjetas, disputas, o crédito). Implementar más de uno NO da bonus. (Disputas de transacciones, `WORKFLOW.md`; no hay un segundo workflow.)
-- [x] Caso normal resuelto de forma automática (safe automated resolution). (Declined o Reversed bajo USD 500: Bruno y Carla en `infra/gcp/scripts/e2e.py`, 11 de 11 contra el stack local.)
-- [x] Caso ambiguo o no soportado → el sistema pide aclaración o se abstiene explícitamente. (Varias candidatas: pide aclaración y ofrece elegir; sin candidatas o fuera de alcance: escala. Cubierto en `agent/tests/test_graph.py` y en e2e.)
-- [x] Caso que requiere intervención humana → handoff estructurado. (Cobro aprobado, fraude, monto sobre el umbral, monto desconocido: `handoff` con solicitud, hechos, acciones, evidencia y preguntas abiertas.)
-- [x] Interacción demostrada en **español y portugués**. (e2e incluye un caso en portugués; la detección de idioma y las respuestas fijas están en es y pt. Falta medir por idioma en la evaluación.)
-- [x] Reportar limitaciones de datos o cobertura de idioma encontradas. (`DATA.md`, `WORKFLOW.md`: sin MXN en transacciones, sin portugués en histórico, `complaints.affected_product_id` inconsistente, sin duplicados exactos)
+- [x] One coherent banking workflow (accounts/payments, cards, disputes, or credit). Implementing more than one earns no bonus. (Transaction disputes, `WORKFLOW.md`. There is no second workflow.)
+- [x] A normal case resolved automatically (safe automated resolution). (Declined or Reversed under USD 500: Bruno and Carla in `infra/gcp/scripts/e2e.py`, 11 of 11 against the local stack.)
+- [x] An ambiguous or unsupported case: the system asks for clarification or explicitly abstains. (Several candidates: it asks for clarification and offers a choice. No candidates or out of scope: it escalates. Covered in `agent/tests/test_graph.py` and in e2e.)
+- [x] A case that needs human intervention gets a structured handoff. (Approved charge, fraud, amount over the threshold, unknown amount: a `handoff` with the request, facts, actions, evidence and open questions.)
+- [x] Interaction demonstrated in **Spanish and Portuguese**. (e2e includes a Portuguese case, and language detection and the fixed replies exist in es and pt. Measurement by language is in the evaluation.)
+- [x] Report the data limits or language coverage found. (`DATA.md`, `WORKFLOW.md`: no MXN in transactions, no Portuguese in the history, inconsistent `complaints.affected_product_id`, no exact duplicates.)
 
-## Sistema funcional (requisitos mínimos)
+## Working system (minimum requirements)
 
-- [x] Mantiene contexto conversacional. (Memoria de LangGraph por conversación y cliente. Límite: está en memoria del proceso, se pierde al reiniciar; el historial que ve el cliente sí se guarda en `agent.conversation_messages`.)
-- [x] Aclara ambigüedad (no asume). (`clarify` con candidatas; nunca elige una por su cuenta.)
-- [x] Responde con información fundamentada en datos permitidos (cuenta, transacción, política) — no alucina hechos. (Las respuestas salen de hechos verificados; el modelo solo redacta un caso resuelto y su borrador pasa por `agent/app/grounding.py`.)
-- [x] Usa herramientas (tools) cuando el workflow lo requiere. (El agente solo accede a datos por el backend HTTP, nunca a Postgres.)
-- [x] Reporta solo acciones cuyo resultado el sistema verificó (no confía en lo que "dice" el LLM que pasó). (Nodo `verify`: relee el caso del backend antes de decir que se registró; si falla, escala.)
+- [x] Keeps conversational context. (LangGraph memory per conversation and customer. Limit: it is in process memory and is lost on restart. The history the customer sees is stored in `agent.conversation_messages`.)
+- [x] Clarifies ambiguity (does not assume). (`clarify` with candidates. It never picks one on its own.)
+- [x] Answers with information grounded in permitted data (account, transaction, policy) and does not hallucinate facts. (Replies come from verified facts. The model only drafts a resolved case and its draft passes through `agent/app/grounding.py`.)
+- [x] Uses tools when the workflow requires it. (The agent reaches data only through the backend over HTTP, never Postgres.)
+- [x] Reports only actions whose result the system verified (it does not trust what the LLM "says" happened). (The `verify` node rereads the case from the backend before saying it was recorded. If that fails, it escalates.)
 
-## Automatización controlada
+## Controlled automation
 
-- [x] Define explícitamente qué puede responder solo, qué requiere confirmación, y cuándo debe abstenerse o transferir a humano. (`docs/WORKFLOW.md`, tabla de autonomía.)
-- [x] Permisos y políticas se hacen cumplir **fuera** del texto generado por el modelo (código determinista, no el prompt). (Guardrail determinista en `agent/app/guardrail.py`; titularidad en el backend; el modelo no decide la política.)
-- [x] El handoff a humano entrega: la solicitud, hechos verificados, acciones tomadas, evidencia de soporte, preguntas sin resolver — no un dump crudo de transcript. (Estructura en [Workflow](WORKFLOW.md); la consola `/admin` la muestra.)
-- [x] **No aplica:** el workflow es disputas y no toca crédito. Si el workflow tocara crédito: separar conversación / riesgo predictivo / política de elegibilidad. El modelo conversacional NUNCA inventa reglas de elegibilidad ni aprueba crédito por su cuenta.
+- [x] Defines explicitly what it can answer alone, what needs confirmation, and when it must abstain or hand off to a human. (`docs/WORKFLOW.md`, the paths and escalation tables.)
+- [x] Permissions and policies are enforced **outside** the model's generated text (deterministic code, not the prompt). (Deterministic guardrail in `agent/app/guardrail.py`, ownership in the backend. The model does not decide policy.)
+- [x] The handoff to a human delivers the request, verified facts, actions taken, supporting evidence and unresolved questions, not a raw transcript dump. (Structure in [Workflow](WORKFLOW.md), shown by the `/admin` console.)
+- [x] **Does not apply:** the workflow is disputes and does not touch credit. If it did, conversation, predictive risk and eligibility policy would be separated. The conversational model NEVER invents eligibility rules or approves credit on its own.
 
-## Datos y ML
+## Data and ML
 
-- [x] Pipeline de datos repetible: contratos de esquema, checks de calidad, linaje, política de actualización/frescura. (DAG de Airflow con DuckDB: reconstruye bronze desde S3 en cada corrida; los tests de dbt (claves, relaciones, valores aceptados, rangos y reglas de negocio) y, si falla uno de silver, no se publica `gold`; linaje por fila en `_source_key`; política de frescura explícita en [Arquitectura](ARCHITECTURE.md) (snapshot estático, recarga a demanda). Falta endurecer los contratos de `gold` a tipados con `contract: enforced`)
-- [x] Al menos un componente aprendido evaluado contra un baseline apropiado. (Clasificación de intención: modelo contra palabras clave, 228 casos ciegos y 40 adversariales, con intervalos y prueba pareada. [Evaluación](EVALUATION.md#1-el-componente-clasificación-de-intención).) (Además, `ml/eval/`: clasificador de intención e idioma con confianza contra las palabras clave, y ranker de la transacción disputada (suma ponderada y GBM) contra `narrow_candidates`, con informes y fallos en `ml/eval/reports/`; resumen en [Componentes de ML](ML_FINDINGS.md), sección 12.)
-- [x] Labels o juicios de relevancia válidos, sin leakage (ej. no usar `is_fraud` como input si se supone que el sistema lo "detecta"). (Etiquetas por construcción o por un oráculo de la política escrito aparte; `is_fraud` no existe en los casos; los conjuntos se leyeron uno por uno y se depuraron (lo hizo el autor de la evaluación, no un tercero). [Evaluación](EVALUATION.md#cómo-se-evaluó).) (En `ml/eval/`: los generadores quitan `is_fraud` y `fraud_score` y lo verifican; el ranker no usa columnas posteriores al resultado; `fraud_score` se descartó por fuga, [Componentes de ML](ML_FINDINGS.md) sección 4.2.)
-- [x] Justificar representaciones, métricas, umbrales, y splits de evaluación. (No hay entrenamiento, así que no hay partición de entrenamiento y prueba: los conjuntos se escribieron antes de ejecutar y lo ajustado después se validó con un conjunto nuevo. [Evaluación](EVALUATION.md#cómo-se-evaluó).) (En `ml/eval/`: pesos a priori e interpretables, abstención con umbral calibrable en dev (`INTENT_MIN_CONFIDENCE`, costo asimétrico 5 a 1) y particiones estratificadas por celda (intención) y por cliente (ranker).)
+- [x] A repeatable data pipeline: schema contracts, quality checks, lineage, refresh and freshness policy. (Airflow DAG with DuckDB: it rebuilds bronze from S3 on every run. The dbt tests (keys, relationships, accepted values, ranges and business rules) gate publishing, and if a silver test fails `gold` is not published. Row-level lineage in `_source_key`. The freshness policy is explicit in [Architecture](ARCHITECTURE.md) (static snapshot, reload on demand). Still to do: harden the `gold` contracts to typed ones with `contract: enforced`.)
+- [x] At least one learned component evaluated against an appropriate baseline. (Intent classification: model against keywords, 228 blind cases and 40 adversarial ones, with intervals and a paired test. [Evaluation](EVALUATION.md#1-the-component-intent-classification).) (Also `ml/eval/`: an intent and language classifier with confidence against the keywords, and a ranker of the disputed transaction (weighted sum and GBM) against `narrow_candidates`, with reports and failures in `ml/eval/reports/`. Summary in [ML components](ML_FINDINGS.md), section 12.)
+- [x] Valid labels or relevance judgments, with no leakage (for example, not using `is_fraud` as input if the system is supposed to "detect" it). (Labels by construction or by a separately written policy oracle. `is_fraud` does not exist in the cases. The sets were read one by one and cleaned, by the evaluation's author and not by a third party. [Evaluation](EVALUATION.md#how-it-was-evaluated).) (In `ml/eval/`: the generators remove `is_fraud` and `fraud_score` and verify it. The ranker uses no columns that come after the outcome. `fraud_score` was dropped for leakage, [ML components](ML_FINDINGS.md) section 4.2.)
+- [x] Justify representations, metrics, thresholds and evaluation splits. (There is no training, so there is no train and test split. The sets were written before running, and anything adjusted afterward was validated with a new set. [Evaluation](EVALUATION.md#how-it-was-evaluated).) (In `ml/eval/`: a priori, interpretable weights, abstention with a threshold calibrated on dev (`INTENT_MIN_CONFIDENCE`, asymmetric cost 5 to 1) and splits stratified by cell (intent) and by customer (ranker).)
 
-## Medición de calidad y manejo de fallas
+## Quality measurement and failure handling
 
-- [x] Evaluación sobre casos held-out. (549 casos de punta a punta contra el backend y la base reales, con y sin modelo. Son casos generados por el equipo.) (También `ml/eval/`: conjuntos dev y test con umbrales congelados en dev.)
-- [x] Incluir: datos incorrectos/faltantes, sesiones expiradas, intentos de acceso no autorizado, prompt injection, fallos de herramientas, ambigüedad multilingüe. (Datos inexistentes 24, sesión vencida 6, datos ajenos 20, inyección 12, fallo del backend 12 y aclaración en es y pt 31: [Evaluación](EVALUATION.md#2-el-sistema-completo-de-punta-a-punta).)
-- [x] Reportar: resultados exitosos, resultados inseguros, comportamiento de handoff, latencia, costo — con tamaños de muestra y limitaciones explícitas. (Con tamaños de muestra, intervalos y límites explícitos. La corrida completa se repitió con el modelo después de las correcciones; lo que no es independiente está dicho en los límites.)
+- [x] Evaluation on held-out cases. (549 end-to-end cases against the real backend and database, with and without the model. They are team-generated cases.) (Also `ml/eval/`: dev and test sets with thresholds frozen on dev.)
+- [x] Include: incorrect or missing data, expired sessions, unauthorized access attempts, prompt injection, tool failures, multilingual ambiguity. (Nonexistent data 24, expired session 6, other customers' data 20, injection 12, backend failure 12 and clarification in es and pt 31: [Evaluation](EVALUATION.md#2-the-full-system-end-to-end).)
+- [x] Report: successful outcomes, unsafe outcomes, handoff behavior, latency, cost, with sample sizes and explicit limits. (With sample sizes, intervals and explicit limits. The full run was repeated with the model after the fixes. What is not independent is stated in the limits.)
 
-## Métricas a reportar (definiciones exactas del reto)
+## Metrics to report (the challenge's exact definitions)
 
-- **Safe automated resolution:** % de casos en-alcance que llegan a resolución correcta y conforme a política SIN intervención humana. Reportar también qué % de casos se intentó automatizar.
-- **Containment:** % de casos que terminan sin transferencia (esto solo NO prueba que el problema se resolvió — reportarlo junto con resolución real).
-- **Escalation quality:** transferencias correctas + contexto útil en el handoff. Reportar transferencias perdidas (missed) e innecesarias donde haya labels de referencia.
-- **Unsafe outcomes:** divulgaciones/acciones no autorizadas o resultados materialmente incorrectos — con conteos y denominadores. Cero fallos en muestra chica NO significa cero riesgo (decirlo explícitamente).
-- **Operating efficiency:** latencia p50/p95 y costo por caso intentado y por caso resuelto exitosamente, end-to-end. Si no hay resoluciones exitosas, usar "not defined", no inventar un número.
-- Comparar resultados por idioma y segmento de cliente autorizado; señalar limitaciones de muestra chica.
-- Separar claramente: medición offline, simulación, y proyección de ahorro de negocio — nunca presentar una comparación offline como "mejora medida en producción".
+- **Safe automated resolution:** the % of in-scope cases that reach a correct, policy-compliant resolution WITHOUT human intervention. Also report what % of cases were attempted for automation.
+- **Containment:** the % of cases that end without a transfer (this ALONE does not prove the problem was solved, so report it together with real resolution).
+- **Escalation quality:** correct transfers plus useful context in the handoff. Report missed and unnecessary transfers where reference labels exist.
+- **Unsafe outcomes:** unauthorized disclosures or actions, or materially incorrect results, with counts and denominators. Zero failures in a small sample does NOT mean zero risk (say so explicitly).
+- **Operating efficiency:** p50 and p95 latency and cost per attempted case and per successfully resolved case, end to end. If there are no successful resolutions, use "not defined" and do not invent a number.
+- Compare results by language and by authorized customer segment, and flag small-sample limits.
+- Clearly separate offline measurement, simulation and business savings projection. Never present an offline comparison as a "measured improvement in production".
 
-## Ruta a producción (honestidad, no implementación real)
+## Path to production (honesty, not a real implementation)
 
-- [x] Tracing / trazabilidad de cada decisión (evidencia de auditoría = fuentes + reglas de política + registros de ejecución; el chain-of-thought oculto del modelo NO cuenta como evidencia). (`agent.trace_log` por paso, sin texto de usuario ni razonamiento del modelo; el caso guarda sus eventos y evidencia.)
-- [x] Reintentos acotados (bounded retries) y fallback seguro. (Pipeline: las cargas reintentan 2 veces y `gold` conserva el último dato válido. Agente: 3 intentos con tiempo de conexión de 2 s y peor caso de 6.9 s; si el backend no responde, `outcome: unavailable` con un mensaje seguro y sin cambios.)
-- [x] Setup reproducible. (Todo como código: Terraform en `infra/gcp/`, Dockerfiles, CI que construye las imágenes y corre las pruebas; los pasos están en `infra/gcp/README.md`.)
-- [x] Explicar límites de capacidad, monitoreo, controles de acceso, retención de datos, y qué falta para producción real. ([Ruta a producción](PRODUCTION.md): cada sección separa lo que existe de lo que falta. No hay política de retención aplicada y no se hizo una prueba de carga; ambas cosas están dichas ahí.)
+- [x] Tracing of every decision (audit evidence = sources + policy rules + execution records. The model's hidden chain of thought does NOT count as evidence). (`agent.trace_log` per step, with no user text or model reasoning. The case stores its events and evidence.)
+- [x] Bounded retries and a safe fallback. (Pipeline: loads retry twice and `gold` keeps the last valid data. Agent: 3 attempts with a 2 s connection timeout and a worst case of 6.9 s. If the backend does not answer, `outcome: unavailable` with a safe message and no changes.)
+- [x] Reproducible setup. (Everything as code: Terraform in `infra/gcp/`, Dockerfiles, CI that builds the images and runs the tests. The steps are in `infra/gcp/README.md` and [Deployment](DEPLOY.md).)
+- [x] Explain capacity limits, monitoring, access controls, data retention and what is missing for real production. ([Path to production](PRODUCTION.md): each section separates what exists from what is missing. No retention policy is applied and no load test was run, and both are stated there.)
 
-## Libertad de arquitectura (lo que NO es obligatorio)
+## Architecture freedom (what is NOT mandatory)
 
-- No hace falta entrenar un modelo nuevo.
-- No hace falta multi-agente.
-- No hace falta un número mínimo de tools.
-- No hace falta streaming.
-- No hace falta forecasting de demanda.
-- No hace falta dashboard.
-- (Pero si se usa un modelo pre-entrenado o retrieval, hay que demostrar el mismo rigor igual: selección de componentes, labels de intención/relevancia, representaciones, prevención de leakage, evaluación held-out, análisis de errores.)
+- Training a new model is not required.
+- Multi-agent is not required.
+- A minimum number of tools is not required.
+- Streaming is not required.
+- Demand forecasting is not required.
+- A dashboard is not required.
+- (But if a pretrained model or retrieval is used, the same rigor must be shown: component selection, intent and relevance labels, representations, leakage prevention, held-out evaluation, error analysis.)
 
-## Fronteras de datos y ejecución
+## Data and execution boundaries
 
-- [x] Solo el dataset organizador-aprobado (LATAM Bank sintético) y recursos externos permitidos.
-- [x] Identificar qué inputs son reales, de-identificados, sintéticos, o generados por el equipo. (`DATA.md`, "Procedencia de los datos": todo es sintético del organizador; lo que genere el equipo se rotulará aparte)
-- [x] No incluir registros privados reales, credenciales, o datos restringidos en la entrega pública ni en requests a modelos externos. (Un PDF con llaves de AWS se sacó del repo y de la historia. El 2026-10-04 se buscaron en los 130 commits los patrones de credenciales (AWS, OpenRouter, GitHub, llaves privadas) y los valores reales del `.env` local: 0 coincidencias. Los `.env` no están versionados. Conviene repetir la búsqueda justo antes de hacer público el repositorio.)
-- [x] Servicios sandbox / tools de banca simulados son aceptables si sus contratos y límites están documentados. (`docs/API.md`; el contrato OpenAPI está versionado y una prueba falla si se desvía.)
-- [ ] Autenticación con sesión de prueba confiable o servicio de identidad — un ID/número de cliente solo NO prueba identidad. **Parcial:** hay sesión JWT firmada con vencimiento y rol, y cuentas de demostración con contraseña (argon2id) y bloqueo por intentos; pero el ingreso del chat sigue aceptando cliente + número de documento. Es un sandbox, hay que decirlo así en la entrega y no presentarlo como identidad real.
-- [x] Permisos de acceso a registros de cada cliente enforced en la capa de servicio/tool, no en el prompt. (Cada consulta del backend se filtra por el cliente del token; hay pruebas de acceso cruzado en backend y agente.)
-- [x] No se requiere ni autoriza mover dinero real ni decisiones de crédito en vivo. (Nada en el sistema mueve dinero; el backend es de solo lectura)
+- [x] Only the organizer-approved dataset (synthetic LATAM Bank) and permitted external resources.
+- [x] Identify which inputs are real, de-identified, synthetic or team-generated. (`DATA.md`, "Provenance": everything is synthetic from the organizer, and anything the team generates is labeled separately.)
+- [x] Do not include real private records, credentials or restricted data in the public submission or in requests to external models. (A PDF with AWS keys was removed from the repo and from its history. On 2026-10-04 all 130 commits were searched for credential patterns (AWS, OpenRouter, GitHub, private keys) and for the real values in the local `.env`: 0 matches. The `.env` files are not versioned. The search should be repeated right before the repository is made public.)
+- [x] Sandbox services and simulated banking tools are acceptable if their contracts and limits are documented. (`docs/API.md`. The OpenAPI contract is versioned and a test fails if it drifts.)
+- [ ] Authentication with a trusted test session or an identity service. A customer ID or number ALONE does not prove identity. **Partial:** there is a signed JWT session with an expiry and a role, and demo accounts with a password (argon2id) and lockout after failed attempts. But the chat login still accepts customer plus ID number. It is a sandbox, so the submission must say so and not present it as real identity.
+- [x] Per-customer record access permissions enforced in the service and tool layer, not in the prompt. (Every backend query is filtered by the customer in the token. There are cross-access tests in the backend and the agent.)
+- [x] Moving real money or making live credit decisions is neither required nor authorized. (Nothing in the system moves money, and the backend is read-only.)
 
-## Entrega (submission, antes de Oct 5)
+## Submission (before Oct 5)
 
-- [ ] Repo público de GitHub: `factored-hackathon-2026-[nombre del equipo]`. **⚠️ El repo `factored-hackathon-2026-bitcoders` está en privado ahora mismo (decisión deliberada durante desarrollo) — volverlo público antes de entregar, o confirmar con el organizador si aceptan invitación como colaborador en su lugar.**
-- [ ] Link donde el tool está desplegado (deploy real, no solo local).
-- [ ] Presentación de 4-6 slides con detalles del tool.
-- [ ] Video pitch (obligatorio) de **no más de 3 minutos**, demostrando la solución funcionando y explicando decisiones arquitectónicas core. (La página del reto fija el límite en 3 minutos.)
-- [ ] Enviar todo a hackathon.admin@factored.ai.
-- [ ] "Submit your tool no matter what!!!" — entregar aunque esté incompleto.
+- [ ] A public GitHub repo: `factored-hackathon-2026-[team name]`. **Warning: the `factored-hackathon-2026-bitcoders` repo is private right now (a deliberate choice during development). Make it public before submitting, or confirm with the organizer whether they accept a collaborator invitation instead.**
+- [ ] A link where the tool is deployed (a real deployment, not only local).
+- [ ] A 4 to 6 slide presentation with details of the tool.
+- [ ] A pitch video (mandatory) of **no more than 3 minutes**, demonstrating the working solution and explaining the core architectural decisions. (The challenge page sets the limit at 3 minutes.)
+- [ ] Send everything to hackathon.admin@factored.ai.
+- [ ] "Submit your tool no matter what!!!" Submit even if it is incomplete.
 
-## Criterios de evaluación (slide "Evaluation Criteria" y página del reto)
+## Evaluation criteria ("Evaluation Criteria" slide and the challenge page)
 
-- Ante todo, la solución debe funcionar.
-- Racional y documentación general del proyecto.
-- **Technical Judgment:** arquitectura, trade-offs, confiabilidad, seguridad y preparación para producción. ([Arquitectura](ARCHITECTURE.md), [Seguridad](SECURITY.md), [Ruta a producción](PRODUCTION.md))
-- **AI Engineering:** backend, frontend, integración del sistema y despliegue.
-- **Data Engineering:** calidad, pipelines, preparación y reproducibilidad de los datos.
-- **Machine Learning:** modelado, evaluación, líneas base y rendimiento. ([Evaluación](EVALUATION.md), [Componentes de ML](ML_FINDINGS.md))
-- **Data Analytics:** métricas, insights, visualización y apoyo a la decisión. (Métricas y bandeja de la consola `/admin`, [Datos](DATA.md), `/data-docs`.)
+- Above all, the solution must work.
+- Rationale and overall project documentation.
+- **Technical Judgment:** architecture, trade-offs, reliability, safety and production readiness. ([Architecture](ARCHITECTURE.md), [Security](SECURITY.md), [Path to production](PRODUCTION.md))
+- **AI Engineering:** backend, frontend, system integration and deployment.
+- **Data Engineering:** quality, pipelines, data preparation and reproducibility.
+- **Machine Learning:** modeling, evaluation, baselines and performance. ([Evaluation](EVALUATION.md), [ML components](ML_FINDINGS.md))
+- **Data Analytics:** metrics, insights, visualization and decision support. (Metrics and inbox in the `/admin` console, [Data](DATA.md), `/data-docs`.)
 
-Otras reglas de la página del reto: español y portugués obligatorios, un solo workflow, equipos de **hasta 4 personas**, y cualquier lenguaje, framework, modelo o nube. El período del reto termina el **5 de octubre**; la página no da hora ni zona horaria.
+Other rules from the challenge page: Spanish and Portuguese are mandatory, one workflow only, teams of **up to 4 people**, and any language, framework, model or cloud. The challenge period ends on **October 5**, and the page gives no time or time zone.
 
-## Datos que condicionan la evaluación
+## Data that conditions the evaluation
 
-El texto histórico es plantilla y `is_fraud` es verdad de referencia, no entrada: por eso la evaluación del componente aprendido usa texto vivo rotulado por el equipo y los campos estructurados como línea base. El detalle está en [Datos](DATA.md).
+Historical text is templated and `is_fraud` is ground truth, not input. So the evaluation of the learned component uses live text labeled by the team, with the structured fields as the baseline. The detail is in [Data](DATA.md).

@@ -1,92 +1,92 @@
-# Seguridad
+# Security
 
-*Los controles de la aplicación y los resultados del análisis de la infraestructura con Checkov y Trivy.*
+*The application's controls and the results of scanning the infrastructure with Checkov and Trivy.*
 
-[Índice](README.md) · [Arquitectura](ARCHITECTURE.md) · [API](API.md)
+[Index](README.md) · [Architecture](ARCHITECTURE.md) · [API](API.md)
 
-## Controles de la aplicación
+## Application controls
 
-| Control | Dónde |
+| Control | Where |
 |---|---|
-| La identidad sale siempre de un JWT firmado con vencimiento y rol (`customer` o `admin`); el agente nunca acepta un `customer_id` dicho en el chat | backend y agente |
-| Cada consulta se filtra por el cliente del token; un recurso ajeno devuelve 404, no 403, para no confirmar que existe | backend |
-| La política (umbral, fraude, ambigüedad) es código determinista, no un prompt | `agent/app/guardrail.py` |
-| El borrador de un modelo pasa por comprobaciones antes de enviarse | `agent/app/grounding.py` |
-| `is_fraud` y `fraud_score` no existen en `gold` ni en ningún esquema de respuesta (lo comprueba una prueba del contrato) | backend |
-| Contraseñas con argon2id (cuentas de demostración) y bcrypt (consola del especialista), bloqueo tras intentos fallidos y misma respuesta para usuario inexistente y clave errónea | backend |
-| El backend es privado: solo cuentas de servicio con `run.invoker` lo llaman, con su ID token | infraestructura |
-| Cada servicio tiene su cuenta de servicio, sus propios secretos y su propio rol en la base | infraestructura |
-| Cloud Armor con reglas WAF y límite de tasa delante del frontend y del agente | infraestructura |
-| Cloud SQL con IP privada y SSL obligatorio; la VM de Airflow sin IP externa, accesible por IAP | infraestructura |
-| El despliegue desde GitHub usa federación de identidad, sin llaves guardadas | infraestructura |
+| Identity always comes from a signed JWT with an expiry and a role (`customer` or `admin`). The agent never accepts a `customer_id` typed in the chat | backend and agent |
+| Every query is filtered by the customer in the token. Someone else's resource returns 404, not 403, so it does not confirm that it exists | backend |
+| Policy (threshold, fraud, ambiguity) is deterministic code, not a prompt | `agent/app/guardrail.py` |
+| A model's draft passes checks before it is sent | `agent/app/grounding.py` |
+| `is_fraud` and `fraud_score` do not exist in `gold` or in any response schema (a contract test checks this) | backend |
+| Passwords use argon2id (demo accounts) and bcrypt (specialist console), with lockout after failed attempts and the same response for an unknown user and a wrong password | backend |
+| The backend is private. Only service accounts with `run.invoker` call it, with their ID token | infrastructure |
+| Each service has its own service account, its own secrets and its own database role | infrastructure |
+| Cloud Armor with WAF rules and a rate limit in front of the frontend and the agent | infrastructure |
+| Cloud SQL with a private IP and mandatory SSL. The Airflow VM has no external IP and is reached through IAP | infrastructure |
+| Deployment from GitHub uses identity federation, with no stored keys | infrastructure |
 
-El ingreso del chat sigue aceptando cliente más número de documento: es un sandbox y se presenta como tal, no como identidad real.
+The chat login still accepts customer plus ID number. It is a sandbox and is presented as one, not as real identity.
 
-## Qué cubre cada herramienta
+## What each tool covers
 
 | | Checkov | Trivy |
 |---|---|---|
-| Terraform | Sí | Sí |
-| Dockerfiles y workflows de GitHub Actions | Sí | Sí |
-| Vulnerabilidades de las imágenes construidas | No | **Sí** |
-| Dependencias de los archivos de bloqueo | No | Sí |
-| Secretos en el repositorio | No | Sí |
+| Terraform | Yes | Yes |
+| Dockerfiles and GitHub Actions workflows | Yes | Yes |
+| Vulnerabilities in the built images | No | **Yes** |
+| Dependencies in lock files | No | Yes |
+| Secrets in the repository | No | Yes |
 
-## Qué se encontró y qué se hizo
+## What was found and what was done
 
-| Hallazgo | Veredicto | Acción |
+| Finding | Verdict | Action |
 |---|---|---|
-| Cloud SQL sin SSL obligatorio | Real | `ssl_mode = ENCRYPTED_ONLY` en los tres ambientes |
-| Cloud SQL de `dev` con IP pública abierta a `0.0.0.0/0` | Real | `dev` pasa a IP privada, como qa y prod |
-| Sin registro de conexiones, esperas, checkpoints ni DDL | Real | Opciones de auditoría activadas en los tres ambientes |
-| Subred sin registro de flujo | Real | Muestreo del 50 % |
-| Contenedor del ETL como `root` | Real | Usuario `etl` (uid 10001); el pipeline completo se probó como no root |
-| Imagen de Airflow sin `USER` | Real, menor | `USER airflow` explícito |
-| Workflows con permisos de escritura por defecto | Real | `permissions: contents: read` a nivel superior |
-| Imagen de Airflow con 25 críticas y 208 altas | Real | Base `slim` y dependencias actualizadas: 17 críticas y 148 altas, de 2,81 GB a 1,34 GB |
-| Llaves de S3 del organizador | Solo en el `.env` local, **no versionado** (se comprobó) | Ninguna: no hay secretos en el repositorio ni en las imágenes |
+| Cloud SQL without mandatory SSL | Real | `ssl_mode = ENCRYPTED_ONLY` in all three environments |
+| `dev` Cloud SQL with a public IP open to `0.0.0.0/0` | Real | `dev` moves to a private IP, like qa and prod |
+| No logging of connections, waits, checkpoints or DDL | Real | Audit options enabled in all three environments |
+| Subnet without flow logs | Real | 50% sampling |
+| ETL container running as `root` | Real | User `etl` (uid 10001). The full pipeline was tested as non-root |
+| Airflow image without `USER` | Real, minor | Explicit `USER airflow` |
+| Workflows with write permissions by default | Real | `permissions: contents: read` at the top level |
+| Airflow image with 25 critical and 208 high | Real | `slim` base and updated dependencies: 17 critical and 148 high, from 2.81 GB to 1.34 GB |
+| The organizer's S3 keys | Only in the local, **unversioned** `.env` (checked) | None: there are no secrets in the repository or in the images |
 
-## Decisiones aceptadas, con su razón
+## Accepted decisions, with the reason
 
-Cada una está comentada en `.checkov.yaml` y `.trivyignore.yaml`.
+Each one is commented in `.checkov.yaml` and `.trivyignore.yaml`.
 
-- **Cifrado con claves de Google y no de cliente** (CKV_GCP_37, 38, 84): una clave suministrada por el cliente convierte una clave perdida en datos perdidos, y KMS agrega una dependencia que aquí no hace falta.
-- **Rol de instancia para el agente de servicio de Compute** (CKV_GCP_42): lo necesita para apagar la VM de Airflow por horario. Es un agente de Google, no una cuenta de carga de trabajo.
-- **Sin `log_hostname`, `log_duration` ni `pgaudit`**: el primero añade una consulta DNS por conexión, el segundo registra cada sentencia, y `pgaudit` no registra nada hasta crear la extensión.
-- **Sin registro de acceso del bucket del lago**: pediría un segundo bucket solo para registros; los datos son sintéticos y el bucket es privado.
-- **CKV_DOCKER_2 (HEALTHCHECK)**: Cloud Run ignora esa instrucción y usa sus propias sondas.
+- **Google-managed encryption keys instead of customer-managed** (CKV_GCP_37, 38, 84): a customer-supplied key turns a lost key into lost data, and KMS adds a dependency that is not needed here.
+- **Instance role for the Compute service agent** (CKV_GCP_42): it needs it to stop the Airflow VM on a schedule. It is a Google agent, not a workload account.
+- **No `log_hostname`, `log_duration` or `pgaudit`**: the first adds a DNS query per connection, the second logs every statement, and `pgaudit` logs nothing until the extension is created.
+- **No access log for the lake bucket**: it would need a second bucket just for logs. The data is synthetic and the bucket is private.
+- **CKV_DOCKER_2 (HEALTHCHECK)**: Cloud Run ignores that instruction and uses its own probes.
 
-## Pendiente
+## Still open
 
-- Los contenedores `backend`, `agent` y `frontend` corren como `root`: falta un `USER` no root en cada Dockerfile.
-- Las imágenes base (Python sobre Debian 13.7 y Airflow sobre Debian 12.15) tienen 45 y 153 paquetes del sistema con vulnerabilidades altas **sin arreglo publicado**. Se resuelve con una imagen base más nueva cuando exista el parche.
-- Auditoría real con `pgaudit` y registro de acceso del lago: no se hicieron.
+- The `backend`, `agent` and `frontend` containers run as `root`. Each Dockerfile needs a non-root `USER`.
+- The base images (Python on Debian 13.7 and Airflow on Debian 12.15) have 45 and 153 system packages with high vulnerabilities **with no published fix**. A newer base image resolves this once the patch exists.
+- Real auditing with `pgaudit` and an access log for the lake were not done.
 
-## Por qué Terraform no se escanea desde el código fuente
+## Why Terraform is not scanned from source
 
-Checkov y Trivy leen el HCL sin evaluarlo. No resuelven bloques `dynamic` ni condicionales sobre variables, así que dan como ausentes opciones que la configuración real sí fija (el modo SSL y los registros de Cloud SQL). Escanear el código fuente marcaba 8 reglas del módulo de Cloud SQL como fallidas en cada ambiente.
+Checkov and Trivy read the HCL without evaluating it. They do not resolve `dynamic` blocks or conditionals on variables, so they report as missing options that the real configuration does set (the SSL mode and the Cloud SQL logs). Scanning the source flagged 8 rules in the Cloud SQL module as failed in every environment.
 
-Por eso, en el CI Checkov revisa solo Dockerfiles y workflows, con una línea base (`.checkov.baseline`) de los hallazgos previos: los nuevos hacen fallar el CI y los conocidos no. El flujo de despliegue (`gcp-deploy.yml`) genera el plan, lo escanea con Checkov en modo `terraform_plan` y aplica **ese mismo plan**.
+So in CI, Checkov reviews only Dockerfiles and workflows, with a baseline (`.checkov.baseline`) of earlier findings: new ones fail the CI and known ones do not. The deployment workflow (`gcp-deploy.yml`) generates the plan, scans it with Checkov in `terraform_plan` mode and applies **that same plan**.
 
-## Qué hace cumplir el CI
+## What the CI enforces
 
-| Puerta | Falla cuando |
+| Gate | Fails when |
 |---|---|
-| Checkov sobre Dockerfiles y workflows | aparece un hallazgo **nuevo** |
-| Trivy `config` | aparece un hallazgo HIGH o CRITICAL no listado en `.trivyignore.yaml` |
-| Trivy `fs` | se versiona un secreto |
-| Trivy `image` (Airflow y ETL) | hay una vulnerabilidad CRITICAL **con arreglo disponible**; las que no lo tienen no cuentan porque bloquearían todos los builds |
-| Checkov sobre el plan en `gcp-deploy` | el plan resuelto incumple una regla no omitida |
+| Checkov on Dockerfiles and workflows | a **new** finding appears |
+| Trivy `config` | a HIGH or CRITICAL finding appears that is not listed in `.trivyignore.yaml` |
+| Trivy `fs` | a secret is committed |
+| Trivy `image` (Airflow and ETL) | there is a CRITICAL vulnerability **with an available fix**. Those without one do not count because they would block every build |
+| Checkov on the plan in `gcp-deploy` | the resolved plan breaks a rule that is not skipped |
 
-## Repetirlo en local
+## Reproducing it locally
 
 ```bash
-# Dockerfiles y workflows (usa .checkov.yaml y .checkov.baseline)
+# Dockerfiles and workflows (uses .checkov.yaml and .checkov.baseline)
 uv venv /tmp/ck && uv pip install --python /tmp/ck/bin/python checkov && /tmp/ck/bin/checkov
 
-# Trivy desde su imagen oficial
+# Trivy from its official image
 docker run --rm -v "$PWD:/src" aquasec/trivy:latest config /src --severity HIGH,CRITICAL --ignorefile /src/.trivyignore.yaml --skip-dirs /src/frontend/node_modules
 docker run --rm -v "$PWD:/src" aquasec/trivy:latest fs /src --scanners secret --skip-files /src/.env
 ```
 
-Dos trampas con Checkov: carga solo el `.checkov.yaml` del directorio actual, y con varios directorios en la configuración escribe una línea base en cada uno, por eso la configuración usa un único directorio.
+Two Checkov traps: it loads only the `.checkov.yaml` in the current directory, and with several directories in the configuration it writes a baseline in each, which is why the configuration uses a single directory.

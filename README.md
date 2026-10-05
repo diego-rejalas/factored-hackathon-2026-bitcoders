@@ -1,71 +1,71 @@
-# LATAM Bank: asistente de disputas
+# LATAM Bank dispute assistant
 
 <p align="center">
   <img src="https://skillicons.dev/icons?i=python,fastapi,nextjs,ts,postgres,duckdb,airflow,docker,terraform,gcp,githubactions&perline=11" alt="Python, FastAPI, Next.js, TypeScript, PostgreSQL, DuckDB, Airflow, Docker, Terraform, Google Cloud, GitHub Actions" />
 </p>
 
-Asistente de atención al cliente bancario que resuelve solo las disputas de transacciones seguras y deriva el resto a una persona con el caso armado. Prototipo del **Factored AI & Data Hackathon 2026**, equipo *bitcoders*, sobre el dataset sintético LATAM Bank.
+A banking customer-service assistant that resolves safe transaction disputes on its own and hands everything else to a person with the case already prepared. Built for the **Factored AI & Data Hackathon 2026** by team *bitcoders*, on the synthetic LATAM Bank dataset.
 
-- **Un cliente** cuenta, en español o portugués, un cargo que no reconoce. El agente identifica la transacción, aplica una política determinista y responde con hechos verificados.
-- **Resuelve solo** lo claro y bajo USD 500 (una transacción rechazada o revertida). **Escala** un cobro aprobado, un posible fraude, un monto alto o un caso ambiguo, con un traspaso estructurado.
-- **Un especialista** toma los casos escalados en la consola `/admin`, con la evidencia, la auditoría y la traza del agente.
-- La política, los permisos y la identidad viven en código. El modelo de lenguaje es opcional y solo redacta.
+- **The customer** describes a charge they do not recognize, in Spanish or Portuguese. The agent finds the transaction, applies a deterministic policy and answers with verified facts.
+- **It resolves alone** what is clear and under USD 500 (a declined or reversed transaction). **It escalates** an approved charge, suspected fraud, a high amount or an ambiguous case, with a structured handoff.
+- **A specialist** picks up escalated cases in the `/admin` console, with the evidence, the audit trail and the agent's trace.
+- Policy, permissions and identity live in code. The language model is optional and only drafts the reply.
 
-## Cómo funciona
+## How it works
 
-**El agente.** La política es código y el modelo solo ayuda: clasifica, redacta y mira si hay fraude, pero no decide.
+**The agent.** Policy is code and the model only helps: it classifies, drafts the reply and takes a second look for fraud, but it never decides.
 
-![Flujo del agente](docs/diagrams/agent-flow.svg)
+![Agent flow](docs/diagrams/agent-flow.svg)
 
-**El pipeline de datos.** Del S3 del organizador a las tablas `gold` que lee el backend, con una compuerta de pruebas antes de publicar.
+**The data pipeline.** From the organizer's S3 bucket to the `gold` tables the backend reads, with a test gate before anything is published.
 
-![Flujo del pipeline](docs/diagrams/pipeline-flow.svg)
+![Pipeline flow](docs/diagrams/pipeline-flow.svg)
 
-**El despliegue.** Todo en Google Cloud, definido con Terraform.
+**The deployment.** Everything runs on Google Cloud and is defined in Terraform.
 
-![Arquitectura en GCP](docs/diagrams/gcp-architecture.svg)
+![GCP architecture](docs/diagrams/gcp-architecture.svg)
 
-## Documentación
+## Documentation
 
-Todo está en [`docs/`](docs/README.md).
+Everything is in [`docs/`](docs/README.md).
 
 | | |
 |---|---|
-| [Workflow](docs/WORKFLOW.md) | Qué resuelve solo, cuándo escala y qué recibe la persona |
-| [Arquitectura](docs/ARCHITECTURE.md) | Cómo está construido y desplegado en GCP |
-| [Datos](docs/DATA.md) | Qué dice el dataset y sus limitaciones |
-| [API](docs/API.md) | Contrato entre la interfaz, el agente y el backend |
-| [Evaluación](docs/EVALUATION.md) | Cómo se midió el sistema y con qué resultados |
-| [Componentes de ML](docs/ML_FINDINGS.md) | Clasificación de intención y ranking de transacciones frente a sus líneas base (`ml/eval/`) |
-| [Seguridad](docs/SECURITY.md) | Controles y hallazgos de Checkov y Trivy |
-| [Ruta a producción](docs/PRODUCTION.md) | Qué existe y qué falta para producción real |
-| [Despliegue](docs/DEPLOY.md) | Desplegar a producción, paso a paso |
-| [Criterios](docs/CRITERIA.md) | Qué pide el reto y qué falta |
-| [Desarrollo local](docs/LOCAL_DEV.md) | Ejecutarlo en tu máquina |
-| [Onboarding](docs/ONBOARDING.md) | Conectarse a la base de datos de GCP (equipo) |
+| [Workflow](docs/WORKFLOW.md) | What it resolves alone, when it escalates and what the person receives |
+| [Architecture](docs/ARCHITECTURE.md) | How it is built and deployed on GCP |
+| [Data](docs/DATA.md) | What the dataset says and its limits |
+| [API](docs/API.md) | The contract between the UI, the agent and the backend |
+| [Evaluation](docs/EVALUATION.md) | How the system was measured, and the results |
+| [ML components](docs/ML_FINDINGS.md) | Intent classification and transaction ranking against their baselines (`ml/eval/`) |
+| [Security](docs/SECURITY.md) | Controls and the Checkov and Trivy findings |
+| [Path to production](docs/PRODUCTION.md) | What exists and what is missing for real production |
+| [Deployment](docs/DEPLOY.md) | Deploying to production, step by step |
+| [Criteria](docs/CRITERIA.md) | What the challenge asks for and what is left |
+| [Local development](docs/LOCAL_DEV.md) | Running it on your machine |
+| [Onboarding](docs/ONBOARDING.md) | Reaching the GCP database and data (team) |
 
-El enunciado del reto está en [`docs/challenge/`](docs/challenge/) (material del organizador, no se edita).
+The challenge statement is in [`docs/challenge/`](docs/challenge/) (organizer material, not edited).
 
-## Estructura
+## Repository layout
 
-| Carpeta | Contenido |
+| Folder | Contents |
 |---|---|
-| `backend/` | Capa de herramientas: FastAPI, permisos por titularidad, casos y consola del especialista |
-| `agent/` | Agente conversacional: LangGraph, guardrail determinista, trazas e historial |
-| `frontend/` | Next.js: chat del cliente y consola `/admin` |
-| `data/` | Pipeline: etapas en `pipeline/` y proyecto dbt en `dbt/` |
-| `ml/eval/` | Conjuntos retenidos y evaluación de los componentes de ML (intención y ranking de transacciones) |
-| `agent/eval/` | Evaluación del sistema de punta a punta y del clasificador de intención |
-| `infra/gcp/` | Terraform por ambiente (`dev`, `qa`, `prod`) y módulos |
-| `infra/gcp/airflow/` | Imagen y DAG de Airflow que corre en la VM |
-| `docs/` | Documentación y diagramas |
+| `backend/` | Tool layer: FastAPI, ownership-based permissions, cases and the specialist console |
+| `agent/` | Conversational agent: LangGraph, deterministic guardrail, traces and history |
+| `frontend/` | Next.js: the customer chat and the `/admin` console |
+| `data/` | Pipeline: stages in `pipeline/` and the dbt project in `dbt/` |
+| `ml/eval/` | Held-out sets and evaluation of the ML components (intent and transaction ranking) |
+| `agent/eval/` | End-to-end evaluation of the system and of the intent classifier |
+| `infra/gcp/` | Terraform per environment (`dev`, `qa`, `prod`) and modules |
+| `infra/gcp/airflow/` | The Airflow image and DAG that run on the VM |
+| `docs/` | Documentation and diagrams |
 
-## Probar
+## Tests
 
 ```bash
-cd backend  && python -m pytest    # capa de herramientas (la base va simulada; con PG_TEST_HOST también corre contra PostgreSQL)
-cd agent    && python -m pytest    # agente y guardrail (backend y modelo simulados)
-cd frontend && pnpm build          # compilación y tipos de la interfaz
+cd backend  && python -m pytest    # tool layer (the database is mocked; with PG_TEST_HOST it also runs against PostgreSQL)
+cd agent    && python -m pytest    # agent and guardrail (backend and model mocked)
+cd frontend && pnpm build          # UI build and type check
 ```
 
-Para levantar todo en local con datos de ejemplo, ver [`docs/LOCAL_DEV.md`](docs/LOCAL_DEV.md).
+To run everything locally with sample data, see [`docs/LOCAL_DEV.md`](docs/LOCAL_DEV.md).
