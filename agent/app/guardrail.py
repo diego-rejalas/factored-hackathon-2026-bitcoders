@@ -97,6 +97,18 @@ GUARDRAIL_LIMITATIONS_ES = {
     "intent_low_confidence": "la confianza del clasificador de intención fue baja: el agente se abstiene y escala",
 }
 
+# The reason and the transaction status in the Spanish summary a specialist reads in the case.
+REASON_LABELS_ES = {
+    "fraud_suspected": "posible fraude o robo",
+    "posted_charge_disputed": "cargo aprobado o pendiente",
+    "amount_threshold": "monto sobre el umbral",
+    "amount_unknown": "monto en USD no disponible",
+    "ambiguity_unresolved": "ambigüedad sin resolver",
+    "intent_low_confidence": "confianza baja al entender el mensaje",
+}
+
+TRANSACTION_STATUS_ES = {"Approved": "aprobada", "Declined": "rechazada", "Pending": "pendiente", "Reversed": "revertida"}
+
 
 def normalize(text: str) -> str:
     """Normalize case and accents for keyword matching."""
