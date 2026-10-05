@@ -100,7 +100,7 @@ export default function AdminMetrics({
               label={tr("es", "escalations")}
               value={percent(escalations?.rate_percent)}
               denominator={escalations && backend ? `${escalations.count} / ${backend.total_cases} casos` : tr("es", "notDefined")}
-              tone="danger"
+              tone="primary"
             />
             <Kpi
               label={tr("es", "humanClosed")}
@@ -116,7 +116,7 @@ export default function AdminMetrics({
             <Kpi
               label={tr("es", "runs")}
               value={agent?.tracing_enabled ? String(agent.total_runs ?? 0) : tr("es", "notDefined")}
-              denominator={agent?.tracing_enabled ? Object.entries(agent.runs_by_outcome ?? {}).map(([key, count]) => `${labelFor(key)}: ${count}`).join(" · ") : tr("es", "tracingOff")}
+              denominator={agent?.tracing_enabled ? Object.entries(mergeByLabel(agent.runs_by_outcome ?? {})).map(([label, count]) => `${label}: ${count}`).join(" · ") : tr("es", "tracingOff")}
             />
             <Kpi
               label={tr("es", "verifySuccess")}
@@ -142,7 +142,7 @@ export default function AdminMetrics({
             <section className="panel">
               <h3>{tr("es", "byReason")}</h3>
               {errors.backend ? <PanelError /> : backend ? (
-                <CountBars values={Object.fromEntries(backend.by_reason.map((row) => [reasonLabel(row.reason, "es"), row.n]))} tone="danger" />
+                <CountBars values={Object.fromEntries(backend.by_reason.map((row) => [reasonLabel(row.reason, "es"), row.n]))} tone="warn" />
               ) : <p className="empty">{tr("es", "notDefined")}</p>}
             </section>
             <section className="panel">
@@ -169,7 +169,7 @@ export default function AdminMetrics({
                     <thead><tr><th scope="col">{tr("es", "node")}</th><th scope="col">{tr("es", "p50")} (ms)</th><th scope="col">{tr("es", "p95")} (ms)</th><th scope="col">n</th></tr></thead>
                     <tbody>
                       {Object.entries(agent.latency_by_node ?? {}).map(([node, values]) => (
-                        <tr key={node}><th scope="row">{node}</th><td className="tnum">{metricNumber(values.p50_ms)}</td><td className="tnum">{metricNumber(values.p95_ms)}</td><td className="tnum">{values.n}</td></tr>
+                        <tr key={node}><th scope="row">{NODES[node] ?? node}</th><td className="tnum">{metricNumber(values.p50_ms)}</td><td className="tnum">{metricNumber(values.p95_ms)}</td><td className="tnum">{values.n}</td></tr>
                       ))}
                     </tbody>
                   </table>
@@ -232,14 +232,32 @@ const LABELS: Record<string, string> = {
   fraud_report: "Reporte de fraude",
 };
 
+function mergeByLabel(values: Record<string, number>): Record<string, number> {
+  const merged: Record<string, number> = {};
+  for (const [key, value] of Object.entries(values)) merged[labelFor(key)] = (merged[labelFor(key)] ?? 0) + value;
+  return merged;
+}
+
+const NODES: Record<string, string> = {
+  understand: "Entender el mensaje",
+  decide: "Decidir",
+  act: "Registrar el caso",
+  verify: "Verificar",
+  respond: "Responder",
+  escalate: "Escalar",
+};
+
 function labelFor(key: string): string {
   if (LABELS[key]) return LABELS[key];
-  if (key.startsWith("llm_rejected")) return "Borrador del modelo rechazado";
+  if (key.startsWith("llm_rejected")) return "Borrador del modelo reemplazado por la plantilla";
   return key;
 }
 
-function CountBars({ values, tone }: { values: Record<string, number>; tone?: "danger" }) {
-  const rows = Object.entries(values).sort((a, b) => b[1] - a[1]);
+function CountBars({ values, tone }: { values: Record<string, number>; tone?: "danger" | "warn" }) {
+  // Two keys can read the same in Spanish (the trace has several "draft rejected" kinds): add them up.
+  const merged: Record<string, number> = {};
+  for (const [key, value] of Object.entries(values)) merged[labelFor(key)] = (merged[labelFor(key)] ?? 0) + value;
+  const rows = Object.entries(merged).sort((a, b) => b[1] - a[1]);
   const max = Math.max(1, ...rows.map(([, value]) => value));
   if (!rows.length) return <p className="empty">{tr("es", "notDefined")}</p>;
   return (

@@ -261,6 +261,7 @@ export function reasonLabel(reason: string | null | undefined, language: Languag
     ambiguity_unresolved: { es: "Ambigüedad sin resolver", pt: "Ambiguidade não resolvida" },
     out_of_scope: { es: "Solicitud fuera de alcance", pt: "Solicitação fora do escopo" },
     verify_failed: { es: "No se pudo verificar el caso", pt: "Não foi possível verificar o caso" },
+    intent_low_confidence: { es: "Confianza baja al entender el mensaje", pt: "Baixa confiança ao entender a mensagem" },
     no_case_yet: { es: "Aún no hay un caso", pt: "Ainda não há um caso" },
     multiple_candidates: { es: "Varias transacciones posibles", pt: "Várias transações possíveis" },
     unconfirmed_candidate: { es: "Transacción por confirmar", pt: "Transação a confirmar" },
