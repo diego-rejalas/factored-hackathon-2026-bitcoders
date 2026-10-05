@@ -204,6 +204,8 @@ class FakeStore:
         dispute = self.disputes.get(case_id)
         if dispute is None or dispute["customer_id"] != customer_id:
             return None
+        if dispute["status"] in ("in_progress", "closed"):
+            return dict(dispute)  # the real store leaves it as it is
         dispute["status"] = "escalated"
         dispute["evidence"] = {**dispute["evidence"], "handoff": handoff}
         self.events[case_id].append({"event": "escalated", "payload": handoff, "ts": datetime(2026, 9, 30, 12, 5, 0)})

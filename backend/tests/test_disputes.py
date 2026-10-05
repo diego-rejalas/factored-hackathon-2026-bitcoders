@@ -98,6 +98,23 @@ def test_escalate_foreign_dispute_is_404(client, auth_headers):
     assert response.status_code == 404
 
 
+def test_a_case_with_a_specialist_or_closed_is_not_reset_by_an_escalation(client, auth_headers, store):
+    """Found while documenting the API: escalate used to overwrite any status, so a re-report could undo a closure."""
+    for taken in ("in_progress", "closed"):
+        case_id = _create_dispute(client, auth_headers, transaction_id="TXN-A2" if taken == "closed" else "TXN-A1").json()["case_id"]
+        store.disputes[case_id]["status"] = taken
+        response = client.post(f"/disputes/{case_id}/escalate", json={"handoff": HANDOFF}, headers=auth_headers)
+        assert response.status_code == 409
+        assert store.disputes[case_id]["status"] == taken  # untouched
+
+
+def test_an_open_or_automatically_resolved_case_can_still_be_escalated(client, auth_headers, store):
+    case_id = _create_dispute(client, auth_headers).json()["case_id"]
+    store.disputes[case_id]["status"] = "auto_resolved"  # the customer disputes the automatic resolution
+    assert client.post(f"/disputes/{case_id}/escalate", json={"handoff": HANDOFF}, headers=auth_headers).status_code == 200
+    assert store.disputes[case_id]["status"] == "escalated"
+
+
 # ------------------------------------------------------------------ one case per transaction, resolve, list
 
 
