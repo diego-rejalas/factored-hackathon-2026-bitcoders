@@ -132,6 +132,11 @@ async def main(config, cases_file="policy_cases.jsonl", tag=""):
     secret = os.environ["SESSION_JWT_SECRET"]
     assert secret
     llm = LLM() if config == "system" else NoLLM()
+    if os.environ.get("EVAL_NO_FRAUD_SIGNAL") and config == "system":
+        # Measure the system as it was before the semantic fraud signal, to show what the signal adds.
+        async def no_signal(message):
+            return None
+        llm.flags_fraud = no_signal
     if config == "system":
         assert llm.enabled, "the system configuration needs OPENROUTER_API_KEY"
     inner = BankTools(os.environ.get("BANK_URL", "http://localhost:8000"))

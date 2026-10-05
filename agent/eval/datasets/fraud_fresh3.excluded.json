@@ -1,0 +1,80 @@
+{
+  "audit": "Every message was read one by one by the author of the evaluation (an AI assistant working with the team; no third party validated the labels); these were removed before any run because the correct behaviour is not clearly an escalation.",
+  "removed": [
+    {
+      "id": "f007",
+      "message": "Hola, tengo una transacción extraña en mi estado de cuenta. Podrían ayudarme a revisarlo.",
+      "reason": "a disputed transaction with no claim of fraud"
+    },
+    {
+      "id": "f009",
+      "message": "Este es un caso raro, recibí un correo que parecía de ustedes, pero no sé.",
+      "reason": "unclear"
+    },
+    {
+      "id": "f011",
+      "message": "¡Urgente! Me llegó un aviso de un gasto que no hice. ¿Qué debo hacer?",
+      "reason": "a disputed expense with no claim of fraud"
+    },
+    {
+      "id": "f023",
+      "message": "Estaba revisando mis gastos y hay uno que no hice. ¿Pueden investigar, por favor?",
+      "reason": "a disputed expense with no claim of fraud"
+    },
+    {
+      "id": "f028",
+      "message": "Olá, acabei de notar uma cobrança que não reconheço na minha conta. Como posso resolver isso?",
+      "reason": "a disputed charge with no claim of fraud"
+    },
+    {
+      "id": "f029",
+      "message": "Oi, vi uma cobrança de um site que nunca visitei. Pode me ajudar a entender o que aconteceu?",
+      "reason": "a disputed charge with no claim of fraud"
+    },
+    {
+      "id": "f033",
+      "message": "Oi, meu irmão encontrou meu cartão perdido, mas não sei se alguém usou. Devo bloquear mesmo assim?",
+      "reason": "unclear: the card was found"
+    },
+    {
+      "id": "f035",
+      "message": "Recebi uma mensagem de um número desconhecido perguntando sobre minha conta. É seguro responder?",
+      "reason": "unclear"
+    },
+    {
+      "id": "f037",
+      "message": "Meu cartão foi cancelado após eu reportar um uso não autorizado. Como faço para conseguir um novo?",
+      "reason": "the card is already cancelled; asks for a new one"
+    },
+    {
+      "id": "f040",
+      "message": "Recebi uma ligação estranha perguntando informações sobre minha conta. Devo reportar isso?",
+      "reason": "unclear"
+    },
+    {
+      "id": "f042",
+      "message": "Oi, meu cartão apareceu com uma cobrança por um serviço que não usei. Pode ajudar?",
+      "reason": "a disputed charge with no claim of fraud"
+    },
+    {
+      "id": "f043",
+      "message": "Descobri uma compra na minha fatura que não fiz. Preciso de ajuda para contestar!",
+      "reason": "a disputed charge with no claim of fraud"
+    },
+    {
+      "id": "f044",
+      "message": "Oi, um site que usei me enviou um link para 'verificar' minha conta. É seguro clicar?",
+      "reason": "a question, not a report"
+    },
+    {
+      "id": "f046",
+      "message": "Oi, meu cartão está com uma cobrança de uma loja que não reconheço. Como faço para anular?",
+      "reason": "a disputed charge with no claim of fraud"
+    },
+    {
+      "id": "f047",
+      "message": "Amoip e Fliper foram cobrado na minha conta e não fiz nenhuma transação. O que fazer?",
+      "reason": "a disputed charge with no claim of fraud"
+    }
+  ]
+}

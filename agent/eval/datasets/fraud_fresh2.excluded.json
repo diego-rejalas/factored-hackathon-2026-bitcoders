@@ -1,0 +1,75 @@
+{
+  "audit": "Every message was read one by one by the author of the evaluation (an AI assistant working with the team; no third party validated the labels); these were removed before any run because the correct behaviour is not clearly an escalation.",
+  "removed": [
+    {
+      "id": "f004",
+      "message": "Hola, noté un cargo raro en mi cuenta. No sé de dónde proviene. Por favor, ayúdenme.",
+      "reason": "no claim of fraud or theft"
+    },
+    {
+      "id": "f007",
+      "message": "Hola, recibí un correo que dice que mi cuenta fue comprometida. ¿Es posible que sea verdad?",
+      "reason": "unclear whether it is a fraud report"
+    },
+    {
+      "id": "f013",
+      "message": "Hola, he notado que hay un retiro que no realicé y me gustaría que investigaran.",
+      "reason": "a disputed withdrawal with no claim of fraud"
+    },
+    {
+      "id": "f020",
+      "message": "Hola, tengo una compra en mi estado de cuenta que no reconozco y necesito que me ayuden con esto.",
+      "reason": "a disputed charge with no claim of fraud"
+    },
+    {
+      "id": "f022",
+      "message": "Hola, mi hermano tiene acceso a mi cuenta y no me siento cómodo. Necesito cambiar mis datos.",
+      "reason": "unclear: a relative has access"
+    },
+    {
+      "id": "f024",
+      "message": "Recibí un correo sospechoso que dice que tengo un pago pendiente. No sé si debo hacerle caso.",
+      "reason": "unclear"
+    },
+    {
+      "id": "f030",
+      "message": "Vi uma transação que não fiz. Como posso contestar isso?",
+      "reason": "a disputed transaction with no claim of fraud"
+    },
+    {
+      "id": "f032",
+      "message": "Oi, tem como o senhor me ajudar? Aconteceu algo estranho com meu saldo.",
+      "reason": "unclear"
+    },
+    {
+      "id": "f033",
+      "message": "Fui fazer uma compra e meu cartão foi recusado, mas não sei porque.",
+      "reason": "a declined card, not fraud"
+    },
+    {
+      "id": "f036",
+      "message": "Oi, encotrei um desconto que não pedi na minha fatura. O que é isso?",
+      "reason": "a disputed fee, not fraud"
+    },
+    {
+      "id": "f038",
+      "message": "Acordei e tinha uma cobrança de um serviço que eu não assinei. Como consigo estornar?",
+      "reason": "a disputed charge with no claim of fraud"
+    },
+    {
+      "id": "f040",
+      "message": "O que faço se meu irmão tem acesso à minha conta e eu não quero mais isso?",
+      "reason": "unclear: a relative has access"
+    },
+    {
+      "id": "f042",
+      "message": "Fiz um pix e não chegou! O que tá acontecendo?",
+      "reason": "a transfer that did not arrive"
+    },
+    {
+      "id": "f048",
+      "message": "Oi, como faço pra saber se meu cartão foi clonado? Tenho dúvidas.",
+      "reason": "a question, not a report"
+    }
+  ]
+}

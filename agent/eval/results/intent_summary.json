@@ -245,8 +245,8 @@
       },
       "model_returned_no_valid_label": 0,
       "model_latency_ms": {
-        "p50": 1222.15,
-        "p95": 1717.205
+        "p50": 1191.05,
+        "p95": 1371.885
       },
       "tokens": {
         "prompt": 67140,
@@ -790,8 +790,8 @@
       },
       "model_returned_no_valid_label": 0,
       "model_latency_ms": {
-        "p50": 1236.35,
-        "p95": 1498.75
+        "p50": 1203.2,
+        "p95": 1463.0
       },
       "tokens": {
         "prompt": 11483,

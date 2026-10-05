@@ -1,0 +1,353 @@
+{
+  "config": "baseline",
+  "model": "none",
+  "n": 549,
+  "concurrency": 4,
+  "wall_seconds": 33.9,
+  "pass_rate_by_category": {
+    "expired_session": {
+      "n": 6,
+      "k": 6,
+      "value": 1.0,
+      "ci95": [
+        0.6097,
+        1.0
+      ]
+    },
+    "foreign_pick": {
+      "n": 8,
+      "k": 8,
+      "value": 1.0,
+      "ci95": [
+        0.6756,
+        1.0
+      ]
+    },
+    "fraud": {
+      "n": 24,
+      "k": 24,
+      "value": 1.0,
+      "ci95": [
+        0.862,
+        1.0
+      ]
+    },
+    "greeting": {
+      "n": 12,
+      "k": 7,
+      "value": 0.5833,
+      "ci95": [
+        0.3195,
+        0.8067
+      ]
+    },
+    "injection": {
+      "n": 12,
+      "k": 12,
+      "value": 1.0,
+      "ci95": [
+        0.7575,
+        1.0
+      ]
+    },
+    "missing_data": {
+      "n": 24,
+      "k": 24,
+      "value": 1.0,
+      "ci95": [
+        0.862,
+        1.0
+      ]
+    },
+    "out_of_scope": {
+      "n": 24,
+      "k": 15,
+      "value": 0.625,
+      "ci95": [
+        0.4271,
+        0.7884
+      ]
+    },
+    "precise": {
+      "n": 384,
+      "k": 348,
+      "value": 0.9062,
+      "ci95": [
+        0.8729,
+        0.9315
+      ]
+    },
+    "tool_failure": {
+      "n": 12,
+      "k": 12,
+      "value": 1.0,
+      "ci95": [
+        0.7575,
+        1.0
+      ]
+    },
+    "unauthorized": {
+      "n": 12,
+      "k": 12,
+      "value": 1.0,
+      "ci95": [
+        0.7575,
+        1.0
+      ]
+    },
+    "vague": {
+      "n": 31,
+      "k": 19,
+      "value": 0.6129,
+      "ci95": [
+        0.4382,
+        0.7627
+      ]
+    }
+  },
+  "in_scope_cases": {
+    "n": 384,
+    "should_resolve": 92,
+    "should_escalate": 292
+  },
+  "safe_automated_resolution": {
+    "of_all_in_scope_cases": {
+      "n": 384,
+      "k": 80,
+      "value": 0.2083,
+      "ci95": [
+        0.1707,
+        0.2517
+      ]
+    },
+    "of_cases_the_policy_lets_automate": {
+      "n": 92,
+      "k": 80,
+      "value": 0.8696,
+      "ci95": [
+        0.7857,
+        0.9238
+      ]
+    },
+    "attempted_automation": {
+      "n": 384,
+      "k": 80,
+      "value": 0.2083,
+      "ci95": [
+        0.1707,
+        0.2517
+      ]
+    },
+    "correct_given_attempted": {
+      "n": 80,
+      "k": 80,
+      "value": 1.0,
+      "ci95": [
+        0.9542,
+        1.0
+      ]
+    }
+  },
+  "containment": {
+    "without_transfer": {
+      "n": 384,
+      "k": 104,
+      "value": 0.2708,
+      "ci95": [
+        0.2288,
+        0.3174
+      ]
+    },
+    "of_which_correct": {
+      "n": 104,
+      "k": 80,
+      "value": 0.7692,
+      "ci95": [
+        0.6795,
+        0.8397
+      ]
+    }
+  },
+  "escalation_quality": {
+    "escalated_when_required": {
+      "n": 292,
+      "k": 268,
+      "value": 0.9178,
+      "ci95": [
+        0.8806,
+        0.9441
+      ]
+    },
+    "missed_escalations": {
+      "n": 292,
+      "k": 0,
+      "value": 0.0,
+      "ci95": [
+        0.0,
+        0.013
+      ]
+    },
+    "unnecessary_escalations": {
+      "n": 92,
+      "k": 0,
+      "value": 0.0,
+      "ci95": [
+        0.0,
+        0.0401
+      ]
+    },
+    "reason_matches_the_policy": {
+      "n": 268,
+      "k": 268,
+      "value": 1.0,
+      "ci95": [
+        0.9859,
+        1.0
+      ]
+    },
+    "handoff_field_present": {
+      "request": {
+        "n": 293,
+        "k": 293,
+        "value": 1.0,
+        "ci95": [
+          0.9871,
+          1.0
+        ]
+      },
+      "verified_facts": {
+        "n": 293,
+        "k": 293,
+        "value": 1.0,
+        "ci95": [
+          0.9871,
+          1.0
+        ]
+      },
+      "actions_taken": {
+        "n": 293,
+        "k": 293,
+        "value": 1.0,
+        "ci95": [
+          0.9871,
+          1.0
+        ]
+      },
+      "evidence": {
+        "n": 293,
+        "k": 268,
+        "value": 0.9147,
+        "ci95": [
+          0.8771,
+          0.9415
+        ]
+      },
+      "open_questions": {
+        "n": 293,
+        "k": 293,
+        "value": 1.0,
+        "ci95": [
+          0.9871,
+          1.0
+        ]
+      },
+      "case_id": {
+        "n": 293,
+        "k": 293,
+        "value": 1.0,
+        "ci95": [
+          0.9871,
+          1.0
+        ]
+      },
+      "reason": {
+        "n": 293,
+        "k": 293,
+        "value": 1.0,
+        "ci95": [
+          0.9871,
+          1.0
+        ]
+      },
+      "limitation": {
+        "n": 293,
+        "k": 293,
+        "value": 1.0,
+        "ci95": [
+          0.9871,
+          1.0
+        ]
+      }
+    }
+  },
+  "unsafe_outcomes": {
+    "auto_resolved_when_policy_requires_a_person": {
+      "n": 372,
+      "k": 0,
+      "value": 0.0,
+      "ci95": [
+        0.0,
+        0.0102
+      ]
+    },
+    "disclosure_of_another_customers_data": {
+      "n": 20,
+      "k": 0,
+      "value": 0.0,
+      "ci95": [
+        0.0,
+        0.1611
+      ]
+    },
+    "promise_of_money_or_time_in_a_reply": {
+      "n": 543,
+      "k": 0,
+      "value": 0.0,
+      "ci95": [
+        0.0,
+        0.007
+      ]
+    }
+  },
+  "by_language_precise": {
+    "es": {
+      "n": 192,
+      "k": 189,
+      "value": 0.9844,
+      "ci95": [
+        0.9551,
+        0.9947
+      ]
+    },
+    "pt": {
+      "n": 192,
+      "k": 159,
+      "value": 0.8281,
+      "ci95": [
+        0.7685,
+        0.8749
+      ]
+    }
+  },
+  "failures": {
+    "greeting/wrong_outcome": 5,
+    "out_of_scope/wrong_outcome": 9,
+    "precise/wrong_outcome": 36,
+    "vague/wrong_outcome": 12
+  },
+  "latency_ms_precise": {
+    "p50": 302.05,
+    "p95": 394.84,
+    "n": 384
+  },
+  "tokens": {
+    "prompt": 0,
+    "completion": 0,
+    "model_calls": 0
+  },
+  "cost_usd": {
+    "total": null,
+    "per_case_all_categories": null,
+    "per_correctly_auto_resolved_case_upper_bound": null
+  }
+}
