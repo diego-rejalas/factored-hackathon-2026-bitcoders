@@ -3,9 +3,10 @@
 import { useState } from "react";
 import Chat from "@/components/Chat";
 import Login from "@/components/Login";
+import type { Language } from "@/lib/types";
 
 export default function CustomerApp({ agentUrl }: { agentUrl: string }) {
-  const [session, setSession] = useState<{ token: string; firstName?: string } | null>(null);
+  const [session, setSession] = useState<{ token: string; firstName?: string; language?: Language } | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
 
   if (!session) {
@@ -13,8 +14,8 @@ export default function CustomerApp({ agentUrl }: { agentUrl: string }) {
       <Login
         agentUrl={agentUrl.replace(/\/$/, "")}
         sessionExpired={sessionExpired}
-        onLogin={(token, firstName) => {
-          setSession({ token, firstName });
+        onLogin={(token, firstName, language) => {
+          setSession({ token, firstName, language });
           setSessionExpired(false);
         }}
       />
@@ -26,6 +27,7 @@ export default function CustomerApp({ agentUrl }: { agentUrl: string }) {
       agentUrl={agentUrl.replace(/\/$/, "")}
       token={session.token}
       firstName={session.firstName}
+      initialLanguage={session.language}
       onLogout={(expired = false) => {
         setSession(null);
         setSessionExpired(expired);

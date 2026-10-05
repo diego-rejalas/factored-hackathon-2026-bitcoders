@@ -36,16 +36,18 @@ export default function Chat({
   agentUrl,
   token,
   firstName,
+  initialLanguage = "es",
   onLogout,
 }: {
   agentUrl: string;
   token: string;
   firstName?: string;
+  initialLanguage?: Language;
   onLogout: (expired?: boolean) => void;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [language, setLanguage] = useState<Language>("es");
+  const [language, setLanguage] = useState<Language>(initialLanguage);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -205,7 +207,7 @@ export default function Chat({
 
       <aside className={`gpt-side${menuOpen ? " open" : ""}`} aria-label={ct(language, "brand")}>
         <div className="gpt-side-head">
-          <span className="gpt-mark" aria-hidden="true">L</span>
+          <img className="gpt-mark" src="/factored-logo.png" alt="" aria-hidden="true" />
           <span className="gpt-brand">{ct(language, "brand")}</span>
           <button className="gpt-icon gpt-side-close" type="button" onClick={() => setMenuOpen(false)} aria-label={ct(language, "closeMenu")}>
             <X size={20} />
@@ -276,7 +278,7 @@ export default function Chat({
           <div className="gpt-col" aria-live="polite" aria-relevant="additions text">
             {messages.length === 0 && !busy && (
               <section className="gpt-empty">
-                <span className="gpt-mark gpt-mark-lg" aria-hidden="true">L</span>
+                <img className="gpt-mark gpt-mark-lg" src="/factored-logo.png" alt="" aria-hidden="true" />
                 <h2>{ct(language, "emptyTitle")}</h2>
                 <p>{ct(language, "emptyBody")}</p>
                 <div className="gpt-suggestions">
