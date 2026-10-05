@@ -1,7 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import { CheckCircle, Gauge, Moon, Question, ShieldWarning, Sun } from "@phosphor-icons/react";
+import { FormEvent, useEffect, useRef, useState } from "react";
+import { CaretDown, CheckCircle, Gauge, Moon, Question, ShieldWarning, Sun } from "@phosphor-icons/react";
 import { ct } from "@/lib/chatText";
 import { scenarioLabel, tr } from "@/lib/i18n";
 import type { DemoScenario, Language } from "@/lib/types";
@@ -33,6 +33,17 @@ export default function Login({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [theme, toggleTheme] = useTheme();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = (event: MouseEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [menuOpen]);
 
   useEffect(() => {
     let active = true;
@@ -84,6 +95,7 @@ export default function Login({
     setDocumentNumber(scenario.document_number);
     setFirstName(scenario.first_name);
     setSelectedScenario(scenario.scenario);
+    setMenuOpen(false);
   }
 
   return (
@@ -105,13 +117,20 @@ export default function Login({
           </div>
           <div className="auth-heading">
             <h1>{tr(language, "loginTitle")}</h1>
-            <label className="language-switch">
-              <span className="sr-only">Idioma / Idioma</span>
-              <select value={language} onChange={(event) => setLanguage(event.target.value as Language)} aria-label="Idioma / Idioma">
-                <option value="es">ES</option>
-                <option value="pt">PT</option>
-              </select>
-            </label>
+            <div className="lang-toggle" role="radiogroup" aria-label="Idioma / Idioma">
+              {(["es", "pt"] as const).map((code) => (
+                <button
+                  key={code}
+                  type="button"
+                  role="radio"
+                  aria-checked={language === code}
+                  className="lang-option"
+                  onClick={() => setLanguage(code)}
+                >
+                  {code.toUpperCase()}
+                </button>
+              ))}
+            </div>
           </div>
           <p className="auth-lead">{tr(language, "loginDescription")}</p>
           {sessionExpired && (
@@ -159,27 +178,59 @@ export default function Login({
             <p>{ct(language, "demoHint")}</p>
             {scenariosError && <p className="scenario-error">{tr(language, "scenariosUnavailable")}</p>}
             {scenarios.length > 0 && (
-              <ul>
-                {scenarios.map((scenario) => {
-                  const Icon = SCENARIO_ICON[scenario.scenario] ?? Question;
-                  return (
-                    <li key={`${scenario.scenario}-${scenario.customer_id}`}>
-                      <button
-                        type="button"
-                        className="auth-scenario"
-                        aria-pressed={selectedScenario === scenario.scenario}
-                        onClick={() => selectScenario(scenario)}
-                      >
+              <div className="scenario-menu" ref={menuRef}>
+                <button
+                  type="button"
+                  className="scenario-trigger"
+                  aria-haspopup="listbox"
+                  aria-expanded={menuOpen}
+                  onClick={() => setMenuOpen((open) => !open)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") setMenuOpen(false);
+                  }}
+                >
+                  {(() => {
+                    const chosen = scenarios.find((item) => item.scenario === selectedScenario);
+                    const Icon = chosen ? SCENARIO_ICON[chosen.scenario] ?? Question : Question;
+                    return (
+                      <>
                         <span className="auth-scenario-icon" aria-hidden="true"><Icon size={20} /></span>
                         <span className="auth-scenario-text">
-                          <span className="tag">{scenarioLabel(scenario.scenario, language)}</span>
-                          <span className="hint">{language === "pt" ? scenario.hint_pt : scenario.hint_es}</span>
+                          <span className="tag">
+                            {chosen ? scenarioLabel(chosen.scenario, language) : language === "pt" ? "Escolha um cenário" : "Elige un escenario"}
+                          </span>
+                          {chosen && <span className="hint">{language === "pt" ? chosen.hint_pt : chosen.hint_es}</span>}
                         </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
+                        <CaretDown className="scenario-caret" size={16} aria-hidden="true" />
+                      </>
+                    );
+                  })()}
+                </button>
+                {menuOpen && (
+                  <ul className="scenario-list" role="listbox" aria-label={ct(language, "demo")}>
+                    {scenarios.map((scenario) => {
+                      const Icon = SCENARIO_ICON[scenario.scenario] ?? Question;
+                      return (
+                        <li key={`${scenario.scenario}-${scenario.customer_id}`} role="presentation">
+                          <button
+                            type="button"
+                            role="option"
+                            className="auth-scenario"
+                            aria-selected={selectedScenario === scenario.scenario}
+                            onClick={() => selectScenario(scenario)}
+                          >
+                            <span className="auth-scenario-icon" aria-hidden="true"><Icon size={20} /></span>
+                            <span className="auth-scenario-text">
+                              <span className="tag">{scenarioLabel(scenario.scenario, language)}</span>
+                              <span className="hint">{language === "pt" ? scenario.hint_pt : scenario.hint_es}</span>
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
             )}
           </div>
         </form>
