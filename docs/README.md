@@ -34,6 +34,18 @@ Asistente de disputas de transacciones de LATAM Bank, para el Factored AI & Data
 
 ## Diagramas
 
-![Arquitectura en GCP](diagrams/gcp-architecture.png)
+Fuentes en [`diagrams/`](diagrams/): los flujos son Graphviz (`*.dot`), el despliegue es `gcp_architecture.py`.
+
+**Agente**
+
+![Flujo del agente](diagrams/agent-flow.svg)
+
+**Pipeline de datos**
+
+![Flujo del pipeline](diagrams/pipeline-flow.svg)
+
+**Despliegue en GCP**
+
+![Arquitectura en GCP](diagrams/gcp-architecture.svg)
 
 El linaje de las tablas del pipeline está en [`diagrams/dbt-lineage.svg`](diagrams/dbt-lineage.svg).

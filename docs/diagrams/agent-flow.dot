@@ -1,0 +1,50 @@
+// Flujo del agente. Render: dot -Tpng -Gdpi=140 agent-flow.dot -o agent-flow.png  (y -Tsvg)
+digraph agent {
+  rankdir=TB; splines=true; nodesep=0.35; ranksep=0.55; pad=0.4; newrank=true;
+  fontname="Helvetica-Bold"; fontsize=24; labelloc=t;
+  label="Flujo del agente · la política es código, el modelo solo ayuda\n ";
+  node [fontname="Helvetica" fontsize=13 shape=box style="rounded,filled" fillcolor="#E8F0FE" color="#1A73E8" penwidth=1.6 margin="0.22,0.14"];
+  edge [fontname="Helvetica" fontsize=11 color="#5F6368" fontcolor="#3C4043" penwidth=1.4];
+
+  cliente [label=<<B>Cliente</B><BR/>español o portugués> fillcolor="#FFFFFF" color="#5F6368"];
+  chat [label=<<B>POST /chat</B><BR/>token de sesión<BR/>(la identidad sale del token)>];
+  understand [label=<<B>understand</B><BR/>intención, idioma y confianza<BR/>+ segunda lectura de fraude<BR/><I>el modelo, las dos a la vez</I>> fillcolor="#F3E8FD" color="#A142F4"];
+  decide [label=<<B>decide</B><BR/>guardrail<BR/>determinista> shape=diamond fillcolor="#FEF7E0" color="#F9AB00" margin="0.02,0.02"];
+
+  declined [label=<<B>declina</B><BR/>sin caso ni traspaso> fillcolor="#F1F3F4" color="#5F6368"];
+  greet [label=<<B>responde</B><BR/>un saludo, o el estado<BR/>de su caso> fillcolor="#F1F3F4" color="#5F6368"];
+  cands [label=<<B>busca candidatas</B><BR/>sus movimientos, por el backend<BR/>(solo los suyos)>];
+  count [label=<¿cuántas<BR/>candidatas?> shape=diamond fillcolor="#FEF7E0" color="#F9AB00" margin="0.02,0.02"];
+  clarify [label=<<B>pregunta cuál es</B><BR/>máximo 2 rondas,<BR/>luego escala> fillcolor="#F1F3F4" color="#5F6368"];
+  policy [label=<¿aprobado o pendiente,<BR/>USD 500 o más,<BR/>monto desconocido?> shape=diamond fillcolor="#FEF7E0" color="#F9AB00" margin="0.02,0.02"];
+  act [label=<<B>act</B><BR/>crea el caso y<BR/>lo marca resuelto>];
+  verify [label=<<B>verify</B><BR/>¿el caso releído<BR/>coincide?> shape=diamond fillcolor="#FEF7E0" color="#F9AB00" margin="0.02,0.02"];
+  escalate [label=<<B>escalate</B><BR/>caso <I>escalated</I> con traspaso:<BR/>hechos verificados, regla y mensaje> fillcolor="#FCE8E6" color="#EA4335"];
+  respond [label=<<B>respond</B><BR/>plantilla, o borrador del modelo<BR/>con comprobaciones<BR/>(sin plazos, sin números inventados)> fillcolor="#E6F4EA" color="#188038"];
+
+  subgraph cluster_store {
+    label="queda guardado"; labeljust=l; fontname="Helvetica-Bold"; fontsize=13; style="rounded,filled"; fillcolor="#F8FBFF"; color="#AECBFA"; margin=16;
+    cases_db [label=<<B>app.disputes</B><BR/>caso y eventos> shape=cylinder fillcolor="#E8F0FE"];
+    history [label=<<B>agent.conversation_messages</B><BR/>historial del cliente> shape=cylinder fillcolor="#E8F0FE"];
+    trace [label=<<B>agent.trace_log</B><BR/>cada paso, sin texto del cliente> shape=cylinder fillcolor="#E8F0FE"];
+  }
+
+  cliente -> chat -> understand -> decide;
+  decide -> declined [label="fuera de alcance" color="#9AA0A6"];
+  decide -> greet [label="saludo o estado" color="#9AA0A6"];
+  decide -> escalate [label="fraude, o confianza baja" color="#EA4335" fontcolor="#EA4335" penwidth=2.2];
+  decide -> cands [label="disputa" color="#1A73E8" fontcolor="#1A73E8" penwidth=2.2];
+  cands -> count;
+  count -> clarify [label="0 o 2 y más" color="#9AA0A6"];
+  count -> policy [label="1" color="#1A73E8" fontcolor="#1A73E8" penwidth=2.2];
+  policy -> escalate [label="sí" color="#EA4335" fontcolor="#EA4335" penwidth=2.2];
+  policy -> act [label="no: Declined o Reversed\nbajo el umbral" color="#188038" fontcolor="#188038" penwidth=2.2];
+  act -> verify;
+  verify -> respond [label="sí" color="#188038" fontcolor="#188038" penwidth=2.2];
+  verify -> escalate [label="no" color="#EA4335" fontcolor="#EA4335" penwidth=2.2];
+  escalate -> respond [label="le dice su\nnúmero de caso"];
+  act -> cases_db [style=dotted color="#9AA0A6"];
+  escalate -> cases_db [style=dotted color="#9AA0A6"];
+  respond -> history [style=dotted color="#9AA0A6"];
+  respond -> trace [style=dotted color="#9AA0A6"];
+}

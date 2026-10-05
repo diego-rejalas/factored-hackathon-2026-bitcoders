@@ -1,0 +1,40 @@
+// Flujo del pipeline de datos. Render: dot -Tpng -Gdpi=140 pipeline-flow.dot -o pipeline-flow.png  (y -Tsvg)
+digraph pipeline {
+  rankdir=TB; splines=true; nodesep=0.5; ranksep=0.6; pad=0.4; newrank=true;
+  fontname="Helvetica-Bold"; fontsize=24; labelloc=t;
+  label="Flujo del pipeline de datos · DAG latam_bank_gcp\n ";
+  node [fontname="Helvetica" fontsize=13 shape=box style="rounded,filled" fillcolor="#E8F0FE" color="#1A73E8" penwidth=1.6 margin="0.22,0.14"];
+  edge [fontname="Helvetica" fontsize=11 color="#5F6368" fontcolor="#3C4043" penwidth=1.4];
+
+  s3 [label="S3 del organizador\n13 tablas CSV, particionadas por día\n~23,5 millones de filas" fillcolor="#FFFFFF" color="#5F6368"];
+
+  subgraph cluster_airflow {
+    label="Airflow 3 en una VM de Compute Engine · cada paso con su registro y sus reintentos";
+    labeljust=l; fontname="Helvetica-Bold"; fontsize=14; style="rounded,filled"; fillcolor="#F8FBFF"; color="#AECBFA"; margin=22;
+    extract [label=<<B>1 · extract_bronze</B><BR/>DuckDB lee de S3<BR/>cada fila guarda su origen (_source_key)>];
+    export_b [label=<<B>2 · export_bronze</B><BR/>bronze como Parquet ZSTD>];
+    dbt [label=<<B>3 · dbt_build</B><BR/>dbt-duckdb, en memoria<BR/>silver, gold y las pruebas de datos>];
+    gate [label=<¿pasan las pruebas<BR/>de <B>silver</B>?> shape=diamond fillcolor="#FEF7E0" color="#F9AB00" margin="0.05,0.05"];
+    export_s [label=<<B>4 · export_silver</B><BR/>silver como Parquet ZSTD>];
+    publish [label=<<B>5 · publish_gold</B><BR/>solo las tablas gold.*> fillcolor="#FCE8E6" color="#EA4335"];
+    docs [label=<<B>6 · dbt_docs</B><BR/>linaje y documentación>];
+    record [label=<<B>7 · record_run</B><BR/>una fila por corrida>];
+  }
+
+  keep [label="La corrida falla a la vista.\ngold conserva el último dato válido." fillcolor="#FCE8E6" color="#EA4335" shape=note];
+  lake [label=<<B>Cloud Storage</B><BR/>lakehouse<BR/>bronze/ · silver/ · docs/> shape=cylinder fillcolor="#E8F0FE"];
+  sql [label=<<B>Cloud SQL</B> PostgreSQL 18<BR/>gold.* · ops.etl_runs> shape=cylinder fillcolor="#FCE8E6" color="#EA4335"];
+  backend [label=<<B>backend</B> (solo lectura)<BR/>y consola: frescura del dato> fillcolor="#E6F4EA" color="#188038"];
+
+  s3 -> extract [label="CSV"];
+  extract -> export_b -> dbt -> gate;
+  gate -> export_s [label="sí" color="#188038" fontcolor="#188038" penwidth=2.2];
+  export_s -> publish -> docs -> record;
+  gate -> keep [label="no" color="#EA4335" fontcolor="#EA4335" penwidth=2.2];
+  export_b -> lake [style=dashed color="#1A73E8" label="bronze/"];
+  export_s -> lake [style=dashed color="#1A73E8" label="silver/"];
+  docs -> lake [style=dashed color="#1A73E8" label="docs/"];
+  publish -> sql [color="#EA4335" penwidth=2.2 label="gold.*"];
+  record -> sql [label="ops.etl_runs"];
+  sql -> backend [color="#188038" label="lee gold"];
+}
