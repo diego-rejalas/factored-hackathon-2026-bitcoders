@@ -297,3 +297,18 @@ export function suggestions(language: Language): string[] {
     ? ["Não reconheço uma cobrança", "Minha compra foi recusada", "Como está o meu caso?"]
     : ["No reconozco un cobro", "Mi compra fue rechazada", "¿Cómo va mi caso?"];
 }
+
+const LIMITATION: Record<string, string> = {
+  fraud_suspected: "El cliente menciona fraude, robo o un uso sin permiso: siempre lo revisa una persona.",
+  posted_charge_disputed: "El cobro está aprobado o pendiente: el dinero pudo moverse, así que lo decide una persona.",
+  amount_threshold: "El monto efectivo en USD alcanza el límite configurado para resolver solo.",
+  amount_unknown: "No se conoce el monto en USD, así que no se puede comprobar el límite.",
+  ambiguity_unresolved: "No quedó una única transacción candidata tras las rondas de aclaración.",
+  intent_low_confidence: "La confianza del clasificador quedó bajo el umbral: el agente se abstiene y escala.",
+  verify_failed: "No se pudo comprobar el caso después de registrarlo.",
+};
+
+/** The policy limit that sent a case to a person, in words a specialist reads; the stored text is an English note. */
+export function limitationLabel(reason: string | null | undefined, stored?: string | null): string {
+  return (reason && LIMITATION[reason]) || stored || "Revisión humana requerida por política.";
+}

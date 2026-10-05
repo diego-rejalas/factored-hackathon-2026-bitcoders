@@ -468,3 +468,20 @@ def test_portuguese_is_recognised_without_the_long_markers_and_spanish_is_not_ta
         assert detect_language(message) == "pt", message
     for message in ["Quiero aumentar el límite de mi tarjeta", "Hola, no reconozco un cobro", "Necesito ver mi saldo", "me cobraron dos veces", "cual es el clima"]:
         assert detect_language(message) == "es", message
+
+
+def test_the_handoff_explains_in_plain_words_why_a_person_has_the_case(graph, tools):
+    """It used to be one sentence for every reason, naming an internal mechanism ("el guardrail no permite…")."""
+    from tests.fakes import _tx, CUS_A
+
+    tools.transactions.append(_tx("TXN-BIG", CUS_A, "Electro Mega", "Declined", 600.00))
+    escalated = _run(graph, "No reconozco el cobro de 600 en Electro Mega", conversation="conv-big")["handoff"]["request"]
+    assert "monto" in escalated["es"] and "monto" not in escalated["pt"] and "valor" in escalated["pt"]
+    tools.transactions.append(_tx("TXN-APP", CUS_A, "Tienda Aprobada", "Approved", 33.33))
+    posted = _run(graph, "No reconozco el cobro de 33.33 en Tienda Aprobada", conversation="conv-posted")["handoff"]["request"]
+    assert "aprobado" in posted["es"] or "pendiente" in posted["es"]
+    for text in (escalated, posted):
+        for language in ("es", "pt"):
+            assert "guardrail" not in text[language].lower() and "política" not in text[language].lower()
+    fraud = _run(graph, "Me robaron la tarjeta, no fui yo", conversation="conv-fraud")["handoff"]["request"]
+    assert "fraude" in fraud["es"] and "fraude" in fraud["pt"]
