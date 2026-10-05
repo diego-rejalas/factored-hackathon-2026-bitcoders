@@ -165,6 +165,22 @@ async def test_dispute_lifecycle_in_sql(store):
 
 
 @pytest.mark.anyio
+async def test_escalating_never_resets_a_case_a_specialist_has_or_has_closed(store):
+    """The SQL guard: before, any status was overwritten and a re-report could undo a specialist's closure."""
+    case = await store.create_dispute("C1", "T2", "x", "s", {})
+    case_id = str(case["case_id"])
+    await store.escalate_dispute("C1", case_id, {"request": "first"})
+    await store.admin_transition(case_id, "in_progress", ("open", "escalated"), "claimed", {"by": "ops", "note": "mine"})
+    kept = await store.escalate_dispute("C1", case_id, {"request": "second"})
+    assert kept["status"] == "in_progress" and kept["evidence"]["handoff"] == {"request": "first"}  # untouched
+    await store.admin_transition(case_id, "closed", ("in_progress",), "closed", {"note": "done", "resolution": "resolved_customer"})
+    kept = await store.escalate_dispute("C1", case_id, {"request": "third"})
+    assert kept["status"] == "closed"
+    events = [e["event"] for e in await store.get_dispute_events(case_id)]
+    assert events.count("escalated") == 1  # the refused calls left no event
+
+
+@pytest.mark.anyio
 async def test_a_case_without_a_transaction_is_never_a_duplicate(store):
     first = await store.create_dispute("C1", None, "x", "no transaction identified", {})
     second = await store.create_dispute("C1", None, "x", "no transaction identified", {})
@@ -415,3 +431,17 @@ async def test_data_freshness_and_demo_scenarios_in_sql(store):
     assert fresh["gold"]["customers"] == 1 and fresh["gold"]["transactions"] == 1
     assert fresh["last_etl_run"]["run_id"] == "r1"
     assert isinstance(await store.demo_scenarios(), list)
+
+
+@pytest.mark.anyio
+async def test_the_days_filter_runs_in_sql_and_counts_back_from_the_snapshots_edge(store):
+    """It never ran against a real database before: every call with a number of days was a 500."""
+    await add_customer(store)
+    await add_tx(store, "T-NEW", when=datetime(2026, 7, 1, 10, 0))
+    await add_tx(store, "T-MID", when=datetime(2026, 6, 28, 10, 0))
+    await add_tx(store, "T-OLD", when=datetime(2026, 5, 1, 10, 0))
+    ids = lambda rows: [r["transaction_id"] for r in rows]
+    assert ids(await store.list_transactions("C1", days=2)) == ["T-NEW"]
+    assert ids(await store.list_transactions("C1", days=5)) == ["T-NEW", "T-MID"]
+    assert ids(await store.list_transactions("C1", days=90)) == ["T-NEW", "T-MID", "T-OLD"]
+    assert ids(await store.list_transactions("C1", days=5, status="Declined", merchant="Tienda")) == ["T-NEW", "T-MID"]

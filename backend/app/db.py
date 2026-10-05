@@ -224,8 +224,10 @@ class BankStore:
             edge = await self.snapshot_edge()
             params.extend([edge, days])
             sql += (
-                f" and transaction_date >= ${len(params) - 1}"
-                f" - make_interval(days => ${len(params)})"
+                # The casts matter: without them Postgres reads the first parameter as an interval (it sits next to
+                # one) and every request with a number of days failed with a 500.
+                f" and transaction_date >= ${len(params) - 1}::timestamp"
+                f" - make_interval(days => ${len(params)}::int)"
             )
         params.append(limit)
         sql += f" order by transaction_date desc limit ${len(params)}"
@@ -317,7 +319,9 @@ class BankStore:
         return [dict(row) for row in rows]
 
     async def escalate_dispute(self, customer_id: str, case_id: str, handoff: dict) -> dict | None:
-        """Mark the case escalated and keep the handoff. (Not guarded by the current status: see the merge notes.)"""
+        """Mark the case escalated and keep the handoff. Only a case nobody has taken can be escalated: one a specialist
+        has (in_progress) or has closed keeps its state, and the case is returned unchanged for the route to refuse.
+        (It used to reset any case, so a re-report could undo a specialist's closure.)"""
         async with self.pool.acquire() as conn:
             async with conn.transaction():
                 row = await conn.fetchrow(
@@ -326,6 +330,7 @@ class BankStore:
                     set status = 'escalated',
                         evidence = evidence || jsonb_build_object('handoff', $3::jsonb)
                     where case_id = $1 and customer_id = $2
+                      and status in ('open', 'auto_resolved', 'escalated')
                     returning case_id, customer_id, transaction_id, reason_code,
                               summary, status, evidence, created_at, resolved_at
                     """,

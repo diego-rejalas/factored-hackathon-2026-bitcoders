@@ -91,6 +91,9 @@ async def escalate_dispute(
     dispute = await store.escalate_dispute(customer_id, case_id, body.handoff)
     if dispute is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Dispute not found")
+    if dispute["status"] != "escalated":
+        # With a specialist or closed: it is not reopened from the customer's side.
+        raise HTTPException(status.HTTP_409_CONFLICT, "Dispute is already with a specialist or closed")
     return dispute
 
 
