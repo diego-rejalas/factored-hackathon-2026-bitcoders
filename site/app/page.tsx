@@ -19,6 +19,7 @@ import { LINKS } from "@/lib/links";
 import caseDetail from "@/images/case-detail.jpg";
 import chatHandoff from "@/images/chat-handoff.jpg";
 import chatResolved from "@/images/chat-resolved.jpg";
+import bitcoders from "@/images/bitcoders-logo.png";
 import logo from "@/images/logo.png";
 
 const frame = "overflow-hidden rounded-2xl border border-border bg-card shadow-frame";
@@ -192,7 +193,7 @@ export default function Home() {
         <section id="proof" aria-labelledby="h-proof" className="py-16 md:py-24">
           <div className={wrap}>
             <Reveal>
-              <h2 id="h-proof" className={h2}>Measured, and honest about it</h2>
+              <h2 id="h-proof" className={h2}>What we measured, and what we did not</h2>
               <p className="mt-3 max-w-xl text-muted-foreground">Offline results on cases the team generated. This is not a production measurement.</p>
             </Reveal>
             <div className="mt-10 grid gap-8 md:grid-cols-3 md:gap-12">
@@ -219,7 +220,7 @@ export default function Home() {
             </div>
             <Reveal>
               <p className="mt-10 max-w-3xl text-muted-foreground">
-                <strong className="text-foreground">What it is not yet.</strong> The data is synthetic, the login is a sandbox, and there is no load test or alerting. The repository lists what a real bank would need first.
+                <strong className="text-foreground">Still missing.</strong> The data is synthetic, the login is a sandbox, and there is no load test or alerting. The repository lists what a real bank would need before using it.
               </p>
             </Reveal>
           </div>
@@ -228,8 +229,16 @@ export default function Home() {
         <section id="team" aria-labelledby="h-close" className="bg-muted py-16 md:py-24">
           <div className={`${wrap} grid gap-10 md:grid-cols-[0.9fr_1.1fr] md:gap-20`}>
             <Reveal>
-              <h2 id="h-close" className={h2}>See it, read it, run it.</h2>
-              <p className="mt-4 max-w-[26rem] text-muted-foreground">Built by team bitcoders for the Factored AI and Data Hackathon 2026.</p>
+              <div className="mb-8 flex items-center gap-5">
+                <Image
+                  src={bitcoders}
+                  alt="BitCoders logo: a hooded figure at a laptop inside a hexagon, with the tagline Code // Win"
+                  className="size-28 shrink-0 rounded-2xl border border-border bg-[#04070d] md:size-36"
+                />
+                <p className="text-lg font-semibold leading-snug">Team bitcoders</p>
+              </div>
+              <h2 id="h-close" className={h2}>Everything in one place.</h2>
+              <p className="mt-4 max-w-[26rem] text-muted-foreground">Built for the Factored AI and Data Hackathon 2026.</p>
               <div className="mt-8 grid gap-2">
                 {[
                   { name: "Diego Rejalas", initials: "DR", href: LINKS.diego },
@@ -262,7 +271,11 @@ export default function Home() {
       </main>
 
       <footer className="border-t border-border py-7 text-sm text-muted-foreground">
-        <div className={wrap}>Synthetic data. Nothing here moves real money.</div>
+        <div className={`${wrap} flex flex-wrap items-center gap-x-4 gap-y-2`}>
+          <Image src={bitcoders} alt="" width={36} height={36} className="rounded-lg border border-border bg-[#04070d]" />
+          <span>Team bitcoders</span>
+          <span className="ml-auto">Synthetic data. Nothing here moves real money.</span>
+        </div>
       </footer>
     </>
   );
