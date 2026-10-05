@@ -17,6 +17,14 @@ SYSTEM_RULES = (
     "7. No uses números que no estén en los hechos."
 )
 
+FRAUD_PROMPT = (
+    "A bank customer wrote this message:\n\"{message}\"\n\n"
+    "Does the customer say that someone else used their card, account, password or phone without permission, that "
+    "they were scammed or phished, or that their card, wallet or phone was stolen or lost? "
+    "A charge they simply do not recognise, with no sign that someone else did it, is NOT fraud for this question. "
+    "Answer yes or no."
+)
+
 CLASSIFY_PROMPT = (
     "Clasifica el mensaje del cliente en UNA etiqueta y responde solo con la etiqueta:\n"
     "- dispute: reporta un cobro/cargo que no reconoce, un cobro duplicado o una compra rechazada.\n"
@@ -80,6 +88,19 @@ class LLM:
             except Exception:
                 continue
         return None
+
+    async def flags_fraud(self, message: str) -> bool | None:
+        """Does the customer say somebody else used their card or account, or that it was stolen, lost or scammed?
+
+        A signal that can only add caution: the keyword rule in app/guardrail.py stays the floor, and a "yes" sends
+        the case to a person. None when the model cannot be reached, which changes nothing. Found necessary by the
+        held-out evaluation: customers describe fraud in many ways a word list does not hold, above all in Portuguese.
+        """
+        raw = await self.chat(FRAUD_PROMPT.format(message=message).strip(), system="You are a strict classifier. Answer with one word: yes or no.")
+        if raw is None:
+            return None
+        answer = raw.strip().strip('"\'`.').lower()
+        return True if answer.startswith(("yes", "sí", "si", "sim")) else False if answer.startswith(("no", "não", "nao")) else None
 
     def _record(self, usage: dict | None) -> None:
         self.usage["calls"] += 1

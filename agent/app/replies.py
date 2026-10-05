@@ -1,12 +1,22 @@
+import re
+
 PORTUGUESE_MARKERS = (
     "não", "você", "obrigado", "obrigada", "bom dia", "boa tarde", "boa noite", "não reconheço", "cobrança", "estorno",
 )
 
 
+# Letters Spanish does not use, and short words that only Portuguese has. A message with none of the long markers
+# above ("Quero aumentar o limite do cartão") used to be answered in Spanish.
+PORTUGUESE_LETTERS = ("ã", "õ", "ç")
+PORTUGUESE_WORDS = re.compile(r"\b(meu|minha|meus|minhas|quero|preciso|oi|olá|ola|vocês|obrigad[oa]|fatura|ontem|hoje|tudo bem|aqui)\b")
+
+
 def detect_language(message: str) -> str:
     """"pt" when the message has Portuguese markers, otherwise "es" (the demo's two languages)."""
     lowered = message.lower()
-    return "pt" if any(marker in lowered for marker in PORTUGUESE_MARKERS) else "es"
+    if any(marker in lowered for marker in PORTUGUESE_MARKERS) or any(letter in lowered for letter in PORTUGUESE_LETTERS):
+        return "pt"
+    return "pt" if PORTUGUESE_WORDS.search(lowered) else "es"
 
 
 def decline_reason(tx: dict, language: str) -> str:
@@ -135,6 +145,13 @@ def escalated_reply(language: str, handoff: dict) -> str:
         f"equipo especializado{case_bit}, con toda la información verificada y las "
         "preguntas abiertas. Una persona continúa desde acá."
     )
+
+
+def declined_reply(language: str) -> str:
+    """What the assistant does not do, said plainly. It names no channel because the sandbox has none to name."""
+    if language == "pt":
+        return "Só consigo ajudar com cobranças que você não reconhece ou com transações recusadas ou revertidas. Para outro assunto, procure o atendimento do banco."
+    return "Solo puedo ayudarte con cobros que no reconoces o con transacciones rechazadas o revertidas. Para otra consulta, comunícate con la atención del banco."
 
 
 def greeting_reply(language: str) -> str:

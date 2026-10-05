@@ -1,4 +1,5 @@
 from copy import deepcopy
+import asyncio
 import time
 from typing import TypedDict
 
@@ -63,7 +64,16 @@ def build_graph(tools, tracer, llm=None):
         start = time.monotonic()
         message = state["message"]
         language = replies.detect_language(message)
-        intent = await intents.classify(message, llm)
+        # Classification and a second look for fraud run together, so the second look costs no extra waiting. It can
+        # only make the agent more cautious: a "yes" hands over to a person, a "no" or a failure leaves the keyword
+        # rule as it was. It also applies to "out of scope": a leaked password or a phishing link is not a loan
+        # request, it is a security matter a person must see, and a decline would leave the customer with nothing.
+        if llm is not None and llm.enabled and not guardrail.mentions_fraud(message):
+            intent, fraud = await asyncio.gather(intents.classify(message, llm), llm.flags_fraud(message))
+            if fraud and intent in ("dispute", "out_of_scope"):
+                intent = "fraud_report"
+        else:
+            intent = await intents.classify(message, llm)
         # A short "yes" answers the candidate proposed in the previous turn: it is part of the
         # dispute, whatever the classifier makes of two words.
         if state.get("proposed_id") and guardrail.is_affirmation(message):
@@ -135,8 +145,11 @@ def build_graph(tools, tracer, llm=None):
             return decision
 
         if intent == "out_of_scope":
-            await tracer.log(state["run_id"], state["conversation_id"], "decide", intent=intent, result_status="escalate", params={"reason": "out_of_scope"}, latency_ms=_elapsed(start))
-            return {"intent": intent, "route": "escalate", "reason": "out_of_scope", "outcome": "escalated"}
+            # Declined, not escalated: there is no case and no handoff behind it, so claiming that "a person continues
+            # from here" would be false and nobody would pick it up. (A customer asked about the weather and was told
+            # a specialist team had the case.)
+            await tracer.log(state["run_id"], state["conversation_id"], "decide", intent=intent, result_status="declined", params={"reason": "out_of_scope"}, latency_ms=_elapsed(start))
+            return {"intent": intent, "route": "respond", "reason": "out_of_scope", "outcome": "declined"}
 
         if intent == "greeting":
             await tracer.log(state["run_id"], state["conversation_id"], "decide", intent=intent, result_status="answer", latency_ms=_elapsed(start))
@@ -381,6 +394,8 @@ def build_graph(tools, tracer, llm=None):
 
         if state.get("handoff"):
             reply = replies.escalated_reply(language, state["handoff"])
+        elif outcome == "declined":
+            reply = replies.declined_reply(language)
         elif route == "respond" and outcome == "clarify":
             if state.get("reason") == "unconfirmed_candidate":
                 reply = replies.confirm_reply(language, (state.get("candidates") or [{}])[0])

@@ -105,6 +105,9 @@ class FakeLLM:
     async def classify_intent(self, message):
         return None  # the keyword baseline decides
 
+    async def flags_fraud(self, message):
+        return False
+
 
 def run(graph, message, token=f"token-{CUS_A}"):
     return asyncio.run(
@@ -164,3 +167,52 @@ def test_greetings_questions_and_out_of_scope_keep_their_fixed_text(tools, messa
     graph, llm = make(tools, "texto del modelo")
     result = run(graph, message)
     assert llm.prompts == [] and result["reply"] != "texto del modelo"
+
+
+# --- the semantic fraud signal (docs/EVALUATION.md): fraud the keyword list does not hold ---------------------
+
+
+class FraudLLM(FakeLLM):
+    def __init__(self, verdict):
+        super().__init__("never used")
+        self.verdict = verdict
+
+    async def flags_fraud(self, message):
+        return self.verdict
+
+    async def classify_intent(self, message):
+        return "dispute"
+
+
+NO_KEYWORD_FRAUD = "Fui roubada no ônibus e já tem compras que não reconheço"  # no word from the fraud list
+
+
+def test_fraud_the_word_list_misses_is_handed_to_a_person_when_the_model_sees_it(tools):
+    graph, _ = make(tools, "x")
+    graph = build_graph(tools, NullTracer(), FraudLLM(True))
+    result = run(graph, NO_KEYWORD_FRAUD)
+    assert result["outcome"] == "escalated" and result["reason"] == "fraud_suspected"
+
+
+def test_the_signal_only_adds_caution_a_no_or_a_failure_leaves_the_rule_as_it_was(tools):
+    for verdict in (False, None):
+        graph = build_graph(tools, NullTracer(), FraudLLM(verdict))
+        result = run(graph, "Me hicieron un cobro que no reconozco de 45.50 en Tienda Don Pepe")
+        assert result["outcome"] == "resolved", verdict  # an ordinary dispute still resolves
+
+
+def test_without_a_model_nothing_changes(tools):
+    graph = build_graph(tools, NullTracer(), None)
+    assert run(graph, "Me hicieron un cobro que no reconozco de 45.50 en Tienda Don Pepe")["outcome"] == "resolved"
+
+
+def test_a_security_matter_the_classifier_calls_out_of_scope_still_reaches_a_person_when_the_model_sees_fraud(tools):
+    class OutOfScopeFraud(FraudLLM):
+        async def classify_intent(self, message):
+            return "out_of_scope"
+
+    graph = build_graph(tools, NullTracer(), OutOfScopeFraud(True))
+    result = run(graph, "Oi, minha senha foi vazada! Preciso trocar agora.")
+    assert result["outcome"] == "escalated" and result["reason"] == "fraud_suspected"
+    graph = build_graph(tools, NullTracer(), OutOfScopeFraud(False))
+    assert run(graph, "Quero aumentar o limite do cartão")["outcome"] == "declined"

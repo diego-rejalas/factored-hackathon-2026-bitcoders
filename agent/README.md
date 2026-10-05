@@ -28,14 +28,15 @@ El resto son reenvíos delgados al backend con comprobaciones previas: `POST /se
 
 ## Guardrail (`app/guardrail.py`)
 
-Una tabla de decisiones en código, no un prompt. Escala siempre ante: fraude o robo (es y pt), un cobro `Approved` o `Pending`, un monto efectivo en USD mayor o igual a `GUARDRAIL_MAX_USD` (500 por defecto) o desconocido, ambigüedad sin resolver tras 2 rondas de aclaración, y una petición fuera de alcance. Resuelve solo una transacción `Declined` o `Reversed` del propio cliente, única candidata y bajo el umbral. El detalle y el orden están en [`docs/WORKFLOW.md`](../docs/WORKFLOW.md).
+Una tabla de decisiones en código, no un prompt. Escala siempre ante: fraude o robo (es y pt), un cobro `Approved` o `Pending`, un monto efectivo en USD mayor o igual a `GUARDRAIL_MAX_USD` (500 por defecto) o desconocido, ambigüedad sin resolver tras 2 rondas de aclaración. Una petición fuera de alcance se **declina** (`outcome: declined`, sin caso ni traspaso). Resuelve solo una transacción `Declined` o `Reversed` del propio cliente, única candidata y bajo el umbral. El detalle y el orden están en [`docs/WORKFLOW.md`](../docs/WORKFLOW.md).
 
 ## Modelo de lenguaje (opcional)
 
-Con `OPENROUTER_API_KEY`, el modelo hace dos cosas, y nunca decide la política:
+Con `OPENROUTER_API_KEY`, el modelo hace tres cosas, y nunca decide la política:
 
 1. **Clasificar la intención** de un mensaje (`app/intents.py`). Sin clave, o si falla, se usan las palabras clave en es y pt.
-2. **Redactar la respuesta de un caso ya resuelto** (`app/llm.py`). El borrador pasa por `app/grounding.py` antes de enviarse: sin plazos ni promesas de dinero, sin números que no estén en los hechos, sin identificadores de cliente, con el número de caso. Si falla, sale la plantilla de `app/replies.py`. Escalaciones, aclaraciones y estados nunca los redacta el modelo.
+2. **Una segunda lectura de fraude** (`LLM.flags_fraud`) sobre los mensajes que parecen una disputa o algo fuera de alcance. Solo puede sumar cautela: un "sí" pasa el caso a una persona; un "no" o un fallo dejan la lista de frases de `guardrail.py` como estaba.
+3. **Redactar la respuesta de un caso ya resuelto** (`app/llm.py`). El borrador pasa por `app/grounding.py` antes de enviarse: sin plazos ni promesas de dinero, sin números que no estén en los hechos, sin identificadores de cliente, con el número de caso. Si falla, sale la plantilla de `app/replies.py`. Escalaciones, aclaraciones y estados nunca los redacta el modelo.
 
 ## Otros módulos
 

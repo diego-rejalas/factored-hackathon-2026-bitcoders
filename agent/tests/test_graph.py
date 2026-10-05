@@ -170,11 +170,15 @@ def test_amount_above_threshold_creates_linked_human_review_case(graph, tools):
     assert result["case"]["status"] == "escalated"
 
 
-def test_out_of_scope_escalates(graph, tools):
-    result = _run(graph, "quiero un préstamo personal nuevo")
-    assert result["outcome"] == "escalated"
-    assert result["handoff"]["reason"] == "out_of_scope"
-    assert _cases_opened(tools) == []  # no transaction: nothing to open a case on
+def test_out_of_scope_is_declined_not_escalated(graph, tools):
+    """Nothing is handed over, so the reply must not say a person has the case (it used to, for any question)."""
+    for message in ("quiero un préstamo personal nuevo", "cual es el clima", "Quero aumentar o limite do cartão"):
+        result = _run(graph, message)
+        assert result["outcome"] == "declined"
+        assert not result.get("handoff") and not result.get("case")
+        assert "revisión humana" not in result["reply"].lower() and "persona" not in result["reply"].lower()
+    assert _cases_opened(tools) == []
+    assert "ajudar" in _run(graph, "Quero aumentar o limite do cartão")["reply"]  # in the customer's language
 
 
 def test_greeting_gets_answer_not_escalation(graph, tools):
@@ -455,3 +459,12 @@ def test_an_escalation_with_no_transaction_says_so_instead_of_leaving_the_facts_
     facts = " | ".join(result["handoff"]["verified_facts"])
     assert "no se identificó una única transacción" in facts and "fraud" in facts
     assert len(result["handoff"]["customer_message"]) <= 300
+
+
+def test_portuguese_is_recognised_without_the_long_markers_and_spanish_is_not_taken_for_it():
+    from app.replies import detect_language
+
+    for message in ["Quero aumentar o limite do cartão", "Preciso ver minha fatura", "Oi, tudo bem?", "Meu cartão foi usado", "Ontem comprei algo"]:
+        assert detect_language(message) == "pt", message
+    for message in ["Quiero aumentar el límite de mi tarjeta", "Hola, no reconozco un cobro", "Necesito ver mi saldo", "me cobraron dos veces", "cual es el clima"]:
+        assert detect_language(message) == "es", message
