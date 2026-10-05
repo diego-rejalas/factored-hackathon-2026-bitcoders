@@ -23,7 +23,7 @@ One line: **an assistant that knows which disputes it should never decide alone.
 | 0:40 to 0:55 | **What** (the reveal) | Cut to black, then the product rises on a device mockup, with the Factored mark and the title "LATAM Bank dispute assistant" | "So we built an assistant that answers the safe ones in seconds, and hands the rest to a person." |
 | 0:55 to 1:25 | **What**, moment one | Screen capture of the real app, framed in a phone mockup with slow zoom and animated callouts. The language toggle flips to Portuguese, the customer types, the answer appears with the case card | "Customers write in Spanish or Portuguese. It finds the transaction, checks the rules, records the case, and confirms it from the bank's own system before it says a word." |
 | 1:25 to 1:55 | **What**, moment two | An approved charge. The reply: a person has it. The handoff card slides in. Cut to the specialist console, the case opens with facts, rule and message already there | "An approved charge, or anything that smells like fraud, never resolves alone. The specialist opens a case that is already prepared: what was verified, which rule sent it here, and what the customer said." |
-| 1:55 to 2:20 | **Trust** | Three rules appear as animated cards: approved charges, 500 dollars, fraud. Then one number, large: "0 of 372 unsafe resolutions" | "The model helps. The rules decide. We tested 549 cases, and in 372 where it must not resolve alone, it never did. A small sample never proves zero risk, so we say that too." |
+| 1:55 to 2:20 | **Trust** | Three rules appear as animated cards: approved charges, 500 dollars, fraud. Then one number, large: "372 of 372" | "The model helps. The rules decide. We tested 549 cases, and in 372 where it must not resolve alone, it never did. A small sample never proves zero risk, so we say that too." |
 | 2:20 to 2:40 | **How** (10%): the core architectural decisions | The agent flow and the Google Cloud diagram, each for a few seconds, animated in | "Three decisions make this safe. The policy is code, outside the model. The agent can reach data only through a private backend that checks who is asking. And it rereads the bank's record before it reports anything as done. All of it runs on Google Cloud, defined as code." |
 | 2:40 to 2:55 | **Close** | The login screen, dark, then the tagline over the hexagon mark | "It is a prototype on synthetic data. But the idea scales: be fast where it is safe, and human where it matters." |
 
@@ -48,7 +48,7 @@ What the research agrees on, and where it shows up in the script above. Sources 
 | **One idea, repeated** | A single memorable line that every beat supports | "It knows which disputes it must never decide alone" |
 | **The surprise is the refusal** | The memorable moment is the assistant choosing not to answer. That is unusual for a bot and it is the product's value | The approved charge at 1:25: the assistant hands the case to a person, and the card slides in |
 | **Show, do not tell, with the real product** | A demo of the core action beats any explanation | The three demo moments use the real app, inside mockups |
-| **Honest proof** | One credible number, with its limit, beats a pile of metrics | "0 of 372", plus the sentence that a small sample never proves zero risk |
+| **Honest proof** | One credible number, with its limit, beats a pile of metrics | "372 of 372" (the cases where it must not resolve alone, and it never did), plus the sentence that a small sample never proves zero risk |
 | **A clear call to action** | End on what happens next | The closing line and the repository |
 
 **A tension to resolve on purpose.** Hackathon guides often say the demo is the most important minute. The organizers here say 90% product and creativity and only 10% technical. Do both by making the demo a **product film**: the real app, cropped and animated, in short beats, with the customer's outcome as the caption. Never narrate how it works while the screen runs.
@@ -126,7 +126,7 @@ The `product-launch-video` skill (HeyGen's HyperFrames) is installed. It capture
 
 ## What not to claim
 
-A measured improvement in production, real identity (the login is a sandbox), time saved, or any savings figure. The evaluation is offline and the data is synthetic. Everything quantitative in the video comes from [Evaluation](EVALUATION.md): 549 cases and 0 of 372 are the only numbers it uses.
+A measured improvement in production, real identity (the login is a sandbox), time saved, or any savings figure. The evaluation is offline and the data is synthetic. Everything quantitative in the video comes from [Evaluation](EVALUATION.md): 549 cases and 372 of 372 are the only numbers it uses.
 
 ## Slides (4 to 6, 60% product and 40% technical)
 
@@ -134,5 +134,5 @@ A measured improvement in production, real identity (the login is a sandbox), ti
 2. **The product.** Two or three framed screens: the customer chat in Portuguese, the handoff card, the specialist console. Caption each with what it does for the customer or the specialist.
 3. **The judgment.** The three paths (resolves, asks, escalates) and the rules that send a case to a person. This is the slide that shows the product has a point of view.
 4. **How it works.** The agent flow and the Google Cloud diagram side by side. One line: policy is code, the model only helps, and the agent reaches data only through a private backend.
-5. **Proof and honesty.** The key results (549 cases, 0 of 372 unsafe resolutions with its upper bound, 100% against 49% on intent) next to the limits: synthetic data, a sandbox login, no load test.
+5. **Proof and honesty.** The key results (549 cases, 372 of 372 cases where it must not resolve alone and it never did, with its upper bound, 100% against 49% on intent) next to the limits: synthetic data, a sandbox login, no load test.
 6. **What a real bank needs next.** The first three items from the path to production, and the repository link.
