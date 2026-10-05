@@ -13,12 +13,12 @@ Lo que el reto exige, extraído de `doc/Factored AI & Data Hackathon 2026.md` y 
 | Automatización controlada | 4 | 0 |
 | Datos y ML | 4 | 0 |
 | Medición de calidad y manejo de fallas | 3 | 0 |
-| Ruta a producción (honestidad, no implementación real) | 3 | 1 |
+| Ruta a producción (honestidad, no implementación real) | 4 | 0 |
 | Fronteras de datos y ejecución | 6 | 1 |
 | Entrega (submission, antes de Oct 5) | 0 | 6 |
-| **Total** | **31** | **8** |
+| **Total** | **32** | **7** |
 
-Lo abierto, en orden de impacto: el **documento de ruta a producción**, el **despliegue** de esta versión y la **entrega** (repositorio público, diapositivas, video y envío). La evaluación está en [Evaluación](EVALUATION.md), con una repetición completa con modelo pendiente.
+Lo abierto, en orden de impacto: el **despliegue** de esta versión y la **entrega** (repositorio público, diapositivas, video y envío). La evaluación está en [Evaluación](EVALUATION.md) y la ruta a producción en [Ruta a producción](PRODUCTION.md).
 
 ## Alcance obligatorio
 
@@ -55,7 +55,7 @@ Lo abierto, en orden de impacto: el **documento de ruta a producción**, el **de
 
 - [x] Evaluación sobre casos held-out. (549 casos de punta a punta contra el backend y la base reales, con y sin modelo. Son casos generados por el equipo.)
 - [x] Incluir: datos incorrectos/faltantes, sesiones expiradas, intentos de acceso no autorizado, prompt injection, fallos de herramientas, ambigüedad multilingüe. (Datos inexistentes 24, sesión vencida 6, datos ajenos 20, inyección 12, fallo del backend 12 y aclaración en es y pt 31: [Evaluación](EVALUATION.md#2-el-sistema-completo-de-punta-a-punta).)
-- [x] Reportar: resultados exitosos, resultados inseguros, comportamiento de handoff, latencia, costo — con tamaños de muestra y limitaciones explícitas. (Con tamaños de muestra, intervalos y límites explícitos. Pendiente repetir la corrida completa con modelo después de las correcciones; ver los límites.)
+- [x] Reportar: resultados exitosos, resultados inseguros, comportamiento de handoff, latencia, costo — con tamaños de muestra y limitaciones explícitas. (Con tamaños de muestra, intervalos y límites explícitos. La corrida completa se repitió con el modelo después de las correcciones; lo que no es independiente está dicho en los límites.)
 
 ## Métricas a reportar (definiciones exactas del reto)
 
@@ -72,7 +72,7 @@ Lo abierto, en orden de impacto: el **documento de ruta a producción**, el **de
 - [x] Tracing / trazabilidad de cada decisión (evidencia de auditoría = fuentes + reglas de política + registros de ejecución; el chain-of-thought oculto del modelo NO cuenta como evidencia). (`agent.trace_log` por paso, sin texto de usuario ni razonamiento del modelo; el caso guarda sus eventos y evidencia.)
 - [x] Reintentos acotados (bounded retries) y fallback seguro. (Pipeline: las cargas reintentan 2 veces y `gold` conserva el último dato válido. Agente: 3 intentos con tiempo de conexión de 2 s y peor caso de 6.9 s; si el backend no responde, `outcome: unavailable` con un mensaje seguro y sin cambios.)
 - [x] Setup reproducible. (Todo como código: Terraform en `infra/gcp/`, Dockerfiles, CI que construye las imágenes y corre las pruebas; los pasos están en `infra/gcp/README.md`.)
-- [ ] **Falta el documento.** Explicar límites de capacidad, monitoreo, controles de acceso, retención de datos, y qué falta para producción real. Hay piezas sueltas: capacidad y camino de escalamiento en [Arquitectura](ARCHITECTURE.md), monitoreo del pipeline en Airflow y `ops.etl_runs`, controles de acceso en [Seguridad](SECURITY.md). Falta reunirlas en un solo documento con la política de retención (`agent.conversation_messages` es la tabla a la que aplica), el monitoreo de los servicios y la separación de la base de datos de la aplicación y la del pipeline)
+- [x] Explicar límites de capacidad, monitoreo, controles de acceso, retención de datos, y qué falta para producción real. ([Ruta a producción](PRODUCTION.md): cada sección separa lo que existe de lo que falta. No hay política de retención aplicada y no se hizo una prueba de carga; ambas cosas están dichas ahí.)
 
 ## Libertad de arquitectura (lo que NO es obligatorio)
 

@@ -75,7 +75,7 @@ El esquema exacto está en `backend/tests/contract/openapi.json`. Aquí, lo que 
 | `GET /me/conversations/{id}` | cliente | Una conversación completa (mensajes y las tarjetas de cada respuesta). 404 si no existe o es de otro cliente |
 | `POST /disputes` `{transaction_id?, reason_code, summary}` | cliente | Abre el caso. `transaction_id` es **opcional**: una escalada que no pudo atarse a una transacción es un caso sin transacción |
 | `GET /disputes/{case_id}` | cliente | El caso con su línea de tiempo (`events`) |
-| `POST /disputes/{case_id}/escalate` `{handoff}` | cliente | Lo llama el agente. Marca `escalated` y guarda el traspaso. **No se guarda por estado**: se puede llamar sobre cualquier caso del cliente |
+| `POST /disputes/{case_id}/escalate` `{handoff}` | cliente | Lo llama el agente. Marca `escalated` y guarda el traspaso. Se puede llamar sobre un caso `open`, `auto_resolved` (el cliente disputa la resolución automática) o `escalated`. Sobre uno `in_progress` o `closed` responde `409` y no cambia nada: un especialista lo tiene o lo cerró, y un nuevo reporte no lo reabre |
 | `POST /disputes/{case_id}/resolve` `{resolution}` | cliente | Lo llama el agente. `resolution` es `no_charge_confirmed` o `reversal_confirmed`. Pasa `open` a `auto_resolved`; repetirlo sobre uno ya `auto_resolved` lo devuelve igual; sobre cualquier otro estado, `409`. **Los humanos nunca ponen `auto_resolved`** |
 | `GET /meta/demo-scenarios` | no | Hasta cuatro escenarios deterministas para la demo, calculados de los datos (umbral, fraude, auto-resuelto…). Público a propósito: solo expone lo que el login de prueba ya pide |
 | `GET /health`, `GET /ready` | no | El proceso vive / alcanza la base |
@@ -145,6 +145,7 @@ Responde: `{reply, conversation_id, outcome, handoff, case_id, case_status, case
 | `resolved` | La política resolvió, o el agente respondió (saludo, estado de un caso) | `auto_resolved` si hubo disputa |
 | `clarify` | Hay 0 o varias transacciones candidatas, o falta el dato clave (con `candidates` si hay). Una pregunta por turno, máximo 2; luego escala | ninguno |
 | `escalated` | Pasa a una persona | **el caso, `escalated`**, atado a la transacción si se pudo; sin transacción si no |
+| `declined` | La petición no es una disputa (un préstamo, el saldo, el clima…). Se responde con un texto fijo en su idioma, **sin caso y sin traspaso**: no se dice que una persona lo tiene, porque nadie lo tendría | ninguno |
 | `unavailable` | **No se pudo verificar** por un fallo del servicio bancario tras los reintentos. No se cambió nada: el cliente puede reintentar | ninguno |
 
 **La resolución automática se cierra o escala.** Después de abrir el caso, el agente lo relee y lo marca `auto_resolved` por `resolve`, y lo relee de nuevo. **Si no se puede marcar, el turno se vuelve una escalada con motivo `verify_failed`**: "resuelto" nunca es una promesa que nadie registró.
@@ -176,6 +177,5 @@ No existe, y no hace falta para la entrega. Si la interfaz dejara de llamar al a
 - **El motivo del rechazo (`response_meaning`) es el estándar ISO 8583**, no una definición del organizador. Se dice así en la respuesta.
 - **El saldo de un producto de crédito se interpreta como lo adeudado** (inferido). El dataset no tiene MXN aunque la mitad de los clientes es mexicana: la moneda se muestra como está guardada.
 - **No hay un servicio de identidad real.** El login del cliente (`customer_id` y documento) y el del especialista son de demostración, El del especialista tiene un límite de intentos por proceso. El contrato lo declara; no lo disimula.
-- **`escalate` no se guarda por estado**: se puede volver a llamar sobre un caso ya escalado o cerrado y reescribe el traspaso. Es lo que hace la implementación de la consola; conviene protegerlo antes de producción.
 - **El estado de la conversación del agente vive en la memoria de cada instancia.** Con más de una instancia, un turno puede caer en otra y perder el hilo (se pierde el contexto de la aclaración, no los casos, que están en la base). Producción real necesita un almacén compartido.
 - **El límite de intentos del login del especialista vive en la memoria de cada proceso** (con varias instancias, cada una cuenta aparte). El de `POST /v1/auth/login` está en la base, por cuenta. `POST /session` (cliente y documento) no tiene límite de intentos.
