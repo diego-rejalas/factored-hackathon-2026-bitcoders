@@ -126,7 +126,7 @@ export default function Home() {
             <Reveal delay={0.2}>
               <div className="relative pb-[18%] md:pb-[22%]">
                 <div className={`${frame} ml-auto w-[82%]`}>
-                  <Image src={caseDetail} alt="The specialist's case detail" className="aspect-[16/10] w-full object-cover object-top" />
+                  <Image src={caseDetail} alt="The specialist's case detail" priority className="aspect-[16/10] w-full object-cover object-top" />
                 </div>
                 <div className={`${frame} absolute bottom-0 left-0 w-[78%]`}>
                   <Image src={chatHandoff} alt="An approved charge handed to a person, with the case card" priority sizes="(min-width: 900px) 640px, 90vw" className="w-full" />
