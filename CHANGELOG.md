@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-05
+
+First submitted version for the Factored AI & Data Hackathon 2026. Everything below the dated entries of this release was developed before it and is listed as it was recorded.
+
+### Added
+- Production deployment on GCP from the GitHub workflow, a deployment runbook (`docs/DEPLOY.md`) and end-to-end checks against the load balancer (11 of 11 scenarios).
+- Documentation in English: the root and `docs/` READMEs, the per-folder READMEs, and three diagrams (agent flow, data pipeline flow, GCP architecture).
+- A dark theme and a redesigned header for the specialist console, Spanish names for states, intents and trace steps, and metrics that read as a product working.
+- The Factored logo as the brand mark, a language toggle and a scenario dropdown on the login, and the login language carried into the chat.
+- A check that replaces a model draft showing an internal state name with the fixed template, and a pitch plan (`docs/PITCH_VIDEO.md`).
+
+### Fixed
+- Metric bars never rendered (an inline span ignored its size), the history sidebar marked two rows as selected, and the sidebar avatar showed a question mark when the customer's name was unknown.
+- The agent's default model in Terraform was not the one that was evaluated.
+
+
 ### Added
 - **ML components with held-out evaluation (`ml/eval/`, `spec/ML_FINDINGS.md` §12)**:
   - Team-generated retained sets (seeded, reproducible, no PII, fraud columns stripped and asserted absent): `intent_set.jsonl` (840 messages, 60 per intent×language cell plus 120 adversaries — prompt injection, real ambiguity, typos, dispute-vocabulary traps; stratified dev/test) and `dispute_set.jsonl` (399 claims with controlled noise over a transaction pool matching the documented marginals, label = original `transaction_id`, 40 `unrelated` cases for the correct "no match" rate, **customer-disjoint train/test split**).
