@@ -37,7 +37,7 @@ El enunciado del reto está en [`doc/`](doc/) (material del organizador, no se e
 | `ml/eval/` | Conjuntos retenidos y evaluación de los componentes de ML (intención y ranking de transacciones) |
 | `agent/eval/` | Evaluación del sistema de punta a punta y del clasificador de intención |
 | `infra/gcp/` | Terraform por ambiente (`dev`, `qa`, `prod`) y módulos |
-| `infra/airflow-gcp/` | Imagen y DAG de Airflow que corre en la VM |
+| `infra/gcp/airflow/` | Imagen y DAG de Airflow que corre en la VM |
 | `docs/` | Documentación y diagramas |
 
 ## Probar

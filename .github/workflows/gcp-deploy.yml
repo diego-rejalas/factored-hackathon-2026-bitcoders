@@ -40,6 +40,9 @@ env:
   APPLY: ${{ github.event_name == 'workflow_dispatch' && inputs.terraform_action == 'apply' }}
   REGION: ${{ vars.GCP_REGION || 'us-east4' }}
   TAG: ${{ github.sha }}
+  # Who may open the IAP tunnel to the Airflow VM, as a JSON list: a repository variable, so that no personal address
+  # lives in the code and an apply from here does not remove the access an earlier apply granted.
+  TF_VAR_airflow_admin_members: ${{ vars.AIRFLOW_ADMIN_MEMBERS || '[]' }}
 
 # The default token is read-only; a job that needs more says so itself.
 permissions:
@@ -111,7 +114,7 @@ jobs:
           docker build . -f agent/Dockerfile           -t "$BASE/agent:$TAG"
           docker build . -f infra/gcp/etl/Dockerfile   -t "$BASE/etl:$TAG"
           docker build . -f frontend/Dockerfile        -t "$BASE/frontend:$TAG"
-          docker build . -f infra/airflow-gcp/Dockerfile -t "$BASE/airflow:$TAG"
+          docker build . -f infra/gcp/airflow/Dockerfile -t "$BASE/airflow:$TAG"
 
       - name: Push images
         if: env.APPLY == 'true'

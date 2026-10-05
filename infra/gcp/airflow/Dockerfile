@@ -1,5 +1,5 @@
 # Airflow for the GCP deployment: runs the pipeline stages (data/pipeline) as separate tasks.
-# Build context is the repository root:  docker build . -f infra/airflow-gcp/Dockerfile
+# Build context is the repository root:  docker build . -f infra/gcp/airflow/Dockerfile
 ARG AIRFLOW_VERSION=3.3.0
 ARG PYTHON_VERSION=3.12
 
@@ -42,7 +42,7 @@ RUN python -c "import duckdb; c = duckdb.connect(); c.execute('INSTALL httpfs');
 
 # dbt project and DAGs are baked into the image: a deploy is a new image tag, never a git pull on the VM.
 COPY --chown=airflow:root data/dbt /opt/airflow/dbt-project
-COPY --chown=airflow:root infra/airflow-gcp/dags /opt/airflow/dags
+COPY --chown=airflow:root infra/gcp/airflow/dags /opt/airflow/dags
 
 ENV DBT_BIN=/opt/airflow/dbt-venv/bin/dbt \
     DBT_DIR=/opt/airflow/dbt-project \

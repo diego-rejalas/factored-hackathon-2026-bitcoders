@@ -1,8 +1,8 @@
 # data/dbt/ — dbt (bronze. → silver. → gold.)
 
-Vertical 2 de `../../docs/ARCHITECTURE.md`. Transforma `bronze.*` (que carga el DAG `latam_bank_gcp` con DuckDB, ver `../../infra/airflow-gcp/`) en `silver.*` y `gold.*` (lo que lee `../../backend/`), dentro de la base `data` de Postgres.
+Vertical 2 de `../../docs/ARCHITECTURE.md`. Transforma `bronze.*` (que carga el DAG `latam_bank_gcp` con DuckDB, ver `../../infra/gcp/airflow/`) en `silver.*` y `gold.*` (lo que lee `../../backend/`), dentro de la base `data` de Postgres.
 
-Contenido de datos, no de infraestructura: cómo se despliega dbt vive en `../../infra/airflow-gcp/` (VM) y `../../infra/gcp/etl/` (Cloud Run Job).
+Contenido de datos, no de infraestructura: cómo se despliega dbt vive en `../../infra/gcp/airflow/` (VM) y `../../infra/gcp/etl/` (Cloud Run Job).
 
 **dbt corre dentro de la imagen de Airflow en GCP** (`dbt-duckdb`), no como servicio aparte. El proyecto también compila contra Postgres (`--target postgres`) para pruebas locales.
 
