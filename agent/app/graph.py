@@ -332,7 +332,7 @@ def build_graph(tools, tracer, llm=None):
         else:
             total = len(state.get("candidates") or [])
             facts.append("no se identificó una única transacción" + (f" ({total} candidatas en la ventana de búsqueda)" if total else ""))
-        facts.append(f"regla aplicada: {guardrail.GUARDRAIL_LIMITATIONS.get(state.get('reason') or '', 'revisión humana requerida')}")
+        facts.append(f"regla aplicada: {guardrail.GUARDRAIL_LIMITATIONS_ES.get(state.get('reason') or '', 'revisión humana requerida')}")
         return facts
 
     def build_handoff(state: AgentState) -> dict:
