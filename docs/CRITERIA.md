@@ -2,7 +2,7 @@
 
 [Índice](README.md) · [Workflow](WORKFLOW.md) · [Arquitectura](ARCHITECTURE.md) · [Datos](DATA.md) · [API](API.md)
 
-Lo que el reto exige, extraído de `doc/Factored AI & Data Hackathon 2026.md` y `doc/Datathon_2026_Kickoff.pdf`, y en qué estado está cada ítem. Cada ítem cumplido dice dónde está la evidencia. **Se actualizó el 2026-10-04 contra el código y los documentos de esta carpeta.**
+Lo que el reto exige, extraído de `docs/challenge/Factored AI & Data Hackathon 2026.md` y `docs/challenge/Datathon_2026_Kickoff.pdf`, y en qué estado está cada ítem. Cada ítem cumplido dice dónde está la evidencia. **Se actualizó el 2026-10-04 contra el código y los documentos de esta carpeta.**
 
 ## De un vistazo
 

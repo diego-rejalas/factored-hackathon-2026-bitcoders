@@ -44,7 +44,7 @@ Todo está en [`docs/`](docs/README.md).
 | [Desarrollo local](docs/LOCAL_DEV.md) | Ejecutarlo en tu máquina |
 | [Onboarding](docs/ONBOARDING.md) | Conectarse a la base de datos de GCP (equipo) |
 
-El enunciado del reto está en [`doc/`](doc/) (material del organizador, no se edita).
+El enunciado del reto está en [`docs/challenge/`](docs/challenge/) (material del organizador, no se edita).
 
 ## Estructura
 

@@ -1,6 +1,6 @@
 # Documentación
 
-Asistente de disputas de transacciones de LATAM Bank, para el Factored AI & Data Hackathon 2026 (equipo bitcoders). Esta carpeta es la única de documentación del repositorio. El enunciado del reto está en [`../doc/`](../doc/) y no se edita.
+Asistente de disputas de transacciones de LATAM Bank, para el Factored AI & Data Hackathon 2026 (equipo bitcoders). Esta carpeta es la única de documentación del repositorio. El enunciado del reto está en [`challenge/`](challenge/) y no se edita.
 
 ## Por dónde empezar
 
