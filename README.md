@@ -17,7 +17,10 @@ Todo está en [`docs/`](docs/README.md).
 | [Arquitectura](docs/ARCHITECTURE.md) | Cómo está construido y desplegado en GCP |
 | [Datos](docs/DATA.md) | Qué dice el dataset y sus limitaciones |
 | [API](docs/API.md) | Contrato entre la interfaz, el agente y el backend |
+| [Evaluación](docs/EVALUATION.md) | Cómo se midió el sistema y con qué resultados |
+| [Componentes de ML](docs/ML_FINDINGS.md) | Clasificación de intención y ranking de transacciones frente a sus líneas base (`ml/eval/`) |
 | [Seguridad](docs/SECURITY.md) | Controles y hallazgos de Checkov y Trivy |
+| [Ruta a producción](docs/PRODUCTION.md) | Qué existe y qué falta para producción real |
 | [Criterios](docs/CRITERIA.md) | Qué pide el reto y qué falta |
 | [Desarrollo local](docs/LOCAL_DEV.md) | Ejecutarlo en tu máquina |
 
@@ -31,6 +34,8 @@ El enunciado del reto está en [`doc/`](doc/) (material del organizador, no se e
 | `agent/` | Agente conversacional: LangGraph, guardrail determinista, trazas e historial |
 | `frontend/` | Next.js: chat del cliente y consola `/admin` |
 | `data/` | Pipeline: etapas en `pipeline/` y proyecto dbt en `dbt/` |
+| `ml/eval/` | Conjuntos retenidos y evaluación de los componentes de ML (intención y ranking de transacciones) |
+| `agent/eval/` | Evaluación del sistema de punta a punta y del clasificador de intención |
 | `infra/gcp/` | Terraform por ambiente (`dev`, `qa`, `prod`) y módulos |
 | `infra/airflow-gcp/` | Imagen y DAG de Airflow que corre en la VM |
 | `docs/` | Documentación y diagramas |

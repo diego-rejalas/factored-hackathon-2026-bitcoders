@@ -1,6 +1,8 @@
-from copy import deepcopy
+"""Build the banking customer-service conversation graph and policy flow."""
+
 import asyncio
 import time
+from copy import deepcopy
 from typing import TypedDict
 
 try:
@@ -11,21 +13,24 @@ except ImportError:  # pragma: no cover
 from langgraph.graph import END, START, StateGraph
 
 import app.grounding as grounding
-import app.guardrail as guardrail
-import app.intents as intents
-import app.replies as replies
+from app import guardrail, intents, ranking, replies
 from app.tools import ToolError
 
 REASON_CODE = "unrecognized_charge"
 
 
 class AgentState(TypedDict, total=False):
+    """Store graph inputs and per-turn decision, candidate, and reply state."""
+
     session_token: str
     message: str
     conversation_id: str
     run_id: str
     language: str
     intent: str
+    intent_confidence: float | None
+    intent_source: str | None
+    intent_abstain: bool
     entities: dict
     route: str
     reason: str | None
@@ -56,36 +61,54 @@ def _elapsed(start: float) -> int:
 
 
 def build_graph(tools, tracer, llm=None):
-    """understand -> decide (deterministic guardrail) -> act -> verify ->
-    escalate/respond. Control flow lives in code; the LLM only drafts the
-    final reply from verified facts."""
+    """Build and compile the customer-service conversation graph.
+
+    The deterministic guardrail controls understand, decide, act, and verify;
+    the LLM only drafts the final response from verified facts.
+    """
 
     async def understand(state: AgentState) -> dict:
         start = time.monotonic()
         message = state["message"]
-        language = replies.detect_language(message)
         # Classification and a second look for fraud run together, so the second look costs no extra waiting. It can
         # only make the agent more cautious: a "yes" hands over to a person, a "no" or a failure leaves the keyword
         # rule as it was. It also applies to "out of scope": a leaked password or a phishing link is not a loan
         # request, it is a security matter a person must see, and a decline would leave the customer with nothing.
-        if llm is not None and llm.enabled and not guardrail.mentions_fraud(message):
-            intent, fraud = await asyncio.gather(intents.classify(message, llm), llm.flags_fraud(message))
-            if fraud and intent in ("dispute", "out_of_scope"):
-                intent = "fraud_report"
+        second_look = getattr(llm, "flags_fraud", None)  # a model without it (a test double) just skips the look
+        if llm is not None and llm.enabled and second_look is not None and not guardrail.mentions_fraud(message):
+            classification, fraud = await asyncio.gather(intents.classify_detailed(message, llm), second_look(message))
         else:
-            intent = await intents.classify(message, llm)
+            classification, fraud = await intents.classify_detailed(message, llm), None
+        intent = classification["intent"]
+        # The replies exist in Spanish and Portuguese: a "mixed" reading from the model is settled by the text itself.
+        language = classification["language"] if classification["language"] in ("es", "pt") else replies.detect_language(message)
+        if fraud and intent in ("dispute", "out_of_scope"):
+            intent = "fraud_report"
         # A short "yes" answers the candidate proposed in the previous turn: it is part of the
         # dispute, whatever the classifier makes of two words.
         if state.get("proposed_id") and guardrail.is_affirmation(message):
             intent = "dispute"
+            classification["abstain"] = False
         await tracer.log(
             state["run_id"], state["conversation_id"], "understand",
-            intent=intent, params={"language": language}, latency_ms=_elapsed(start),
+            intent=intent,
+            params={
+                "language": language,
+                "intent_source": classification["source"],
+                "intent_confidence": classification["confidence"],
+                "intent_abstain": classification["abstain"],
+                "intent_prompt_version": classification["prompt_version"],
+                "classifier_latency_ms": classification["classifier_latency_ms"],
+            },
+            latency_ms=_elapsed(start),
         )
         continuing_dispute = intent == "dispute"
         return {
             "language": language,
             "intent": intent,
+            "intent_confidence": classification["confidence"],
+            "intent_source": classification["source"],
+            "intent_abstain": classification["abstain"],
             "entities": guardrail.extract_entities(message),
             # Clear per-turn results from the previous checkpoint. Only case-status
             # requests intentionally reuse the last case; dispute clarification keeps
@@ -121,8 +144,10 @@ def build_graph(tools, tracer, llm=None):
             raise
 
     async def fetch_candidates(state: AgentState, entities: dict) -> list:
-        """Every status, not only Declined/Reversed: a charge that was approved is exactly the
-        one a customer disputes as unrecognized, and it must never be invisible to the agent."""
+        """List all statuses so disputed posted charges remain visible.
+
+        An approved charge may be the exact transaction the customer disputes.
+        """
         token = state["session_token"]
         days = entities.get("days")
         merged: list = []
@@ -143,6 +168,12 @@ def build_graph(tools, tracer, llm=None):
             if selected is not None:
                 decision["candidate"] = selected
             return decision
+
+        # El clasificador se abstuvo (confianza bajo INTENT_MIN_CONFIDENCE):
+        # regla de código, nunca del modelo. Siempre después del override de fraude.
+        if state.get("intent_abstain"):
+            await tracer.log(state["run_id"], state["conversation_id"], "decide", intent=intent, result_status="escalate", params={"reason": "intent_low_confidence", "confidence": state.get("intent_confidence")}, latency_ms=_elapsed(start))
+            return {"intent": intent, "route": "escalate", "reason": "intent_low_confidence", "outcome": "escalated"}
 
         if intent == "out_of_scope":
             # Declined, not escalated: there is no case and no handoff behind it, so claiming that "a person continues
@@ -185,9 +216,13 @@ def build_graph(tools, tracer, llm=None):
                 pool = [tx for tx in candidates if tx.get("transaction_id") == proposed]
             else:
                 pool = guardrail.narrow_candidates(candidates, message, entities)
+                # The ranker only orders an ambiguous pool (which options are offered first); 0, 1 or 2+ and all the
+                # policy remain narrow_candidates.
+                if len(pool) > 1:
+                    pool = ranking.rank_candidates(message, pool)
 
         if len(pool) != 1:
-            await tracer.log(state["run_id"], state["conversation_id"], "decide", intent=intent, result_status="clarify", params={"candidates": len(pool)}, latency_ms=_elapsed(start))
+            await tracer.log(state["run_id"], state["conversation_id"], "decide", intent=intent, result_status="clarify", params={"candidates": len(pool), "ranked_by": "weighted_v1" if len(pool) > 1 else None}, latency_ms=_elapsed(start))
             return {
                 "intent": intent,
                 "route": "respond",
@@ -338,6 +373,7 @@ def build_graph(tools, tracer, llm=None):
             "amount_unknown",
             "posted_charge_disputed",
             "ambiguity_unresolved",
+            "intent_low_confidence",
         }:
             candidate = state.get("candidate") or {}
             transaction_id = candidate.get("transaction_id")

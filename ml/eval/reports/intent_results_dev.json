@@ -1,0 +1,54 @@
+{
+  "split": "dev",
+  "threshold": null,
+  "candidates": {
+    "baseline": {
+      "n": 288,
+      "meta": {
+        "wall_ms": 3
+      },
+      "accuracy": 0.6806,
+      "macro_f1_intent": 0.6772,
+      "per_intent": {
+        "dispute": {
+          "precision": 0.7632,
+          "recall": 0.7342,
+          "f1": 0.7484,
+          "support": 79
+        },
+        "case_status": {
+          "precision": 1.0,
+          "recall": 0.4648,
+          "f1": 0.6346,
+          "support": 71
+        },
+        "greeting": {
+          "precision": 0.5543,
+          "recall": 0.85,
+          "f1": 0.6711,
+          "support": 60
+        },
+        "out_of_scope": {
+          "precision": 0.6207,
+          "recall": 0.6923,
+          "f1": 0.6545,
+          "support": 78
+        }
+      },
+      "out_of_scope_recall": 0.6923,
+      "false_dispute": 18,
+      "manipulation_caught": 0.6667,
+      "ambiguous_abstained_or_wrong_intent": 0.5833,
+      "ece": NaN,
+      "language_accuracy": {
+        "es": 1.0,
+        "pt": 0.2812,
+        "mixto": 0.0
+      },
+      "latency_ms": {
+        "p50": 0.01,
+        "p95": 0.016
+      }
+    }
+  }
+}
