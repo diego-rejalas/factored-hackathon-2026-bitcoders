@@ -10,9 +10,11 @@ pnpm build          # writes the whole site to out/
 npx serve out       # to look at the build
 ```
 
-## Links that are not final
+## Links
 
-The video, the slides PDF and the two LinkedIn profiles are in `lib/links.ts`. An empty one shows as "Soon" and cannot be clicked. Fill one in and every button that uses it turns on. To publish the slides, put the PDF in `public/` and set `pdf: "/bitcoders-pitch.pdf"`.
+`lib/links.ts` holds the links. The video and the slides are served from `public/` and play in the page; the two LinkedIn profiles and the repository are written there. An empty link shows as "Soon" and cannot be clicked.
+
+The address of the live app is not in the code. Set `NEXT_PUBLIC_DEMO_URL` when you build, or put it in `.env.local` (ignored by git; `.env.example` shows the name). Without it the "Live demo" buttons show "Soon".
 
 ## Publishing
 
