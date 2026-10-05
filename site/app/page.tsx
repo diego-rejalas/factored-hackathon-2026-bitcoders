@@ -29,12 +29,12 @@ const big = "font-display font-bold leading-[0.9] tracking-[-0.045em]";
 const chip = "inline-flex min-h-11 min-w-11 items-center justify-center bg-white px-3 text-[1.05rem] font-medium hover:bg-ink hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2";
 
 const slides = [
-  { src: slide1, title: "Fast where it is safe, human where it matters." },
-  { src: slide2, title: "It is eleven at night. A charge you do not recognize." },
-  { src: slide3, title: "Answers in seconds. A person where it matters." },
+  { src: slide1, title: "LATAM Bank dispute assistant" },
+  { src: slide2, title: "Most disputes are simple. A few are fraud." },
+  { src: slide3, title: "A customer writes in Spanish or Portuguese" },
   { src: slide4, title: "The model helps. The rules decide." },
-  { src: slide5, title: "How it works: three decisions" },
-  { src: slide6, title: "Measured, and honest about it" },
+  { src: slide5, title: "What we measured: 372 of 372" },
+  { src: slide6, title: "A prototype on synthetic data" },
 ];
 
 const screens = [
@@ -177,7 +177,7 @@ export default function Home() {
                 downloadHref={FILES.video}
                 size="18 MB"
               />
-              <SlideViewer slides={slides} deckHref={FILES.deck} size="1.7 MB" />
+              <SlideViewer slides={slides} deckHref={FILES.deck} size="110 KB" />
             </div>
           </div>
         </section>
