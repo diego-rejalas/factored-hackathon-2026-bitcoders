@@ -1,9 +1,12 @@
-# Guía de Conexión y Onboarding para el Equipo (GCP & Datos)
-> **Nota (2026-10-02):** estos nombres (`factored-hackathon`, `us-central1`) son los del stack desplegado **antes** de separar el IaC en `envs/dev|qa|prod`. Los ambientes nuevos usan `factored-<ambiente>` y `us-east4`; los scripts aceptan `ENVIRONMENT=dev` (por defecto) o `INSTANCE=` y `REGION=` explícitos.
-> **Proyecto:** `bitcoders-factored-hackathon` | **Región:** `us-central1`  
-> **Hackathon:** Factored AI & Data Hackathon 2026
+# Onboarding del equipo: acceso a GCP y a los datos
 
-Bienvenido al entorno de desarrollo en Google Cloud Platform (GCP). Esta guía te explica paso a paso cómo autenticarte y conectarte a la base de datos PostgreSQL, al Data Lakehouse en Cloud Storage y a los servicios en Cloud Run.
+[Índice](README.md) · [Arquitectura](ARCHITECTURE.md) · [Despliegue](DEPLOY.md)
+
+> **Proyecto:** `bitcoders-factored-hackathon` · **Región:** `us-east4` · **Ambiente:** `prod` (`dev` y `qa` usan el mismo esquema de nombres: `factored-<ambiente>`).
+>
+> Los scripts de `infra/gcp/scripts/` toman `ENVIRONMENT=dev|qa|prod` (por defecto `dev`). Para `prod`, anteponlo: `ENVIRONMENT=prod ./infra/gcp/scripts/...`.
+
+Cómo autenticarte y llegar a la base de datos PostgreSQL, al lakehouse en Cloud Storage y a los servicios de Cloud Run. Quien da los accesos es el dueño del proyecto (`infra/gcp/scripts/grant_access.sh`).
 
 ---
 
@@ -12,7 +15,7 @@ Bienvenido al entorno de desarrollo en Google Cloud Platform (GCP). Esta guía t
 Instala las siguientes herramientas básicas (si aún no las tienes):
 1. **Google Cloud CLI (`gcloud`):** [Instrucciones de instalación](https://cloud.google.com/sdk/docs/install).
 2. **Cliente de Base de Datos:** [DBeaver](https://dbeaver.io/) (recomendado), DataGrip, pgAdmin o `psql`.
-3. **Cloud SQL Auth Proxy (Recomendado para conectar sin abrir IPs):**
+3. **Cloud SQL Auth Proxy** (solo para `dev`; en `prod` la base es privada):
    * **macOS (Homebrew):** `brew install cloud-sql-proxy`
    * **Linux:**
      ```bash
@@ -24,7 +27,8 @@ Instala las siguientes herramientas básicas (si aún no las tienes):
 
 ---
 
-## 2. Paso 1: Autenticación en Google Cloud
+
+## 2. Autenticación en Google Cloud
 
 Abre tu terminal y autentícate con la cuenta de Google (Gmail) a la que se le dio acceso:
 
@@ -41,57 +45,37 @@ gcloud config set project bitcoders-factored-hackathon
 
 ---
 
-## 3. Paso 2: Verificar o Reanudar la Base de Datos
+## 3. La base de datos (`data`)
 
-Para minimizar costos, Cloud SQL utiliza **Hibernación Just-in-Time**. Si la base de datos estuvo en reposo, debes reanudarla antes de conectarte:
+En `prod` Cloud SQL tiene **solo IP privada**: no hay IP pública ni lista de redes autorizadas, así que el Auth Proxy desde tu computadora **no llega**. Se entra por la VM de Airflow, que está dentro de la red y a la que se llega por IAP (sin IP externa).
 
 ```bash
-# Comprobar estado:
-./infra/gcp/scripts/manage_db.sh status
+# 1. Enciende la VM (se apaga sola a las 03:00) y espera ~1 minuto
+ENVIRONMENT=prod ./infra/gcp/scripts/airflow_vm.sh start
 
-# Si activationPolicy está en NEVER, reactívala (tarda ~60 segundos):
-./infra/gcp/scripts/manage_db.sh resume
+# 2. Una consulta desde el contenedor del scheduler, que ya tiene las credenciales del pipeline
+gcloud compute ssh factored-prod-airflow --zone us-east4-a --project bitcoders-factored-hackathon \
+    --tunnel-through-iap --command "sudo docker exec airflow-scheduler-1 python -c \"import os,psycopg2; c=psycopg2.connect(host=os.environ['PG_HOST'],dbname=os.environ['PG_DATABASE'],user=os.environ['PG_USER'],password=os.environ['PG_PASSWORD'],sslmode='require'); cur=c.cursor(); cur.execute('select count(*) from gold.transactions'); print(cur.fetchone())\""
+
+# 3. Al terminar
+ENVIRONMENT=prod ./infra/gcp/scripts/airflow_vm.sh stop
 ```
+
+Esa cuenta es la del pipeline (escribe `gold`): úsala solo para consultar. Un cliente gráfico (DBeaver, DataGrip) no llega a la base en `prod`; para explorar datos sin tocar la VM, usa el lakehouse (apartado 4).
+
+Si el dueño del proyecto te dio acceso a `dev`, esa base y sus scripts (`manage_db.sh`) siguen su propia configuración: pregúntale cómo se entra.
+
+#### Esquemas
+* `gold.*`: tablas de negocio para el servicio (`customers`, `products`, `transactions`, `complaints`, `call_center_interactions`).
+* `ops.etl_runs`: historial de corridas del pipeline.
+* `agent.trace_log` y `agent.conversation_messages`: traza del agente (sin texto del cliente) e historial de conversaciones.
+* `app.*`: casos de disputa y sus eventos.
 
 ---
 
-## 4. Paso 3: Conexión a Cloud SQL PostgreSQL (`data`)
+## 4. El lakehouse (Cloud Storage, Parquet)
 
-### Método Recomendado: Cloud SQL Auth Proxy
-
-El Proxy crea un túnel cifrado local seguro directamente con la instancia sin necesidad de configurar redes públicas.
-
-1. **Inicia el proxy en una pestaña de tu terminal:**
-   ```bash
-   cloud-sql-proxy bitcoders-factored-hackathon:us-central1:factored-hackathon
-   ```
-   *Verás un mensaje indicando que el proxy está escuchando en `127.0.0.1:5432`.*
-
-2. **Configura tu cliente de base de datos (DBeaver / DataGrip / psql):**
-   * **Host:** `127.0.0.1` o `localhost`
-   * **Puerto:** `5432`
-   * **Database:** `data`
-   * **Usuario:** Tu usuario asignado (ej. `tu_nombre` o `postgres`)
-   * **Contraseña:** Tu contraseña asignada
-
-#### Ejemplo de conexión rápida con `psql`:
-```bash
-psql "host=127.0.0.1 port=5432 dbname=data user=TU_USUARIO"
-```
-
-#### Esquemas disponibles en la base de datos:
-* `gold.*` ➔ Tablas de negocio limpias y optimizadas para servicio (`customers`, `products`, `transactions`, `complaints`, etc.).
-* `ops.etl_runs` ➔ Historial de corridas de ETL con métricas y resultados de calidad.
-* `agent.trace_log` ➔ Logs de auditoría de cada paso del agente conversacional.
-
----
-
-## 5. Paso 4: Consulta al Data Lakehouse (GCS Parquet)
-
-Las capas **Bronze** (datos crudos) y **Silver** (datos estandarizados y tipados) están preservadas en formato columnar **Parquet con compresión ZSTD** en el bucket de Google Cloud Storage:
-`gs://factored-lakehouse-bitcoders-factored-hackathon`
-
-Puedes consultarlas directamente desde tu máquina con **DuckDB en Python** sin descargar gigabytes de archivos:
+**Bronze** (datos crudos) y **Silver** (estandarizados y tipados) están en Parquet con compresión ZSTD en `gs://factored-prod-lakehouse-bitcoders-factored-hackathon` (`bronze/<tabla>/`, `silver/<tabla>/` y `docs/`). No necesita la VM ni la base: lo lees desde tu máquina con DuckDB.
 
 ```python
 import duckdb
@@ -100,49 +84,36 @@ con = duckdb.connect()
 con.execute("INSTALL httpfs; LOAD httpfs;")
 con.execute("CREATE SECRET (TYPE GCS, PROVIDER CREDENTIAL_CHAIN);")
 
-# Consultar capa Silver (Clientes activos)
-df_customers = con.execute("""
-    SELECT * 
-    FROM 'gs://factored-lakehouse-bitcoders-factored-hackathon/silver/customers/customers.parquet'
-    LIMIT 5
-""").df()
-print(df_customers)
-
-# Consultar transacciones con particionado tipo Hive
-df_tx = con.execute("""
-    SELECT transaction_id, customer_id, amount, year, month, day
-    FROM read_parquet('gs://factored-lakehouse-bitcoders-factored-hackathon/silver/transactions/*/*/*/*.parquet', hive_partitioning=true)
-    WHERE amount > 500
-    LIMIT 10
-""").df()
-print(df_tx)
+bucket = "gs://factored-prod-lakehouse-bitcoders-factored-hackathon"
+print(con.execute(f"SELECT * FROM '{bucket}/silver/customers/customers.parquet' LIMIT 5").df())
+print(con.execute(f"SELECT * FROM read_parquet('{bucket}/silver/transactions/**/*.parquet') LIMIT 5").df())
 ```
 
 ---
 
-## 6. Paso 5: Microservicios en la Nube (Cloud Run)
+## 5. Los servicios (Cloud Run)
 
-Los servicios de backend, agente y frontend están desplegados en Cloud Run:
+La interfaz y el agente salen por el balanceador (Cloud Armor delante); el backend es **privado** (solo el agente lo llama, con su identidad).
 
-| Servicio | URL Pública / Endpoint | Propósito |
-| :--- | :--- | :--- |
-| **Frontend Chat** | `https://frontend-127503393524.us-central1.run.app` | Interfaz web de usuario para simulación de chat. |
-| **Agente AI (LangGraph)** | `https://agent-127503393524.us-central1.run.app` | Orquestador conversacional y guardrails (`POST /chat`). |
-| **Backend Bancario** | `https://backend-127503393524.us-central1.run.app` | API de herramientas bancarias con OpenAPI docs en `/docs`. |
-
-Para ver logs de ejecución en tiempo real desde tu consola:
 ```bash
-gcloud beta run services logs tail agent --region=us-central1
-gcloud beta run services logs tail backend --region=us-central1
+cd infra/gcp/envs/prod && terraform output edge_url      # https://<dominio>/  y  /agent/*
+gcloud beta run services logs tail factored-prod-agent --region us-east4 --project bitcoders-factored-hackathon
+gcloud beta run services logs tail factored-prod-backend --region us-east4 --project bitcoders-factored-hackathon
 ```
+
+| Servicio | Cómo se llega | Qué es |
+|---|---|---|
+| `factored-prod-frontend` | `/` del balanceador | Chat del cliente y consola `/admin` |
+| `factored-prod-agent` | `/agent/*` del balanceador (`POST /agent/chat`) | Agente y guardrail |
+| `factored-prod-backend` | Privado (token de identidad) | API de herramientas bancarias |
 
 ---
 
-## 7. Preguntas Frecuentes y Solución de Problemas
+## 6. Preguntas Frecuentes y Solución de Problemas
 
 * **Error: `connection refused` o timeout al conectar a PostgreSQL:**
-  * Asegúrate de que el Cloud SQL Proxy esté corriendo en una terminal.
-  * Verifica si la base de datos está hibernada (`./infra/gcp/scripts/manage_db.sh status`). Si está en `NEVER`, ejecuta `./infra/gcp/scripts/manage_db.sh resume`.
+  * En `dev`, asegúrate de que el Cloud SQL Proxy esté corriendo en una terminal.
+  * En `dev`, mira si la base está hibernada (`./infra/gcp/scripts/manage_db.sh status`; si está en `NEVER`, `resume`). En `prod` no se llega con el proxy: ver el apartado 3.
 * **Error: `password authentication failed for user`:**
   * Revisa que estés ingresando el usuario y contraseña exactos que te proporcionaron en el aprovisionamiento.
 * **Error: `Bucket not found` al consultar en GCS:**
