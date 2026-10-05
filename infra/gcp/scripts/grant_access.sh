@@ -134,4 +134,4 @@ echo -e "${GREEN}===============================================================
 echo -e "Las credenciales y detalles individuales se guardaron en:"
 echo -e "👉 ${YELLOW}${CREDENTIALS_FILE}${NC} (Este archivo está en .gitignore para seguridad)."
 echo -e "\nPuedes compartir con tu equipo la guía de conexión en:"
-echo -e "👉 ${BLUE}infra/gcp/docs/TEAM_ONBOARDING.md${NC}\n"
+echo -e "👉 ${BLUE}docs/ONBOARDING.md${NC}\n"

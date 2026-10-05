@@ -42,6 +42,7 @@ Todo está en [`docs/`](docs/README.md).
 | [Despliegue](docs/DEPLOY.md) | Desplegar a producción, paso a paso |
 | [Criterios](docs/CRITERIA.md) | Qué pide el reto y qué falta |
 | [Desarrollo local](docs/LOCAL_DEV.md) | Ejecutarlo en tu máquina |
+| [Onboarding](docs/ONBOARDING.md) | Conectarse a la base de datos de GCP (equipo) |
 
 El enunciado del reto está en [`doc/`](doc/) (material del organizador, no se edita).
 
