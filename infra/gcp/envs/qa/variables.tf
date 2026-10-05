@@ -215,6 +215,12 @@ variable "edge_domain" {
   default     = ""
 }
 
+variable "edge_additional_domains" {
+  description = "Extra domains for the load balancer, each with its own certificate next to the main one. The names are not written in the repository: the deploy workflow reads them from the repository variable EDGE_ADDITIONAL_DOMAINS."
+  type        = list(string)
+  default     = []
+}
+
 variable "edge_lockdown" {
   description = "Send the browser through the load balancer and make the frontend and the agent accept traffic only from it. Turn on once the load balancer answers over HTTPS: its managed certificate takes 15 to 60 minutes to become active, and until then the load balancer cannot serve the application."
   type        = bool
