@@ -99,18 +99,21 @@ Lo abierto, en orden de impacto: el **despliegue** de esta versión y la **entre
 - [ ] Repo público de GitHub: `factored-hackathon-2026-[nombre del equipo]`. **⚠️ El repo `factored-hackathon-2026-bitcoders` está en privado ahora mismo (decisión deliberada durante desarrollo) — volverlo público antes de entregar, o confirmar con el organizador si aceptan invitación como colaborador en su lugar.**
 - [ ] Link donde el tool está desplegado (deploy real, no solo local).
 - [ ] Presentación de 4-6 slides con detalles del tool.
-- [ ] Video pitch corto (obligatorio) demostrando la solución funcionando y explicando decisiones arquitectónicas core.
+- [ ] Video pitch (obligatorio) de **no más de 3 minutos**, demostrando la solución funcionando y explicando decisiones arquitectónicas core. (La página del reto fija el límite en 3 minutos.)
 - [ ] Enviar todo a hackathon.admin@factored.ai.
 - [ ] "Submit your tool no matter what!!!" — entregar aunque esté incompleto.
 
-## Criterios de evaluación (slide "Evaluation Criteria")
+## Criterios de evaluación (slide "Evaluation Criteria" y página del reto)
 
 - Ante todo, la solución debe funcionar.
 - Racional y documentación general del proyecto.
-- **AI Engineering:** backend, frontend, deployment.
-- **Data Engineering:** cómo se maneja extracción y transformación de datos.
-- **Data Analytics:** calidad de datos, insights relevantes que la solución entrega.
-- **Machine Learning:** selección de modelo, optimización, implementación, tracking.
+- **Technical Judgment:** arquitectura, trade-offs, confiabilidad, seguridad y preparación para producción. ([Arquitectura](ARCHITECTURE.md), [Seguridad](SECURITY.md), [Ruta a producción](PRODUCTION.md))
+- **AI Engineering:** backend, frontend, integración del sistema y despliegue.
+- **Data Engineering:** calidad, pipelines, preparación y reproducibilidad de los datos.
+- **Machine Learning:** modelado, evaluación, líneas base y rendimiento. ([Evaluación](EVALUATION.md), [Componentes de ML](ML_FINDINGS.md))
+- **Data Analytics:** métricas, insights, visualización y apoyo a la decisión. (Métricas y bandeja de la consola `/admin`, [Datos](DATA.md), `/data-docs`.)
+
+Otras reglas de la página del reto: español y portugués obligatorios, un solo workflow, equipos de **hasta 4 personas**, y cualquier lenguaje, framework, modelo o nube. El período del reto termina el **5 de octubre**; la página no da hora ni zona horaria.
 
 ## Datos que condicionan la evaluación
 
