@@ -1,3 +1,5 @@
+"""Deterministic parsing and policy checks for transaction disputes."""
+
 import os
 import re
 import unicodedata
@@ -79,15 +81,18 @@ GUARDRAIL_LIMITATIONS = {
     "verify_failed": "could not re-verify the case after acting",
     "amount_unknown": "effective USD amount is unknown (no conversion), so the threshold cannot be checked",
     "posted_charge_disputed": "the disputed charge is Approved or Pending: money may have moved, so a person decides",
+    "intent_low_confidence": "intent classifier confidence below INTENT_MIN_CONFIDENCE — the agent abstains and escalates",
 }
 
 
 def normalize(text: str) -> str:
+    """Normalize case and accents for keyword matching."""
     text = unicodedata.normalize("NFD", text.lower())
     return "".join(c for c in text if unicodedata.category(c) != "Mn")
 
 
 def max_usd() -> float:
+    """Return the configured escalation threshold in effective USD."""
     try:
         return float(os.environ.get("GUARDRAIL_MAX_USD", DEFAULT_MAX_USD))
     except ValueError:
@@ -95,11 +100,13 @@ def max_usd() -> float:
 
 
 def mentions_fraud(message: str) -> bool:
+    """Detect fraud or theft keywords in the customer message."""
     msg = normalize(message)
     return any(keyword in msg for keyword in FRAUD_KEYWORDS)
 
 
 def effective_usd(transaction: dict) -> float:
+    """Return the effective USD amount, or zero when it is unavailable."""
     value = transaction.get("amount_usd_effective")
     try:
         return float(value) if value is not None else 0.0
@@ -108,8 +115,11 @@ def effective_usd(transaction: dict) -> float:
 
 
 def amount_known(transaction: dict) -> bool:
-    """False when the USD amount is missing or not a number. An unknown amount is never
-    treated as zero: the threshold cannot be checked, so the case escalates."""
+    """Return whether the effective USD amount is a parseable number.
+
+    An unknown amount is never treated as zero; the case must escalate because
+    the threshold cannot be checked.
+    """
     value = transaction.get("amount_usd_effective")
     if value is None:
         return False
@@ -121,6 +131,7 @@ def amount_known(transaction: dict) -> bool:
 
 
 def exceeds_threshold(transaction: dict) -> bool:
+    """Check whether the effective USD amount reaches the escalation limit."""
     return effective_usd(transaction) >= max_usd()
 
 
@@ -140,6 +151,7 @@ DAYS_RE = re.compile(r"hace\s+(\d+)\s+d[ií]as?|ha\s+(\d+)\s+dias?|last\s+(\d+)\
 
 
 def parse_number(raw: str) -> float:
+    """Parse a decimal amount in common US or Latin American notation."""
     if "," in raw and "." in raw:
         if raw.rfind(",") > raw.rfind("."):
             raw = raw.replace(".", "").replace(",", ".")
@@ -158,6 +170,7 @@ def parse_number(raw: str) -> float:
 
 
 def extract_entities(message: str) -> dict:
+    """Extract the largest mentioned amount and approximate date window."""
     entities: dict = {}
     stripped = DAYS_RE.sub(" ", NOT_AMOUNT_RE.sub(" ", message.lower()))
     numbers = [parse_number(m.group(0)) for m in AMOUNT_RE.finditer(stripped)]
@@ -172,8 +185,11 @@ def extract_entities(message: str) -> dict:
 
 
 def matches_amount(transaction: dict, amount: float, exact: bool = False) -> bool:
-    """Approximate by default (1% tolerance, the customer rarely remembers cents); exact=True
-    requires the amount to the cent."""
+    """Compare a transaction amount with a claim amount.
+
+    Use one-percent tolerance by default; ``exact=True`` requires a match to
+    the cent.
+    """
 
     def close(value):
         try:
@@ -187,12 +203,11 @@ def matches_amount(transaction: dict, amount: float, exact: bool = False) -> boo
 
 
 def narrow_candidates(candidates: list, message: str, entities: dict) -> list:
-    """Order-preserving narrowing. Returns:
-    - the candidates corroborated by merchant and/or amount mentions,
-    - [] when the message names specifics that match nothing (never fall back
-      to auto-resolving an unrelated transaction),
-    - the full candidate list when the message carries no specifics at all
-      (ambiguity resolved by asking, not by guessing)."""
+    """Return candidates supported by explicit merchant or amount mentions.
+
+    Preserve input order. Return an empty list for unmatched named specifics
+    and the full pool when the message provides no specifics.
+    """
     msg = normalize(message)
     merchant_hits = [
         tx
@@ -231,8 +246,10 @@ CAPITALIZED_RE = re.compile(
 
 
 def mentions_unknown_merchant(message: str, candidates: list) -> bool:
-    """True when the message names a capitalized multi-word place/merchant that
-    matches none of the candidates — a strong signal we must not guess."""
+    """Detect a named multiword merchant that matches no candidate.
+
+    Such a mention is a strong signal that the agent must not guess.
+    """
     known = {normalize(tx.get("merchant_name") or "") for tx in candidates}
     for match in CAPITALIZED_RE.finditer(message):
         if normalize(match.group(1)) not in known:
@@ -241,8 +258,7 @@ def mentions_unknown_merchant(message: str, candidates: list) -> bool:
 
 
 def guardrail_intent(message: str, intent: str) -> str:
-    """Deterministic intent-level override: fraud mention always escalates,
-    whatever the classifier said."""
+    """Override the classifier when the message mentions suspected fraud."""
     if mentions_fraud(message):
         return "fraud_report"
     return intent
@@ -257,9 +273,11 @@ AFFIRMATIONS = {
 
 
 def is_corroborated(transaction: dict, message: str, entities: dict) -> bool:
-    """True when the customer's own words identify this transaction: its merchant is named or
-    the amount they mention matches. A time window alone does not identify a transaction, and a
-    vague report must never be closed against whatever single candidate happens to exist."""
+    """Check whether the customer's words identify this transaction.
+
+    A named merchant or matching amount corroborates a candidate; a time
+    window or vague report alone never identifies it.
+    """
     msg = normalize(message)
     merchant = transaction.get("merchant_name")
     if merchant and normalize(merchant) in msg:
@@ -269,7 +287,7 @@ def is_corroborated(transaction: dict, message: str, entities: dict) -> bool:
 
 
 def is_affirmation(message: str) -> bool:
-    """A short yes: used to confirm the one candidate the agent just proposed."""
+    """Detect a short affirmative response confirming the proposed candidate."""
     words = normalize(message).replace(",", " ").replace(".", " ").replace("!", " ").split()
     if not words or len(words) > 5:
         return False

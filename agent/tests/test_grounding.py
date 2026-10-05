@@ -105,6 +105,9 @@ class FakeLLM:
     async def classify_intent(self, message):
         return None  # the keyword baseline decides
 
+    async def classify_detailed(self, message):
+        return None  # the keyword baseline decides
+
     async def flags_fraud(self, message):
         return False
 
@@ -183,6 +186,9 @@ class FraudLLM(FakeLLM):
     async def classify_intent(self, message):
         return "dispute"
 
+    async def classify_detailed(self, message):
+        return {"intent": "dispute", "language": None, "confidence": 0.95, "model": "fake", "prompt_version": "test", "usage": {}, "latency_ms": 1}
+
 
 NO_KEYWORD_FRAUD = "Fui roubada no ônibus e já tem compras que não reconheço"  # no word from the fraud list
 
@@ -210,6 +216,9 @@ def test_a_security_matter_the_classifier_calls_out_of_scope_still_reaches_a_per
     class OutOfScopeFraud(FraudLLM):
         async def classify_intent(self, message):
             return "out_of_scope"
+
+        async def classify_detailed(self, message):
+            return {"intent": "out_of_scope", "language": None, "confidence": 0.95, "model": "fake", "prompt_version": "test", "usage": {}, "latency_ms": 1}
 
     graph = build_graph(tools, NullTracer(), OutOfScopeFraud(True))
     result = run(graph, "Oi, minha senha foi vazada! Preciso trocar agora.")

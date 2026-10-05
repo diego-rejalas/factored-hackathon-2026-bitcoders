@@ -1,0 +1,3 @@
+{"case_id": "DSP-0052", "claim": "Tengo un cobro que no hice, a principios de mes", "noise_type": "date_vague", "language": "es", "label": "TXN-S000358", "ranking": ["TXN-S000361", "TXN-S000371"], "baseline_pool": 18}
+{"case_id": "DSP-0187", "claim": "Tem uma cobrança que não reconheço de 698,43", "noise_type": "combo", "language": "pt", "label": "TXN-S002481", "ranking": ["TXN-S002489", "TXN-S002492", "TXN-S002488", "TXN-S002481"], "baseline_pool": 0}
+{"case_id": "DSP-0339", "claim": "Reconheço uma cobrança que não fiz de 813.59", "noise_type": "merchant_missing", "language": "pt", "label": "TXN-S006924", "ranking": ["TXN-S006919", "TXN-S006923", "TXN-S006918", "TXN-S006924", "TXN-S006926"], "baseline_pool": 0}
