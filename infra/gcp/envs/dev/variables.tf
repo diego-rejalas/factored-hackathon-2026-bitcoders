@@ -146,8 +146,9 @@ variable "cors_allowed_origins" {
 }
 
 variable "openrouter_model" {
-  type    = string
-  default = "openai/gpt-4o-mini"
+  description = "The model the agent calls through OpenRouter. The one the evaluation measured (docs/EVALUATION.md); another model is a different system."
+  type        = string
+  default     = "anthropic/claude-haiku-4.5"
 }
 
 variable "guardrail_max_usd" {

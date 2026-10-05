@@ -14,6 +14,7 @@ Asistente de disputas de transacciones de LATAM Bank, para el Factored AI & Data
 | Ver cómo se midió el sistema y con qué resultados | [Evaluación](EVALUATION.md) |
 | Ver la evaluación de los componentes de ML (intención y ranking) | [Componentes de ML](ML_FINDINGS.md) |
 | Saber qué falta para producción real | [Ruta a producción](PRODUCTION.md) |
+| Desplegar a producción, paso a paso | [Despliegue](DEPLOY.md) |
 | Comprobar qué pide el reto y qué falta | [Criterios](CRITERIA.md) |
 | Ejecutarlo en tu máquina | [Desarrollo local](LOCAL_DEV.md) |
 
