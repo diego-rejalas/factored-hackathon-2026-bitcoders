@@ -59,22 +59,22 @@ export default function Home() {
     <>
       <a
         href="#main"
-        className="absolute -left-[999px] z-30 rounded-full bg-foreground px-4 py-2 text-background focus:left-4 focus:top-4"
+        className="absolute -left-[999px] z-30 inline-flex min-h-11 items-center rounded-full bg-foreground px-5 text-background focus:left-4 focus:top-4"
       >
         Skip to the content
       </a>
 
       <header className="sticky top-0 z-20 border-b border-border/60 bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex h-16 w-[min(1180px,100%-2.5rem)] items-center gap-6">
-          <a href="#top" className="flex items-center gap-3 font-semibold">
+          <a href="#top" className="flex min-h-11 items-center gap-3 rounded-lg font-semibold focus-visible:ring-2 focus-visible:ring-ring">
             <Image src={logo} alt="" width={30} height={30} className="rounded-lg bg-white" />
             LATAM Bank dispute assistant
           </a>
-          <nav aria-label="Main" className="ml-auto hidden gap-7 text-[0.95rem] text-muted-foreground md:flex">
-            <a className="transition-colors hover:text-foreground" href="#judgment">How it decides</a>
-            <a className="transition-colors hover:text-foreground" href="#product">The product</a>
-            <a className="transition-colors hover:text-foreground" href="#proof">The proof</a>
-            <a className="transition-colors hover:text-foreground" href="#team">Team</a>
+          <nav aria-label="Main" className="ml-auto hidden gap-5 text-[0.95rem] text-muted-foreground md:flex">
+            <a className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg px-2 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring" href="#judgment">How it decides</a>
+            <a className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg px-2 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring" href="#product">The product</a>
+            <a className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg px-2 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring" href="#proof">The proof</a>
+            <a className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg px-2 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring" href="#team">Team</a>
           </nav>
         </div>
       </header>
@@ -215,9 +215,9 @@ export default function Home() {
                     <div>
                       <b className="block">{p.name}</b>
                       {p.href ? (
-                        <a href={p.href} className="text-sm text-primary hover:underline">LinkedIn</a>
+                        <a href={p.href} className="inline-flex min-h-11 items-center text-sm text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring rounded-lg">LinkedIn</a>
                       ) : (
-                        <span className="text-sm text-muted-foreground">LinkedIn, soon</span>
+                        <span className="inline-flex min-h-11 items-center text-sm text-muted-foreground">LinkedIn, soon</span>
                       )}
                     </div>
                   </div>
