@@ -89,3 +89,17 @@ with Diagram(
     airflow >> Edge(label="registros", style="dotted", color="#9AA0A6") >> logs
     logs - Edge(style="invis") - mon
     iam - Edge(style="invis") - secrets
+
+
+# The library writes absolute paths to its icon files into the SVG, which break anywhere but this machine
+# (GitHub shows no icons). Embed them so the SVG is self-contained.
+import base64
+import pathlib
+import re
+
+_svg = pathlib.Path("gcp-architecture.svg")
+_svg.write_text(re.sub(
+    r'xlink:href="([^"]+\.png)"',
+    lambda m: 'xlink:href="data:image/png;base64,' + base64.b64encode(pathlib.Path(m.group(1)).read_bytes()).decode() + '"',
+    _svg.read_text(),
+))
