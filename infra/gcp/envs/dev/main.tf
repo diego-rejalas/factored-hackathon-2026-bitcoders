@@ -212,12 +212,13 @@ module "edge" {
   count  = var.enable_edge ? 1 : 0
   source = "../../modules/edge"
 
-  name             = local.prefix
-  project_id       = var.project_id
-  region           = var.region
-  frontend_service = module.frontend.name
-  agent_service    = module.agent.name
-  domain           = var.edge_domain
+  name               = local.prefix
+  project_id         = var.project_id
+  region             = var.region
+  frontend_service   = module.frontend.name
+  agent_service      = module.agent.name
+  domain             = var.edge_domain
+  additional_domains = var.edge_additional_domains
 
   depends_on = [module.foundation]
 }
