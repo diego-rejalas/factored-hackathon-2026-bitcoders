@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 // True only after the page has mounted and the visitor asked for reduced motion. The first render always matches the
 // server's HTML, so hydration stays clean.
-export function useCalm() {
+function useCalm() {
   const reduce = useReducedMotion();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
