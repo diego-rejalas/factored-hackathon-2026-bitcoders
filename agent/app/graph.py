@@ -375,9 +375,10 @@ def build_graph(tools, tracer, llm=None):
             candidate = state.get("candidate") or {}
             transaction_id = candidate.get("transaction_id")
             summary = (
-                f"Cliente solicita revisión humana ({state.get('reason')}); "
+                f"Cliente solicita revisión humana ({guardrail.REASON_LABELS_ES.get(state.get('reason') or '', 'revisión humana requerida')}); "
                 + (
-                    f"transacción {transaction_id} figura como {candidate.get('transaction_status')}."
+                    f"transacción {transaction_id} figura como "
+                    f"{guardrail.TRANSACTION_STATUS_ES.get(candidate.get('transaction_status') or '', candidate.get('transaction_status'))}."
                     if transaction_id
                     else "no se identificó una transacción única."
                 )
