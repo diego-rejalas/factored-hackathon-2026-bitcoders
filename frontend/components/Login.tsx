@@ -21,7 +21,7 @@ export default function Login({
 }: {
   agentUrl: string;
   sessionExpired: boolean;
-  onLogin: (token: string, firstName?: string) => void;
+  onLogin: (token: string, firstName?: string, language?: Language) => void;
 }) {
   const [customerId, setCustomerId] = useState("");
   const [documentNumber, setDocumentNumber] = useState("");
@@ -82,7 +82,7 @@ export default function Login({
         return;
       }
       const body = await response.json();
-      onLogin(body.session_token, firstName);
+      onLogin(body.session_token, firstName, language);
     } catch {
       setError(tr(language, "connectError"));
     } finally {
@@ -112,7 +112,7 @@ export default function Login({
 
         <form id="customer-login" className="auth-card" onSubmit={submit}>
           <div className="auth-brand auth-brand-small">
-            <span className="gpt-mark" aria-hidden="true">L</span>
+            <img className="gpt-mark" src="/factored-logo.png" alt="" aria-hidden="true" />
             <span>{ct(language, "brand")}</span>
           </div>
           <div className="auth-heading">

@@ -1704,10 +1704,9 @@ table.metrics-table tbody th {
   width: 1.9rem;
   height: 1.9rem;
   border-radius: 8px;
-  background: var(--g-mark);
-  color: #fff;
-  font-weight: 600;
-  font-size: 0.9rem;
+  object-fit: cover;
+  background: #fff;
+  box-shadow: 0 0 0 1px var(--g-line);
 }
 
 .gpt-mark-lg {
