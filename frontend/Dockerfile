@@ -19,5 +19,7 @@ ENV PORT=8080
 # AGENT_URL is runtime env (set by Terraform to the agent's Cloud Run URL) —
 # the same image can point at any environment.
 COPY --from=build /app/.next/standalone ./
+# Next's standalone output leaves public/ out on purpose: without this line every file in it answers 404 (the logo).
+COPY --from=build /app/public ./public
 COPY --from=build /app/.next/static ./.next/static
 CMD ["node", "server.js"]
