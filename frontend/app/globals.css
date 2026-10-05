@@ -2605,3 +2605,8 @@ table.metrics-table tbody th {
 .scenario-trigger .hint {
   display: none;
 }
+
+.mark-logo {
+  object-fit: cover;
+  background: #fff;
+}
