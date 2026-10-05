@@ -4,7 +4,7 @@
 
 This repository is an AI-first banking customer-service hackathon prototype. Read `doc/Factored AI & Data Hackathon 2026.md` before changing product behavior, then use `docs/CRITERIA.md`, `docs/DATA.md`, and `docs/ARCHITECTURE.md` as the implementation contract.
 
-- `infra/airflow-gcp/` holds the Airflow image and the DAG `latam_bank_gcp` that runs on the GCP VM; `infra/gcp/etl/` is the Cloud Run Job fallback. Shared pipeline stages live in `data/pipeline/`.
+- `infra/gcp/airflow/` holds the Airflow image and the DAG `latam_bank_gcp` that runs on the GCP VM; `infra/gcp/etl/` is the Cloud Run Job fallback. Shared pipeline stages live in `data/pipeline/`.
 - `data/dbt/` contains the dbt project (dbt-postgres): `models/staging/` builds `silver.*` and `models/gold/` supplies `gold.*` tables; custom tests live in `tests/`.
 - GCP infrastructure is Terraform in `infra/gcp/` (`envs/dev|qa|prod`, shared `modules/`). Preview with `terraform plan`; the user runs privileged `apply`s. The Railway stack was removed (see git history).
 - `backend/` (FastAPI tool layer, read-only database role), `agent/` (LangGraph) and `frontend/` (Next.js, Cloud Run) are implemented. Follow their README contracts.

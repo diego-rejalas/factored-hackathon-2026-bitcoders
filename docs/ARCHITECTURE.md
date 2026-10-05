@@ -51,7 +51,7 @@ Todo es Terraform en `infra/gcp/`, en tres ambientes (`dev`, `qa`, `prod`) con m
 
 **Responsabilidad:** llevar los CSV del organizador (S3) hasta tablas consultables, sin perder lo crudo, y dejar `gold` listo para el backend.
 
-Airflow 3 corre en la VM (`infra/airflow-gcp/`, DAG `latam_bank_gcp`). Cada corrida:
+Airflow 3 corre en la VM (`infra/gcp/airflow/`, DAG `latam_bank_gcp`). Cada corrida:
 
 1. DuckDB lee los CSV de S3 en paralelo, sin bajar archivos, y escribe **bronze** como Parquet en el lakehouse, con el objeto de origen (`_source_key`) y la hora de carga como linaje.
 2. dbt (`dbt-duckdb`, en la misma VM) construye **silver** y **gold** en RAM: tipos reales, vacío a nulo, países conformados, y las pruebas de datos.
