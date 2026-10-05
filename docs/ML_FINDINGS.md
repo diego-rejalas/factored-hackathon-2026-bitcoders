@@ -13,7 +13,7 @@ Documento para el ML engineer. Reúne lo que se midió sobre el dataset LATAM Ba
 - **No existen etiquetas de "qué transacción se disputó"**, ni transacciones duplicadas naturales, ni texto con intención real (los textos son plantillas, 100% español, sin portugués). Todo lo que dependa de eso exige datos generados por el equipo.
 - **Propuesta**: componentes evaluables con etiquetas válidas por construcción (set generado por el equipo, rotulado como tal): (A) clasificación de intención e idioma, es/pt, con confianza y abstención; (B) identificación de la transacción disputada a partir de una descripción libre; (C) prioridad calibrada por motivo de contacto como señal secundaria. **Ejecutado (2026-10-04, §12)**: A y B medidos contra baseline sobre set retenido propio; A integrado con abstención (LLM pendiente de clave), B integrado solo como ordenamiento del pool ambiguo. Jev de TypeSafe queda como stub defensivo sin evaluar (sin clave; descartado por medición cuando exista).
 
-## 2. Lo que pide el reto (`doc/Factored AI & Data Hackathon 2026.md`)
+## 2. Lo que pide el reto (`docs/challenge/Factored AI & Data Hackathon 2026.md`)
 
 - Línea 23: elegir un problema acotado, usar los datos para explicar por qué importa, **establecer una línea base** y medir si el enfoque mejora calidad de servicio y eficiencia operativa.
 - Línea 46 (criterio 4, "datos y ML sólidos"): pipeline repetible con contratos, chequeos de calidad, linaje y política de frescura. **Evaluar al menos un componente aprendido contra una línea base apropiada.** Usar etiquetas o juicios de relevancia válidos y prevenir la fuga.
