@@ -1,47 +1,49 @@
 @import "tailwindcss";
 
-/* The theme follows the system. Dark is the product's own look. Radius rule: pills for actions, 16px for surfaces. */
+/* Windows on coloured desks. Navy ink, a cyan taken from the team's logo, and a candy set that means something: mint is
+   "resolved", butter is "asks first", coral is "a person takes it". Every window has a hard offset shadow. Shape rule:
+   square corners, 2px navy lines. */
 :root {
-  --background: #0a1628;
-  --foreground: #f2f5fb;
-  --card: #142338;
-  --card-foreground: #f2f5fb;
-  --muted: #101f36;
-  --muted-foreground: #a3b2c8;
-  --border: #263954;
-  --primary: #7b97ff;
-  --primary-foreground: #0a1628;
-  --ring: #7b97ff;
-  --ok: #3ccf82;
-  --warn: #f2b04a;
-  --radius: 1rem;
-  --shadow-frame: 0 30px 80px rgb(2 8 20 / 0.55);
-  color-scheme: dark light;
+  --ink: #10173a;
+  --cyan: #52d9f2;
+  --lilac: #cdbdff;
+  --mint: #b6efcf;
+  --butter: #ffe48f;
+  --coral: #ff9f89;
+  --paper: #fbfbff;
+  --win: #e7edf8;
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: #ffffff;
+  --muted: #eef1fb;
+  --muted-foreground: #3b4570;
+  --border: var(--ink);
+  --primary: var(--ink);
+  --primary-foreground: #ffffff;
+  --ring: var(--ink);
+  --ok: #0b7a44;
+  --warn: #8f4a06;
+  color-scheme: light;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    --background: #f6f8fc;
-    --foreground: #0a1628;
-    --card: #ffffff;
-    --card-foreground: #0a1628;
-    --muted: #eaeff7;
-    --muted-foreground: #44546e;
-    --border: #d4dcea;
-    --primary: #2f4fd8;
-    --primary-foreground: #ffffff;
-    --ring: #2f4fd8;
-    --ok: #12834a;
-    --warn: #a65f08;
-    --shadow-frame: 0 30px 70px rgb(10 22 40 / 0.16);
-  }
+.on-cyan { --background: var(--cyan); --muted-foreground: #1c2860; background: var(--cyan); color: var(--ink); }
+.on-lilac { --background: var(--lilac); --muted-foreground: #2a2a72; background: var(--lilac); color: var(--ink); }
+.on-mint { --background: var(--mint); --muted-foreground: #17423a; background: var(--mint); color: var(--ink); }
+.on-butter { --background: var(--butter); --muted-foreground: #4d3a08; background: var(--butter); color: var(--ink); }
+
+/* Inside a window the tokens return to navy on pale blue, whatever desk the window sits on. */
+.window-scope {
+  --background: #ffffff;
+  --foreground: var(--ink);
+  --muted-foreground: #3b4570;
+  --border: var(--ink);
+  color: var(--ink);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-border: var(--border);
@@ -50,8 +52,17 @@
   --color-ring: var(--ring);
   --color-ok: var(--ok);
   --color-warn: var(--warn);
-  --font-sans: var(--font-plex), system-ui, sans-serif;
-  --shadow-frame: var(--shadow-frame);
+  --color-ink: var(--ink);
+  --color-cyan: var(--cyan);
+  --color-lilac: var(--lilac);
+  --color-mint: var(--mint);
+  --color-butter: var(--butter);
+  --color-coral: var(--coral);
+  --color-win: var(--win);
+  --font-sans: var(--font-grotesk), system-ui, sans-serif;
+  --font-display: var(--font-bricolage), var(--font-grotesk), system-ui, sans-serif;
+  --font-mono: var(--font-mono-body), ui-monospace, monospace;
+  --font-pixel: var(--font-pixel), ui-monospace, monospace;
 }
 
 @layer base {
@@ -62,11 +73,89 @@
     background: var(--background);
     color: var(--foreground);
     -webkit-font-smoothing: antialiased;
-    line-height: 1.55;
+    line-height: 1.5;
   }
   @media (prefers-reduced-motion: reduce) {
     html {
       scroll-behavior: auto;
     }
   }
+}
+
+/* Halftone: a field of navy dots that fades toward its edges. */
+.halftone {
+  background-image: radial-gradient(circle at center, var(--ink) 1.3px, transparent 1.9px);
+  background-size: 8px 8px;
+  -webkit-mask-image: radial-gradient(closest-side, #000 25%, transparent 100%);
+  mask-image: radial-gradient(closest-side, #000 25%, transparent 100%);
+}
+
+/* The sky at the top of the page. */
+.sky {
+  background:
+    radial-gradient(50% 45% at 85% 12%, #8fe9fa 0, transparent 70%),
+    radial-gradient(55% 50% at 10% 20%, #cdbdff 0, transparent 72%),
+    linear-gradient(180deg, #e6dcff 0, #d6f6fd 60%, #fbfbff 100%);
+}
+
+/* Corner brackets around the big statement. */
+.brackets {
+  --b: 12px;
+  background:
+    linear-gradient(var(--ink), var(--ink)) top left / var(--b) 2px no-repeat,
+    linear-gradient(var(--ink), var(--ink)) top left / 2px var(--b) no-repeat,
+    linear-gradient(var(--ink), var(--ink)) top right / var(--b) 2px no-repeat,
+    linear-gradient(var(--ink), var(--ink)) top right / 2px var(--b) no-repeat,
+    linear-gradient(var(--ink), var(--ink)) bottom left / var(--b) 2px no-repeat,
+    linear-gradient(var(--ink), var(--ink)) bottom left / 2px var(--b) no-repeat,
+    linear-gradient(var(--ink), var(--ink)) bottom right / var(--b) 2px no-repeat,
+    linear-gradient(var(--ink), var(--ink)) bottom right / 2px var(--b) no-repeat;
+}
+
+dialog::backdrop {
+  background: rgb(16 23 58 / 0.82);
+}
+
+/* The wire the next robot is being reached by: the dashes travel toward it. */
+@keyframes wire {
+  to {
+    stroke-dashoffset: -14;
+  }
+}
+
+/* The seek bar of the video player: a square thumb on a navy track that fills as the video plays. */
+.scrub {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+.scrub::-webkit-slider-runnable-track {
+  height: 12px;
+  border: 2px solid var(--ink);
+  background: linear-gradient(to right, var(--ink) var(--p), #ffffff var(--p));
+}
+.scrub::-moz-range-track {
+  height: 8px;
+  border: 2px solid var(--ink);
+  background: linear-gradient(to right, var(--ink) var(--p), #ffffff var(--p));
+}
+.scrub::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 22px;
+  margin-top: -7px;
+  background: var(--cyan);
+  border: 2px solid var(--ink);
+}
+.scrub::-moz-range-thumb {
+  width: 12px;
+  height: 18px;
+  border-radius: 0;
+  background: var(--cyan);
+  border: 2px solid var(--ink);
+}
+.scrub:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
 }
