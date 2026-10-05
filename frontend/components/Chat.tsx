@@ -18,7 +18,7 @@ import {
 } from "@phosphor-icons/react";
 import CasesPanel from "@/components/CasesPanel";
 import { EvidenceItem, EvidenceList, evidenceFromCase, evidenceLabel } from "@/components/Evidence";
-import { ct } from "@/lib/chatText";
+import { ct, shortCaseIds } from "@/lib/chatText";
 import { useTheme } from "@/lib/useTheme";
 import { caseStatusLabel, reasonLabel, suggestions, tr } from "@/lib/i18n";
 import type { Candidate, ChatResponse, ConversationItem, DisputeCase, Handoff, Language, StoredMessage } from "@/lib/types";
@@ -116,7 +116,7 @@ export default function Chat({
         body.messages.map((message) => ({
           id: nextId.current++,
           role: message.role,
-          text: message.text,
+          text: shortCaseIds(message.text),
           response: message.response ?? undefined,
         })),
       );
@@ -177,7 +177,7 @@ export default function Chat({
       setLanguage(detected);
       setMessages((previous) => [
         ...previous,
-        { id: nextId.current++, role: "bot", text: body.reply, response: body, animate: true },
+        { id: nextId.current++, role: "bot", text: shortCaseIds(body.reply), response: body, animate: true },
       ]);
       void loadHistory();
     } catch {

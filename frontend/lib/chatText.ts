@@ -62,3 +62,10 @@ export type ChatTextKey = keyof (typeof TEXT)["es"];
 export function ct(language: Language, key: ChatTextKey): string {
   return TEXT[language][key];
 }
+
+const UUID = /\b([0-9a-f]{8})-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
+
+/** A case id is a UUID. The reply keeps the full id (the model's checks need it), but the customer sees the short form the case card shows. */
+export function shortCaseIds(text: string): string {
+  return text.replace(UUID, (_match, head: string) => `#${head}`);
+}
