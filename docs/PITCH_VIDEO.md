@@ -1,37 +1,45 @@
-# Pitch video script (3 minutes maximum)
+# Pitch video and slides
 
 [Index](README.md) · [Criteria](CRITERIA.md) · [Evaluation](EVALUATION.md)
 
-The challenge page sets the limit at **3 minutes**. This script runs about **2 minutes 50 seconds** at a calm pace (roughly 380 spoken words). Narration is in English, the demo runs in Spanish and Portuguese, which is what the challenge requires. Every number below comes from [Evaluation](EVALUATION.md). Do not add numbers that are not there.
+The organizers' guidance for the submission: pitch it to a bank investor, as a product that solves a real problem. **Video: 90% product and creativity, 10% technical**, told as *Why, What, How*, with editing and delivery weighing the most. Do not just record the screen and explain it. Use animation, transitions and mockups, and make it feel like a launch. **Slides: 60% product and creativity, 40% technical**, with the technical side always tied to the value it delivers.
 
-## Before recording
+The video limit is **3 minutes**. This script runs about **2 minutes 55 seconds** (roughly 330 spoken words). Narration is in English. The product speaks Spanish and Portuguese on screen, which the challenge requires.
 
-- Production is the demo target: the load balancer URL from `terraform output edge_url`. Start from the login screen, in dark mode, at 1440×900.
-- Customers (see [Local development](LOCAL_DEV.md); `e2e.py` passed with the same ids against `prod`): Carla `CLI-00232W4ZDQPP` for a reversed charge that resolves, Bruno `CLI-0064RNKCVQCN` for a declined one, Ana `CLI-00MT1OY089RA` for the cases that escalate.
-- Have the `/admin` console open in a second tab, already signed in as `ops`, with one escalated case in the inbox. Make that case first.
-- Keep three diagrams ready as full-screen images: `docs/diagrams/agent-flow.png`, `pipeline-flow.png`, `gcp-architecture.png`.
+## The idea
+
+One line: **an assistant that knows which disputes it should never decide alone.** Fast answers are easy. The product is the judgment: it resolves the safe cases in seconds and hands the rest to a person with the case already prepared. Build the whole video around that contrast, and keep the engineering to ten percent.
 
 ## Script
 
-| Time | Screen | Narration |
-|---|---|---|
-| 0:00 to 0:15 | A title card (see "Higgsfield" below), then the login screen | "Banks lose hours on one question: *I do not recognize this charge.* We built an assistant that answers the safe cases on its own, in Spanish and Portuguese, and hands the rest to a person with the case already prepared." |
-| 0:15 to 0:35 | Slide or `docs/WORKFLOW.md` table of the three paths | "We picked one workflow, transaction disputes, and made it small and honest. It resolves a declined or reversed transaction under 500 dollars. It escalates an approved charge, suspected fraud, a high amount, or anything ambiguous. Those rules are code, not a prompt." |
-| 0:35 to 1:00 | Switch the toggle to PT, pick the scenario from the dropdown, send the reversed-charge message | "Here is a customer writing in Portuguese. The agent finds the transaction, checks it against the policy, records the case, and rereads it from the backend before it says anything is resolved." |
-| 1:00 to 1:25 | Ana: the approved charge, then the fraud wording | "An approved charge is never resolved alone. And when the customer says someone used their card, it escalates, even if the model had read it as a normal dispute." |
-| 1:25 to 1:45 | Second tab: `/admin`, open the escalated case | "The specialist sees what the agent verified, the rule that sent the case here, the customer's message, and the agent's trace. Not a transcript dump." |
-| 1:45 to 2:05 | `agent-flow.png`, then `gcp-architecture.png` | "The model only helps: it classifies intent, takes a second look for fraud that can only add caution, and drafts the reply, which passes deterministic checks. The agent reaches data only through a private backend with per-customer permissions. Everything runs on Google Cloud, in Terraform, with a pipeline from the organizer's S3 to the tables the backend reads." |
-| 2:05 to 2:35 | The results table from `EVALUATION.md` | "We measured it on 549 cases we generated. Zero of 372 unsafe resolutions, with an upper bound of about 1 percent, because a small sample never proves zero risk. Intent classification: 100 percent against 49 percent for keywords on a blind set. Portuguese without the model drops to 83 percent, and we say so. The evaluation also found nine real defects, including a backend error that had been there from the start." |
-| 2:35 to 2:55 | `docs/PRODUCTION.md` headings | "This is a prototype on synthetic data. The login is a sandbox. There is no load test, no alerting and no retention policy yet. We wrote down what a real bank would need first." |
-| 2:55 to 3:00 | Closing card with the repo name | "Thank you. The code, the evaluation and the deployment steps are in the repository." |
+| Time | Beat | Picture | Narration |
+|---|---|---|---|
+| 0:00 to 0:20 | **Why** (the customer) | Generated cinematic cold open: a phone lights up in a dark room, a charge the person does not recognize, a hand hovering over the call button. No UI yet. Quiet music | "It is eleven at night. A charge you do not recognize. You will not sleep until someone tells you what it is." |
+| 0:20 to 0:40 | **Why** (the bank) | Kinetic text over a stack of identical tickets, then one highlighted in red | "For the bank, most of these are simple. A few are fraud. The hard part is not answering fast. It is knowing which ones a machine must never decide." |
+| 0:40 to 0:55 | **What** (the reveal) | Cut to black, then the product rises on a device mockup, with the Factored mark and the title "LATAM Bank dispute assistant" | "So we built an assistant that answers the safe ones in seconds, and hands the rest to a person." |
+| 0:55 to 1:25 | **What**, moment one | Screen capture of the real app, framed in a phone mockup with slow zoom and animated callouts. The language toggle flips to Portuguese, the customer types, the answer appears with the case card | "Customers write in Spanish or Portuguese. It finds the transaction, checks the rules, records the case, and confirms it from the bank's own system before it says a word." |
+| 1:25 to 1:55 | **What**, moment two | An approved charge. The reply: a person has it. The handoff card slides in. Cut to the specialist console, the case opens with facts, rule and message already there | "An approved charge, or anything that smells like fraud, never resolves alone. The specialist opens a case that is already prepared: what was verified, which rule sent it here, and what the customer said." |
+| 1:55 to 2:20 | **Trust** | Three rules appear as animated cards: approved charges, 500 dollars, fraud. Then one number, large: "0 of 372 unsafe resolutions" | "The model helps. The rules decide. We tested 549 cases, and in 372 where it must not resolve alone, it never did. A small sample never proves zero risk, so we say that too." |
+| 2:20 to 2:40 | **How** (10%) | The agent flow and the Google Cloud diagram, each for a few seconds, animated in | "A private banking backend, an agent whose policy is code, a data pipeline from the organizer's bucket, all on Google Cloud and defined as code." |
+| 2:40 to 2:55 | **Close** | The login screen, dark, then the tagline over the hexagon mark | "It is a prototype on synthetic data. But the idea scales: be fast where it is safe, and human where it matters." |
 
-## Notes for the take
+## How to make it feel like a launch
 
-- **Do not claim** a measured improvement in production, real identity, or a savings figure. The evaluation is offline and the data is synthetic.
-- **Pace:** the 0:35 to 1:25 demo is the part that needs to be real and uncut. If a reply is slow, cut to the result rather than waiting.
-- **If you run long,** cut the architecture slide first (1:45 to 2:05) and keep the evaluation, because honesty about limits is part of the score.
-- Before submitting, rewatch once with sound off: the screen should still tell the story.
+- **Do not show a raw screen recording.** Every app shot goes inside a device mockup, with a slow push-in, and a callout that names the thing it points at. Cut at the moment of the answer, not before it.
+- **Cold open and transitions with Higgsfield.** The CLI and skills are installed (`higgsfield-generate`, `higgsfield-brandkit`). Ask for: the 20-second cold open (phone in a dark room), a short abstract transition built on the hexagon motif, and a closing still. Authenticate first with `higgsfield auth login`. Generated people and scenes are synthetic: say so in the video description, and never use them to suggest real customers.
+- **Sound:** one music bed that lifts at the reveal (0:40) and drops under the voice at the demo. Record the voice in a quiet room, in one pass per beat, and cut on the breath.
+- **Kinetic text** for the Why and Trust beats, so the video still reads with the sound off.
+- **Real product, real data.** The captures come from `prod` (the load balancer URL from `terraform output edge_url`) in dark mode at 1440×900, with Carla `CLI-00232W4ZDQPP` for a reversed charge and Ana `CLI-00MT1OY089RA` for the escalation. Create the escalated case before recording so the specialist console has something in it, and sign in as `ops` ahead of time.
 
-## Higgsfield (optional)
+## What not to claim
 
-The Higgsfield CLI and skills are installed. Use them only for the **title card and the closing card**, never for the product itself: the demo must be the real application. Authenticate once with `higgsfield auth login`, then ask for a short abstract motion backdrop for the title card (about 4 seconds, dark, a hexagon motif to match the Factored logo) and a still for the close. Generated footage must be labeled as generated if you describe it anywhere.
+A measured improvement in production, real identity (the login is a sandbox), time saved, or any savings figure. The evaluation is offline and the data is synthetic. Everything quantitative in the video comes from [Evaluation](EVALUATION.md): 549 cases and 0 of 372 are the only numbers it uses.
+
+## Slides (4 to 6, 60% product and 40% technical)
+
+1. **The problem.** The cold open's still, and one line: the customer who cannot sleep, and the bank that must tell fraud from a simple question.
+2. **The product.** Two or three framed screens: the customer chat in Portuguese, the handoff card, the specialist console. Caption each with what it does for the customer or the specialist.
+3. **The judgment.** The three paths (resolves, asks, escalates) and the rules that send a case to a person. This is the slide that shows the product has a point of view.
+4. **How it works.** The agent flow and the Google Cloud diagram side by side. One line: policy is code, the model only helps, and the agent reaches data only through a private backend.
+5. **Proof and honesty.** The key results (549 cases, 0 of 372 unsafe resolutions with its upper bound, 100% against 49% on intent) next to the limits: synthetic data, a sandbox login, no load test.
+6. **What a real bank needs next.** The first three items from the path to production, and the repository link.
