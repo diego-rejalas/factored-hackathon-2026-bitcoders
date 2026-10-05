@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { caseStatusLabel, reasonLabel, tr } from "@/lib/i18n";
+import { caseStatusLabel, limitationLabel, reasonLabel, tr } from "@/lib/i18n";
 import type { CaseEvent, DisputeCase, Handoff, TraceRow } from "@/lib/types";
 import { formatAmount, formatDate } from "@/lib/types";
 
@@ -193,11 +193,11 @@ export default function AdminCaseDetail({
               <h4>{tr("es", "reason")} / {tr("es", "limitation")}</h4>
               <dl className="kv">
                 <dt>Motivo</dt><dd>{reasonLabel(handoff.reason, "es")}</dd>
-                <dt>{tr("es", "limitation")}</dt><dd>{handoff.limitation || "Revisión humana requerida por política."}</dd>
+                <dt>{tr("es", "limitation")}</dt><dd>{limitationLabel(handoff.reason, handoff.limitation)}</dd>
               </dl>
             </section>
             {handoff.customer_message && <section><h4>Mensaje del cliente</h4><p>{handoff.customer_message}</p></section>}
-            {request && <section><h4>{tr("es", "request")}</h4><p>{request}</p></section>}
+            {request && <section><h4>Qué se le explicó al cliente</h4><p>{request}</p></section>}
             <ListSection title={tr("es", "verifiedFacts")} values={handoff.verified_facts} />
             <ListSection title={tr("es", "actionsTaken")} values={handoff.actions_taken?.map(actionDescription)} />
             {handoff.evidence?.length ? (

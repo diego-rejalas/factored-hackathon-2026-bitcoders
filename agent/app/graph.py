@@ -342,10 +342,7 @@ def build_graph(tools, tracer, llm=None):
         handoff = {
             "reason": state.get("reason") or "unspecified",
             "limitation": guardrail.GUARDRAIL_LIMITATIONS.get(state.get("reason") or "", "human review required"),
-            "request": {
-                "es": "Revisión humana requerida: el guardrail no permite auto-resolver este caso.",
-                "pt": "Revisão humana necessária: o guardrail não permite auto-resolver este caso.",
-            },
+            "request": replies.handoff_request(state.get("reason")),
             "customer_language": state.get("language", "es"),
             "conversation_id": state.get("conversation_id"),
             # What the person taking the case can rely on without asking again: what the backend confirmed about the

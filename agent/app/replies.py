@@ -179,3 +179,47 @@ def unavailable_reply(language: str) -> str:
         "No pude completar la verificación ahora por un problema técnico. No se hizo ningún cambio en tu cuenta. "
         "Inténtalo de nuevo en unos instantes o habla con un agente."
     )
+
+
+# Why a person is involved, in words the customer (and the specialist reading the case) can use. It used to be one
+# sentence for every reason: "Revisión humana requerida: el guardrail no permite auto-resolver este caso", which names
+# an internal mechanism the customer has never heard of and says nothing about their case.
+HANDOFF_REQUEST = {
+    "fraud_suspected": (
+        "Mencionaste un posible fraude, un robo o un uso que no autorizaste. Una persona del banco lo revisará con prioridad.",
+        "Você mencionou uma possível fraude, um roubo ou um uso que não autorizou. Uma pessoa do banco vai revisar com prioridade.",
+    ),
+    "posted_charge_disputed": (
+        "Este cobro ya fue aprobado o sigue pendiente, así que no puedo darlo por resuelto yo solo. Una persona del banco lo revisará contigo.",
+        "Esta cobrança já foi aprovada ou ainda está pendente, então não posso dá-la como resolvida sozinho. Uma pessoa do banco vai revisá-la com você.",
+    ),
+    "amount_threshold": (
+        "Por el monto, este caso lo debe revisar una persona del banco.",
+        "Pelo valor, este caso precisa ser revisado por uma pessoa do banco.",
+    ),
+    "amount_unknown": (
+        "No pude confirmar el monto en dólares de este cobro, así que lo revisará una persona del banco.",
+        "Não consegui confirmar o valor em dólares desta cobrança, então uma pessoa do banco vai revisá-la.",
+    ),
+    "ambiguity_unresolved": (
+        "No logré identificar con certeza cuál es el cobro. Una persona del banco te ayudará a ubicarlo.",
+        "Não consegui identificar com certeza qual é a cobrança. Uma pessoa do banco vai ajudar você a localizá-la.",
+    ),
+    "intent_low_confidence": (
+        "No estoy seguro de haber entendido bien tu solicitud. Una persona del banco la revisará.",
+        "Não tenho certeza de ter entendido bem a sua solicitação. Uma pessoa do banco vai revisá-la.",
+    ),
+    "verify_failed": (
+        "No pude comprobar que tu caso quedó registrado correctamente. Una persona del banco lo revisará.",
+        "Não consegui confirmar que o seu caso foi registrado corretamente. Uma pessoa do banco vai revisá-lo.",
+    ),
+}
+HANDOFF_REQUEST_DEFAULT = (
+    "Este caso necesita que lo revise una persona del banco.",
+    "Este caso precisa ser revisado por uma pessoa do banco.",
+)
+
+
+def handoff_request(reason: str | None) -> dict:
+    es, pt = HANDOFF_REQUEST.get(reason or "", HANDOFF_REQUEST_DEFAULT)
+    return {"es": es, "pt": pt}
