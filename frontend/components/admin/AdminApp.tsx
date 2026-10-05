@@ -5,12 +5,14 @@ import AdminLogin from "@/components/admin/AdminLogin";
 import AdminCaseDetail from "@/components/admin/AdminCaseDetail";
 import AdminInbox from "@/components/admin/AdminInbox";
 import AdminMetrics from "@/components/admin/AdminMetrics";
-import { ChatCircleDots, SignOut } from "@phosphor-icons/react";
+import { ChatCircleDots, Moon, SignOut, Sun } from "@phosphor-icons/react";
 import { tr } from "@/lib/i18n";
+import { useTheme } from "@/lib/useTheme";
 
 type View = "inbox" | "case" | "metrics";
 
 export default function AdminApp({ agentUrl }: { agentUrl: string }) {
+  const [theme, toggleTheme] = useTheme();
   const [session, setSession] = useState<{ token: string; username: string } | null>(null);
   const [view, setView] = useState<View>("inbox");
   const [caseId, setCaseId] = useState<string | null>(null);
@@ -36,7 +38,7 @@ export default function AdminApp({ agentUrl }: { agentUrl: string }) {
   }
 
   return (
-    <div className="admin-shell">
+    <div className="admin-shell" data-theme={theme ?? undefined}>
       <a className="skip-link" href="#admin-content">Ir al contenido principal</a>
       <header className="appbar">
         <h1><img className="mark mark-logo" src="/factored-logo.png" alt="" aria-hidden="true" />{tr("es", "adminTitle")}</h1>
@@ -45,6 +47,10 @@ export default function AdminApp({ agentUrl }: { agentUrl: string }) {
             <span className="who-avatar" aria-hidden="true">{session.username.slice(0, 1).toUpperCase()}</span>
             <span className="who-name">{session.username}</span>
           </span>
+          <button className="appbar-btn appbar-theme" type="button" onClick={toggleTheme} aria-label="Cambiar tema" title="Cambiar tema">
+            <Sun className="icon-sun" size={18} aria-hidden="true" />
+            <Moon className="icon-moon" size={18} aria-hidden="true" />
+          </button>
           <a className="appbar-btn" href="/" aria-label="Atención al cliente">
             <ChatCircleDots size={18} aria-hidden="true" />
             <span>Atención al cliente</span>
