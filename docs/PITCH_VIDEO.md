@@ -4,6 +4,8 @@
 
 The organizers' guidance for the submission: pitch it to a bank investor, as a product that solves a real problem. **Video: 90% product and creativity, 10% technical**, told as *Why, What, How*, with editing and delivery weighing the most. Do not just record the screen and explain it. Use animation, transitions and mockups, and make it feel like a launch. **Slides: 60% product and creativity, 40% technical**, with the technical side always tied to the value it delivers.
 
+The submission page asks for exactly this: a **4 to 6 slide presentation** that explains the approach, the results and the key technical decisions, and a **video pitch of no longer than 3 minutes** that demonstrates the working solution and explains the core architectural decisions. The organizers' tip (90% product) and the page's wording (show the working solution, explain the core architectural decisions) fit together: the video is a launch film of the real product, and it names the architectural decisions in one short, plain beat instead of walking through the system.
+
 The video limit is **3 minutes**. This script runs about **2 minutes 55 seconds** (roughly 330 spoken words). Narration is in English. The product speaks Spanish and Portuguese on screen, which the challenge requires.
 
 ## The idea
@@ -20,7 +22,7 @@ One line: **an assistant that knows which disputes it should never decide alone.
 | 0:55 to 1:25 | **What**, moment one | Screen capture of the real app, framed in a phone mockup with slow zoom and animated callouts. The language toggle flips to Portuguese, the customer types, the answer appears with the case card | "Customers write in Spanish or Portuguese. It finds the transaction, checks the rules, records the case, and confirms it from the bank's own system before it says a word." |
 | 1:25 to 1:55 | **What**, moment two | An approved charge. The reply: a person has it. The handoff card slides in. Cut to the specialist console, the case opens with facts, rule and message already there | "An approved charge, or anything that smells like fraud, never resolves alone. The specialist opens a case that is already prepared: what was verified, which rule sent it here, and what the customer said." |
 | 1:55 to 2:20 | **Trust** | Three rules appear as animated cards: approved charges, 500 dollars, fraud. Then one number, large: "0 of 372 unsafe resolutions" | "The model helps. The rules decide. We tested 549 cases, and in 372 where it must not resolve alone, it never did. A small sample never proves zero risk, so we say that too." |
-| 2:20 to 2:40 | **How** (10%) | The agent flow and the Google Cloud diagram, each for a few seconds, animated in | "A private banking backend, an agent whose policy is code, a data pipeline from the organizer's bucket, all on Google Cloud and defined as code." |
+| 2:20 to 2:40 | **How** (10%): the core architectural decisions | The agent flow and the Google Cloud diagram, each for a few seconds, animated in | "Three decisions make this safe. The policy is code, outside the model. The agent can reach data only through a private backend that checks who is asking. And it rereads the bank's record before it reports anything as done. All of it runs on Google Cloud, defined as code." |
 | 2:40 to 2:55 | **Close** | The login screen, dark, then the tagline over the hexagon mark | "It is a prototype on synthetic data. But the idea scales: be fast where it is safe, and human where it matters." |
 
 ## How to make it feel like a launch
