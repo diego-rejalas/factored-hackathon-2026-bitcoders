@@ -2,13 +2,14 @@
 phrasings. It is a validation set for the fix: the fix was written from the first run's failures, so measuring it on
 those same cases would prove little. Nothing here was shown to the person writing the fix.
 
-    OPENROUTER_API_KEY=... python -m eval.generate_fraud_fresh
+    OPENROUTER_API_KEY=... python -m eval.generate_fraud_fresh [name]
 """
 
 import asyncio
 import json
 import os
 import re
+import sys
 from pathlib import Path
 
 import httpx
@@ -45,8 +46,11 @@ async def main():
     for language, messages in (("es", es), ("pt", pt)):
         for message in messages:
             rows.append({"id": f"f{len(rows):03d}", "category": "fraud", "customer_id": CUSTOMERS[len(rows) % len(CUSTOMERS)], "message": message, "language": language, "expected": {"outcome": "escalated"}})
-    (HERE / "datasets" / "fraud_fresh.jsonl").write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows))
-    print(len(rows), "messages")
+    name = sys.argv[1] if len(sys.argv) > 1 else "fraud_fresh"
+    seen = {" ".join(json.loads(l)["message"].lower().split()) for f in (HERE / "datasets").glob("fraud_fresh*.jsonl") if f.stem != name for l in f.read_text().splitlines()}
+    rows = [r for r in rows if " ".join(r["message"].lower().split()) not in seen]  # never repeat a message from another set
+    (HERE / "datasets" / f"{name}.jsonl").write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows))
+    print(len(rows), "messages ->", name)
 
 
 if __name__ == "__main__":

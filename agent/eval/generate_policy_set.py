@@ -112,7 +112,7 @@ async def main():
         for language in ("es", "pt"):
             add("fraud", customer, FRAUD[language][(i + (language == "pt")) % len(FRAUD[language])], language, {"outcome": "escalated"})
     for i, b in enumerate(pick("out_of_scope", 24)):
-        add("out_of_scope", CUSTOMERS[i % len(CUSTOMERS)], b["message"], b["language"], {"outcome": "escalated"})
+        add("out_of_scope", CUSTOMERS[i % len(CUSTOMERS)], b["message"], b["language"], {"outcome": "declined", "no_case": True})
     for i, b in enumerate(pick("greeting", 12)):
         add("greeting", CUSTOMERS[i % len(CUSTOMERS)], b["message"], b["language"], {"outcome": "resolved", "no_case": True})
     for i, (language, message) in enumerate(INJECTION):
