@@ -57,7 +57,7 @@ export type CaseEvent = {
 export type ChatResponse = {
   reply: string;
   conversation_id: string;
-  outcome: "resolved" | "clarify" | "escalated";
+  outcome: "resolved" | "clarify" | "escalated" | "declined" | "unavailable";
   handoff?: Handoff | null;
   candidates?: Candidate[] | null;
   case?: DisputeCase | null;

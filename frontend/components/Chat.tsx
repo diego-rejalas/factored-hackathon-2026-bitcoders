@@ -388,7 +388,8 @@ function AssistantMessage({
       <StreamingText text={message.text} animate={Boolean(message.animate)} onDone={() => setDone(true)} onTick={onTick} />
       {done && response && (
         <div className="turn-extras">
-          {!response.case && response.outcome !== "clarify" && <OutcomeBadge outcome={response.outcome} language={language} />}
+          {/* A badge says something happened to a case. A greeting, a question or an error is not a resolution. */}
+          {!response.case && response.outcome === "escalated" && <OutcomeBadge outcome={response.outcome} language={language} />}
           {response.outcome === "clarify" && response.candidates && response.candidates.length > 0 && (
             <CandidateCards candidates={response.candidates} language={language} onSelect={onSelect} />
           )}
