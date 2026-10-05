@@ -116,7 +116,7 @@ export default function AdminMetrics({
             <Kpi
               label={tr("es", "runs")}
               value={agent?.tracing_enabled ? String(agent.total_runs ?? 0) : tr("es", "notDefined")}
-              denominator={agent?.tracing_enabled ? Object.entries(agent.runs_by_outcome ?? {}).map(([key, count]) => `${key}: ${count}`).join(" · ") : tr("es", "tracingOff")}
+              denominator={agent?.tracing_enabled ? Object.entries(agent.runs_by_outcome ?? {}).map(([key, count]) => `${labelFor(key)}: ${count}`).join(" · ") : tr("es", "tracingOff")}
             />
             <Kpi
               label={tr("es", "verifySuccess")}
@@ -214,6 +214,30 @@ function Kpi({
   );
 }
 
+// Spanish names for the values the backend and the agent's trace use as keys. An unknown key shows as it is.
+const LABELS: Record<string, string> = {
+  open: "Abierto",
+  auto_resolved: "Resuelto automáticamente",
+  escalated: "Escalado",
+  in_progress: "En curso",
+  closed: "Cerrado",
+  resolved: "Resuelto",
+  clarify: "Aclaración",
+  declined: "Declinado",
+  unavailable: "No disponible",
+  dispute: "Disputa",
+  case_status: "Estado de un caso",
+  greeting: "Saludo",
+  out_of_scope: "Fuera de alcance",
+  fraud_report: "Reporte de fraude",
+};
+
+function labelFor(key: string): string {
+  if (LABELS[key]) return LABELS[key];
+  if (key.startsWith("llm_rejected")) return "Borrador del modelo rechazado";
+  return key;
+}
+
 function CountBars({ values, tone }: { values: Record<string, number>; tone?: "danger" }) {
   const rows = Object.entries(values).sort((a, b) => b[1] - a[1]);
   const max = Math.max(1, ...rows.map(([, value]) => value));
@@ -222,7 +246,7 @@ function CountBars({ values, tone }: { values: Record<string, number>; tone?: "d
     <div className="bar-list">
       {rows.map(([label, value]) => (
         <div className="bar-item" key={label}>
-          <span className="bar-label" title={label}>{label}</span>
+          <span className="bar-label" title={labelFor(label)}>{labelFor(label)}</span>
           <span className="bar-track" aria-hidden="true"><span className={`bar-fill ${tone ?? ""}`} style={{ width: `${Math.max(2, (value / max) * 100)}%` }} /></span>
           <span className="count tnum">{value}</span>
         </div>
