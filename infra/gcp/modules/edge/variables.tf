@@ -28,6 +28,12 @@ variable "domain" {
   default     = ""
 }
 
+variable "additional_domains" {
+  description = "More domains served by the same load balancer, each with its own managed certificate, attached next to the main one. They are added without touching the main certificate, so nothing that works today stops working while the new certificates are issued. Each name must already have a DNS A record pointing at the load balancer's address."
+  type        = list(string)
+  default     = []
+}
+
 variable "rate_limit_per_minute" {
   description = "Requests per minute and client IP before Cloud Armor answers 429."
   type        = number
