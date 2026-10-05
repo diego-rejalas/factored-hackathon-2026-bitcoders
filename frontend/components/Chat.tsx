@@ -14,7 +14,7 @@ import {
   SpinnerGap,
   Sun,
   UserCheck,
-  X,
+  X, UserCircle,
 } from "@phosphor-icons/react";
 import CasesPanel from "@/components/CasesPanel";
 import { EvidenceItem, EvidenceList, evidenceFromCase, evidenceLabel } from "@/components/Evidence";
@@ -284,7 +284,7 @@ export default function Chat({
           {ct(language, "theme")}
         </button>
         <div className="gpt-user">
-          <span className="gpt-avatar" aria-hidden="true">{initial}</span>
+          <span className="gpt-avatar" aria-hidden="true">{firstName ? initial : <UserCircle size={20} />}</span>
           <span className="gpt-user-name">{firstName}</span>
           <button className="gpt-icon" type="button" onClick={() => onLogout(false)} aria-label={ct(language, "logout")} title={ct(language, "logout")}>
             <SignOut size={18} />

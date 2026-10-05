@@ -293,9 +293,54 @@ function ListSection({ title, values }: { title: string; values?: string[] }) {
   );
 }
 
+const ACTIONS: Record<string, string> = {
+  create_dispute: "Caso registrado",
+  escalate_dispute: "Caso escalado",
+  resolve_dispute: "Caso resuelto automáticamente",
+};
+
 function actionDescription(action: Record<string, unknown>): string {
-  const name = typeof action.action === "string" ? action.action.replaceAll("_", " ") : "Acción";
-  return action.case_id ? `${name} · caso ${String(action.case_id)}` : name;
+  const key = typeof action.action === "string" ? action.action : "";
+  const name = ACTIONS[key] ?? (key ? key.replaceAll("_", " ") : "Acción");
+  return action.case_id ? `${name} · #${String(action.case_id).slice(0, 8)}` : name;
+}
+
+// The agent's trace stores English keys (the metrics read them). The console shows them in Spanish.
+const TRACE_NODES: Record<string, string> = {
+  understand: "Entender el mensaje",
+  decide: "Decidir",
+  act: "Registrar el caso",
+  verify: "Verificar",
+  respond: "Responder",
+  escalate: "Escalar a una persona",
+};
+
+const TRACE_TERMS: Record<string, string> = {
+  dispute: "Disputa",
+  case_status: "Estado de un caso",
+  greeting: "Saludo",
+  out_of_scope: "Fuera de alcance",
+  fraud_report: "Reporte de fraude",
+  create_dispute: "Crear caso",
+  escalate_dispute: "Escalar caso",
+  resolve_dispute: "Resolver caso",
+  get_dispute: "Leer caso",
+  check_status: "Revisar estado",
+  check_amount: "Revisar monto",
+  escalate: "Escalar",
+  clarify: "Aclarar",
+  answer: "Responder",
+  act: "Actuar",
+  declined: "Declinar",
+  resolved: "Resuelto",
+  escalated: "Escalado",
+  auto_resolved: "Resuelto automáticamente",
+  open: "Abierto",
+  failed: "Falló",
+};
+
+function traceTerm(value: string): string {
+  return TRACE_TERMS[value] ?? (value.startsWith("llm_rejected") ? "Borrador del modelo rechazado" : value);
 }
 
 function EvidenceItem({ entry }: { entry: Record<string, unknown> }) {
@@ -363,11 +408,11 @@ function eventLabel(event: CaseEvent): string {
 function TraceEvent({ row }: { row: TraceRow }) {
   return (
     <li>
-      <strong>{row.node}</strong>
+      <strong>{TRACE_NODES[row.node] ?? row.node}</strong>
       <span className="trace-tags">
-        {row.intent && <span>{row.intent}</span>}
-        {row.tool && <span>{row.tool}</span>}
-        {row.result_status && <span>{row.result_status}</span>}
+        {row.intent && <span>{traceTerm(row.intent)}</span>}
+        {row.tool && <span>{traceTerm(row.tool)}</span>}
+        {row.result_status && <span>{traceTerm(row.result_status)}</span>}
         {row.latency_ms !== null && row.latency_ms !== undefined && <span className="tnum">{row.latency_ms} ms</span>}
       </span>
       <time className="when" dateTime={row.ts || undefined}>{formatDate(row.ts, "es")}</time>

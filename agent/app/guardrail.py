@@ -84,6 +84,19 @@ GUARDRAIL_LIMITATIONS = {
     "intent_low_confidence": "intent classifier confidence below INTENT_MIN_CONFIDENCE — the agent abstains and escalates",
 }
 
+# What the specialist reads in the handoff's verified facts. The English text above stays the stored `limitation`,
+# which the contract and the evaluation read.
+GUARDRAIL_LIMITATIONS_ES = {
+    "fraud_suspected": "el cliente menciona fraude, robo o uso sin permiso: siempre lo revisa una persona",
+    "amount_threshold": "el monto efectivo alcanza o supera el umbral de escalamiento (GUARDRAIL_MAX_USD)",
+    "ambiguity_unresolved": "no hubo una única transacción candidata tras las rondas de aclaración",
+    "out_of_scope": "la consulta está fuera del flujo de disputas de transacciones",
+    "verify_failed": "no se pudo volver a verificar el caso después de actuar",
+    "amount_unknown": "el monto efectivo en USD no se conoce, así que no se puede comparar con el umbral",
+    "posted_charge_disputed": "el cobro está aprobado o pendiente: el dinero pudo moverse, así que decide una persona",
+    "intent_low_confidence": "la confianza del clasificador de intención fue baja: el agente se abstiene y escala",
+}
+
 
 def normalize(text: str) -> str:
     """Normalize case and accents for keyword matching."""
