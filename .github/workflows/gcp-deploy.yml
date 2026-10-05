@@ -43,6 +43,9 @@ env:
   # Who may open the IAP tunnel to the Airflow VM, as a JSON list: a repository variable, so that no personal address
   # lives in the code and an apply from here does not remove the access an earlier apply granted.
   TF_VAR_airflow_admin_members: ${{ vars.AIRFLOW_ADMIN_MEMBERS || '[]' }}
+  # Domains live in repository variables, not in the code. Empty: the load balancer keeps its <ip>.sslip.io name.
+  TF_VAR_edge_domain: ${{ vars.EDGE_DOMAIN || '' }}
+  TF_VAR_edge_additional_domains: ${{ vars.EDGE_ADDITIONAL_DOMAINS || '[]' }}
 
 # The default token is read-only; a job that needs more says so itself.
 permissions:

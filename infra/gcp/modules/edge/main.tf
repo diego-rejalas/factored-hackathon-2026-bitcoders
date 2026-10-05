@@ -31,6 +31,25 @@ resource "google_compute_managed_ssl_certificate" "this" {
   }
 }
 
+# One managed certificate per extra domain. Google issues each one once its DNS record points at the load balancer's
+# address, which takes 15 to 60 minutes, and the main certificate keeps serving in the meantime.
+resource "google_compute_managed_ssl_certificate" "additional" {
+  for_each = toset(var.additional_domains)
+
+  # The "add" in the name keeps it apart from the main certificate's name, so the same domain can be made the main one
+  # later without the two resources fighting over one name.
+  name    = "${var.name}-edge-cert-add-${substr(sha1(each.key), 0, 6)}"
+  project = var.project_id
+
+  managed {
+    domains = [each.key]
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
 # Rules are evaluated by priority and the first match ends the evaluation. The WAF rules come first on purpose:
 # the rate limit matches every request and its "conform" action is allow, so anything placed after it would
 # never run.
@@ -175,7 +194,7 @@ resource "google_compute_target_https_proxy" "this" {
   name             = "${var.name}-edge-https-proxy"
   project          = var.project_id
   url_map          = google_compute_url_map.https.id
-  ssl_certificates = [google_compute_managed_ssl_certificate.this.id]
+  ssl_certificates = concat([google_compute_managed_ssl_certificate.this.id], [for c in google_compute_managed_ssl_certificate.additional : c.id])
 }
 
 resource "google_compute_global_forwarding_rule" "https" {
