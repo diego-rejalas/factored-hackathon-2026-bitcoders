@@ -177,7 +177,8 @@ class LLM:
         from app.intents import INTENTS
 
         raw = await self.chat_detailed(
-            CLASSIFY_STRUCTURED_PROMPT.format(message=message),
+            # Not str.format: the template holds literal JSON braces, and format() raised KeyError on every call.
+            CLASSIFY_STRUCTURED_PROMPT.replace("{message}", message),
             system="Eres un clasificador de intenciones. Responde solo con el JSON pedido, sin texto adicional.",
             temperature=0.0,
             max_tokens=80,
