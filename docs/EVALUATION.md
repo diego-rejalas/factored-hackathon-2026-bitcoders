@@ -8,15 +8,15 @@
 
 | Pregunta | Respuesta | Dónde |
 |---|---|---|
-| ¿Un modelo clasifica la intención mejor que las palabras clave? | **Sí, con mucho margen sobre texto que no usa esas palabras**: 100 % (228 de 228) contra 49,1 % en el conjunto ciego. Sobre 40 casos adversariales hechos a mano, 97,5 % contra 87,5 %, una diferencia que no es significativa a ese tamaño | [Componente](#1-el-componente-clasificación-de-intención) |
-| ¿El sistema completo cumple la política? | En la primera corrida: **99,2 %** de 384 disputas con el modelo y **90,1 %** sin él. Tras corregir lo que se encontró: 549 de 549 con el modelo y 90,6 % de las disputas sin él | [Sistema](#2-el-sistema-completo-de-punta-a-punta) |
+| ¿Un modelo clasifica la intención mejor que las palabras clave? | **Sí, con mucho margen sobre texto que no usa esas palabras**: 100 % (228 de 228) contra 49,1 % en el conjunto ciego. Sobre 40 casos adversariales hechos a mano, 95,0 % contra 87,5 %, una diferencia que no es significativa a ese tamaño | [Componente](#1-el-componente-clasificación-de-intención) |
+| ¿El sistema completo cumple la política? | En la primera corrida: **99,2 %** de 384 disputas con el modelo y **90,1 %** sin él. Tras corregir lo que se encontró y fusionar el trabajo del equipo: 548 de 549 con el modelo y 90,6 % de las disputas sin él | [Sistema](#2-el-sistema-completo-de-punta-a-punta) |
 | ¿Resolvió algo que debía pasar a una persona? | **0 de 372** casos. Con esa muestra, el riesgo real podría llegar hasta el 1 % | [Resultados inseguros](#resultados-inseguros) |
-| ¿Qué encontró la evaluación? | **Ocho defectos reales**, todos corregidos con pruebas, entre ellos un error 500 del backend que existía desde el principio | [Hallazgos](#3-lo-que-se-encontró) |
+| ¿Qué encontró la evaluación? | **Nueve defectos reales**, todos corregidos con pruebas, entre ellos un error 500 del backend que existía desde el principio y una caída del clasificador con modelo que habría roto el chat con cualquier clave | [Hallazgos](#3-lo-que-se-encontró) |
 | ¿Cuánto de esto es evidencia independiente? | **Menos de lo que parece**: el 100 % posterior a las correcciones se mide sobre los mismos casos que las originaron. Lo independiente es el conjunto ciego de intenciones y el tercer conjunto de fraude | [Límites](#4-límites) |
 
 ## Cómo se evaluó
 
-**Qué es el "componente aprendido".** El agente decide con código; el modelo hace tres cosas: clasificar la intención de un mensaje, dar una segunda lectura de fraude que solo puede sumar cautela, y redactar la respuesta de un caso ya resuelto. El componente evaluado contra una línea base es la **clasificación de intención**: `anthropic/claude-haiku-4.5` (por OpenRouter) frente a las palabras clave en español y portugués que usa el agente sin modelo. No se entrenó ningún modelo.
+**Qué es el "componente aprendido".** El agente decide con código; el modelo hace tres cosas: clasificar la intención de un mensaje (salida estructurada con idioma y confianza, y abstención bajo 0,5), dar una segunda lectura de fraude que solo puede sumar cautela, y redactar la respuesta de un caso ya resuelto. El componente evaluado contra una línea base es la **clasificación de intención**: `anthropic/claude-haiku-4.5` (por OpenRouter) frente a las palabras clave en español y portugués que usa el agente sin modelo. No se entrenó ningún modelo.
 
 **Por qué no hay conjunto de entrenamiento ni particiones.** No hay nada que entrenar, así que no hay fuga entre entrenamiento y prueba. La separación que importa es otra: los conjuntos de prueba se escribieron **antes** de ejecutar nada y ni el prompt del modelo ni la lista de palabras clave se tocaron para ellos. Lo que se ajustó después se validó, cuando fue posible, con un conjunto nuevo que no se había visto.
 
@@ -35,6 +35,8 @@
 
 Todo número de este documento se recalcula con los archivos por caso de `agent/eval/results/`. Cómo repetirlo: `agent/eval/README.md`.
 
+**Hay otra evaluación, complementaria.** `ml/eval/` (en [Componentes de ML](ML_FINDINGS.md)) mide el clasificador de intención con confianza y abstención y el ranker de la transacción disputada, sobre conjuntos propios con particiones por celda y por cliente y umbrales calibrados solo en desarrollo. Esta evaluación mide el sistema completo contra el backend y la base reales, y el clasificador sobre un conjunto distinto. Las dos usan casos generados por el equipo; no se promedian ni se mezclan.
+
 ## 1. El componente: clasificación de intención
 
 Cuatro etiquetas: disputa, estado de un caso, saludo y fuera de alcance.
@@ -46,13 +48,14 @@ Cuatro etiquetas: disputa, estado de un caso, saludo y fuera de alcance.
 | Español / portugués | 53,9 % / 44,3 % | 100 % / 100 % | 115 / 113 |
 | Mensajes naturales / **sin jerga bancaria** | 52,3 % / 42,7 % | 100 % / 100 % | 153 / 75 |
 | *Por etiqueta:* disputa / estado / saludo / fuera de alcance | 61,7 / **13,3** / 59,0 / 65,0 % | 100 % en las cuatro | 47 / 60 / 61 / 60 |
-| **Conjunto adversarial**, exactitud | 87,5 % (IC 73,9 a 94,5) | 97,5 % (IC 87,1 a 99,6) | 40 |
+| **Conjunto adversarial**, exactitud | 87,5 % (IC 73,9 a 94,5) | 95,0 % (IC 83,5 a 98,6) | 40 |
 
 - En el conjunto ciego, **116 casos los acierta solo el modelo y ninguno solo las palabras clave** (McNemar exacto, p menor que 0,001).
-- En el adversarial: 5 los acierta solo el modelo y 1 solo las palabras clave (p = 0,22): **con 40 casos no se puede afirmar diferencia**.
-- El modelo falló un caso adversarial: `?` lo etiquetó como saludo y la referencia dice fuera de alcance.
+- En el adversarial: 4 los acierta solo el modelo y 1 solo las palabras clave (p = 0,38): **con 40 casos no se puede afirmar diferencia**.
+- El modelo falló dos casos adversariales: un mensaje en inglés ("I do not recognise a charge") lo llamó fuera de alcance y `?` lo llamó saludo. Los dos con confianza baja (0,1 y 0,3): **el agente los escala por abstención**, no los responde.
+- **Abstención.** Con el umbral por defecto (confianza 0,5), 9 de los 40 casos adversariales (22,5 %) se escalan a una persona; en los 31 restantes el modelo acierta 31 (IC 89,0 a 100). En el conjunto ciego no se abstiene en ninguno.
 - Las palabras clave fallan sobre todo en **estado del caso** (13 %): los clientes preguntan "cómo va lo que reporté" sin decir "caso" ni "reclamo".
-- La llamada al modelo tarda p50 1,2 s y p95 1,4 s, y cuesta 0,00032 USD por mensaje clasificado.
+- Esta sección mide la **ruta de producción**: la clasificación estructurada, que devuelve intención, idioma y confianza. La llamada tarda p50 1,25 s y p95 1,45 s, y cuesta 0,00059 USD por mensaje clasificado.
 
 **Cómo leerlo.** El 100 % es un techo, no una promesa: el límite inferior del intervalo es 98,3 %, los mensajes los escribió otro modelo de lenguaje, y la tarea es fácil para un modelo. Y la línea base **no se reforzó**: es la lista de palabras clave sin cambios. Una lista más larga cerraría parte de la brecha; lo que se midió es "el modelo contra estas reglas", no "el modelo contra las mejores reglas posibles".
 
@@ -76,19 +79,21 @@ Se corrió contra el backend y la base reales del stack local, en dos configurac
 | Sesión vencida (debe dar 401) | 6 | 100 % | 100 % |
 | Fallo del backend (debe avisar y no cambiar nada) | 12 | 100 % | 100 % |
 
-### Corrida final, después de las correcciones
+### Corrida final, con el código fusionado
 
-Mismos casos, con una excepción: el oráculo de **fuera de alcance** pasó de "escalar" a "declinar" (sección 3, defecto 5).
+Mismos casos, con una excepción: el oráculo de **fuera de alcance** pasó de "escalar" a "declinar" (sección 3, defecto 5). Esta corrida incluye el trabajo de clasificación con confianza y de orden de candidatas que se integró después (ver [Componentes de ML](ML_FINDINGS.md)).
 
 | Categoría | Casos | Sin modelo | Con modelo |
 |---|---:|---:|---:|
-| Disputa con monto declarado | 384 | 90,6 % | **100 %** |
+| Disputa con monto declarado | 384 | 90,6 % | **99,7 %** (383/384) |
 | Aclaración | 31 | 61,3 % | 100 % |
 | Fraude | 24 | 100 %\* | 100 %\* |
 | Fuera de alcance (debe declinar) | 24 | 62,5 % | 100 % |
 | Saludo | 12 | 58,3 % | 100 % |
 | Datos inexistentes, inyección, datos ajenos, transacción ajena, sesión vencida, fallo del backend | 74 | 100 % | 100 % |
-| **Total** | **549** | | **549 de 549** (IC 99,3 a 100) |
+| **Total** | **549** | | **548 de 549** (IC 99,0 a 100) |
+
+El único fallo con modelo: una petición de detalles de un cargo aprobado de 767,43 USD que el modelo llamó "fuera de alcance"; se declinó en vez de pasar a una persona. No es un resultado inseguro, pero es una disputa que no se atendió.
 
 \* Esas palabras de fraude se escribieron a partir de estos mismos casos: es una prueba de regresión, no una medición independiente. La independiente está en la sección 3.
 
@@ -102,7 +107,7 @@ De las 384, 92 son de una transacción que la política deja resolver sola y 292
 | Sobre todos los casos en alcance | 20,8 % (80/384) | 24,0 % (92/384) |
 | Se intentó automatizar / de eso, correcto | 20,8 % / 100 % | 24,0 % / 100 % |
 | **Contención** (terminan sin transferir) / de eso, correcto | 27,1 % / 76,9 % | 24,0 % / 100 % |
-| **Escalamiento**: se transfirió cuando debía | 91,8 % (268/292; IC 88,1 a 94,4) | 100 % (292/292; IC 98,7 a 100) |
+| **Escalamiento**: se transfirió cuando debía | 91,8 % (268/292; IC 88,1 a 94,4) | 99,7 % (291/292; IC 98,1 a 99,9) |
 | Transferencias perdidas / innecesarias | 0 de 292 / 0 de 92 | 0 de 292 / 0 de 92 |
 | El motivo del traspaso coincide con la política | 100 % | 100 % |
 
@@ -122,7 +127,7 @@ La contención sola no prueba nada: 24 % es baja a propósito, porque el 76 % de
 
 | Disputas con monto | Sin modelo | Con modelo |
 |---|---:|---:|
-| Español | 98,4 % (189/192) | 100 % (192/192) |
+| Español | 98,4 % (189/192) | 99,5 % (191/192) |
 | Portugués | **82,8 %** (159/192) | 100 % (192/192) |
 
 Sin modelo, el portugués rinde claramente peor: la lista de palabras clave tiene menos formas en ese idioma. No se comparó por segmento de cliente (país): los clientes del fixture son inventados y no hay muestra por país.
@@ -144,16 +149,16 @@ Medida con el stack local y concurrencia 4, sobre las 384 disputas. **No es la l
 
 | | Sin modelo | Con modelo |
 |---|---:|---:|
-| Latencia p50 / p95 | 0,30 s / 0,39 s | 1,42 s / 4,17 s |
-| Costo por caso (549 casos, todas las categorías) | 0 | **0,00067 USD** |
-| Costo por caso resuelto solo | 0 | **no mayor que 0,0040 USD** |
-| Tokens | 0 | 277.492 de entrada y 18.119 de salida, 1.153 llamadas |
+| Latencia p50 / p95 | 0,32 s / 0,42 s | 1,50 s / 4,22 s |
+| Costo por caso (549 casos, todas las categorías) | 0 | **0,00093 USD** |
+| Costo por caso resuelto solo | 0 | **no mayor que 0,0056 USD** |
+| Tokens | 0 | 356.195 de entrada y 31.128 de salida, 1.153 llamadas |
 
-El costo por caso resuelto es una **cota superior**: divide el gasto de toda la corrida (incluidas las categorías que no se resuelven) entre las 92 resoluciones correctas. Es el costo de las llamadas al modelo; no incluye la infraestructura. La segunda lectura de fraude suma una llamada por mensaje (corre a la vez que la clasificación, así que no añade espera) y subió el costo de 0,00052 a 0,00067 USD por caso.
+El costo por caso resuelto es una **cota superior**: divide el gasto de toda la corrida (incluidas las categorías que no se resuelven) entre las 92 resoluciones correctas. Es el costo de las llamadas al modelo; no incluye la infraestructura. El costo subió de 0,00052 a 0,00093 USD por caso a lo largo del trabajo: la segunda lectura de fraude suma una llamada por mensaje (corre a la vez que la clasificación, así que no añade espera) y el prompt de la clasificación estructurada es más largo que el anterior.
 
 ## 3. Lo que se encontró
 
-Ocho defectos reales. Ninguno dejó pasar algo inseguro, y todos se corrigieron con pruebas que fallan sin la corrección.
+Nueve defectos reales. Ninguno dejó pasar algo inseguro, y todos se corrigieron con pruebas que fallan sin la corrección.
 
 | # | Defecto | Cómo se encontró | Corrección |
 |---|---|---|---|
@@ -165,6 +170,7 @@ Ocho defectos reales. Ninguno dejó pasar algo inseguro, y todos se corrigieron 
 | 6 | **Un saludo mostraba la etiqueta "resuelto automáticamente"** | El usuario | La etiqueta solo aparece si hay un caso o una escalación |
 | 7 | **El idioma se reconocía por diez palabras largas**: "Quero aumentar o limite do cartão" se respondía en español | Al escribir una prueba | Letras y palabras que solo existen en portugués |
 | 8 | **`escalate` pisaba cualquier estado**: un nuevo reporte podía deshacer el cierre de un especialista | Al documentar la API | Un caso `in_progress` o `closed` responde 409 y no cambia; uno `open`, `auto_resolved` o `escalated` sigue escalando |
+| 9 | **La clasificación estructurada con modelo se caía en cada llamada.** El prompt tiene llaves de JSON literales y se armaba con `str.format`, que lanzaba `KeyError`: con una clave de OpenRouter configurada, el paso de entender fallaba y **el chat entero devolvía error con cualquier mensaje**. Sin clave (como está hoy en producción) no se veía | Al ejecutar el árbol fusionado con el modelo: es código que llegó en la integración del trabajo de clasificación. Las pruebas usaban un modelo de mentira que nunca llegaba a esa línea | Se arma el prompt sin `str.format`. Hay una prueba que construye el prompt real (con llaves en el mensaje del cliente) y falla sin la corrección |
 
 ### Validación de las correcciones de fraude
 

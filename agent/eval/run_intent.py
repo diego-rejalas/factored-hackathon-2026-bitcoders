@@ -13,7 +13,7 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
-from app.intents import INTENTS, baseline_classify
+from app.intents import INTENTS, baseline_classify, classify_detailed
 from app.llm import LLM
 from eval import stats
 
@@ -26,10 +26,11 @@ def load(path):
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
 
 
-async def classify_with_model(llm: LLM, message: str) -> tuple[str | None, float]:
+async def classify_with_model(llm: LLM, message: str) -> tuple[dict | None, float]:
+    """The production path: the structured classification with confidence, not the older single-label prompt."""
     start = time.monotonic()
-    label = await llm.classify_intent(message)
-    return label, (time.monotonic() - start) * 1000
+    detail = await llm.classify_detailed(message)
+    return detail, (time.monotonic() - start) * 1000
 
 
 async def evaluate(rows, llm, concurrency=8):
@@ -37,11 +38,14 @@ async def evaluate(rows, llm, concurrency=8):
 
     async def one(row):
         async with gate:
-            label, latency = await classify_with_model(llm, row["message"])
+            detail, latency = await classify_with_model(llm, row["message"])
         baseline = baseline_classify(row["message"])
+        label = detail["intent"] if detail else None
         # What the agent really does: the model's label when it gives a valid one, otherwise the keywords.
         system = label if label in INTENTS else baseline
-        return {**row, "baseline": baseline, "model": label, "system": system, "model_latency_ms": round(latency, 1)}
+        confidence = detail["confidence"] if detail else None
+        return {**row, "baseline": baseline, "model": label, "system": system, "confidence": confidence,
+                "model_latency_ms": round(latency, 1)}
 
     return await asyncio.gather(*(one(r) for r in rows))
 
@@ -76,6 +80,9 @@ def summarize(results, llm_usage):
         },
         "paired": {"only_baseline_right": only_baseline, "only_system_right": only_system, "mcnemar_exact_p": round(stats.mcnemar_exact(only_baseline, only_system), 6)},
         "model_returned_no_valid_label": sum(1 for r in results if r["model"] is None),
+        # Confidence below this sends the case to a person (INTENT_MIN_CONFIDENCE, default 0.5): how often, and how right the rest is.
+        "abstains_below_0.5": stats.rate(sum(1 for r in results if r["confidence"] is not None and r["confidence"] < 0.5), len(results)),
+        "accuracy_when_it_does_not_abstain": acc("system", [r for r in results if r["confidence"] is None or r["confidence"] >= 0.5]),
         "model_latency_ms": {"p50": stats.percentile(latencies, 0.5), "p95": stats.percentile(latencies, 0.95)},
         "tokens": {"prompt": llm_usage["prompt_tokens"], "completion": llm_usage["completion_tokens"]},
         "cost_usd_total": round(llm_usage["cost"], 6) if llm_usage["cost_reported_calls"] else None,
