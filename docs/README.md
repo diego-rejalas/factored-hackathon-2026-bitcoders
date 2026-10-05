@@ -12,6 +12,7 @@ Asistente de disputas de transacciones de LATAM Bank, para el Factored AI & Data
 | Llamar a las APIs o revisar el contrato | [API](API.md) |
 | Revisar los controles y los hallazgos de seguridad | [Seguridad](SECURITY.md) |
 | Ver cómo se midió y con qué resultados | [Evaluación](EVALUATION.md) |
+| Saber qué falta para producción real | [Ruta a producción](PRODUCTION.md) |
 | Comprobar qué pide el reto y qué falta | [Criterios](CRITERIA.md) |
 | Ejecutarlo en tu máquina | [Desarrollo local](LOCAL_DEV.md) |
 
