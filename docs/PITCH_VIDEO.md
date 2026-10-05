@@ -6,6 +6,8 @@ The organizers' guidance for the submission: pitch it to a bank investor, as a p
 
 The submission page asks for exactly this: a **4 to 6 slide presentation** that explains the approach, the results and the key technical decisions, and a **video pitch of no longer than 3 minutes** that demonstrates the working solution and explains the core architectural decisions. The organizers' tip (90% product) and the page's wording (show the working solution, explain the core architectural decisions) fit together: the video is a launch film of the real product, and it names the architectural decisions in one short, plain beat instead of walking through the system.
 
+**Everything is delivered in English** (the organizers confirmed it): the narration, the on-screen text and the slides. The product still speaks Spanish and Portuguese in the demo, because the challenge requires it, so add short English subtitles over those moments (the customer's message and the reply) so a jury member who does not read them follows the story.
+
 The video limit is **3 minutes**. This script runs about **2 minutes 55 seconds** (roughly 330 spoken words). Narration is in English. The product speaks Spanish and Portuguese on screen, which the challenge requires.
 
 ## The idea
