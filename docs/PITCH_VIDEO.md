@@ -31,6 +31,48 @@ One line: **an assistant that knows which disputes it should never decide alone.
 - **Kinetic text** for the Why and Trust beats, so the video still reads with the sound off.
 - **Real product, real data.** The captures come from `prod` (the load balancer URL from `terraform output edge_url`) in dark mode at 1440×900, with Carla `CLI-00232W4ZDQPP` for a reversed charge and Ana `CLI-00MT1OY089RA` for the escalation. Create the escalated case before recording so the specialist console has something in it, and sign in as `ops` ahead of time.
 
+## Selling techniques applied
+
+What the research agrees on, and where it shows up in the script above. Sources are linked at the end of the section.
+
+| Technique | What it means | Where it is in the script |
+|---|---|---|
+| **The customer is the hero, the product is the guide** (StoryBrand) | Open on a person with a problem, not on the product. The product arrives as the guide with a plan | The cold open is one customer at night. Give her a name on screen (Ana) and keep her through the whole video |
+| **Problem, agitate, solve** | Name the problem, make the audience feel its weight, then present the solution as the way out | 0:00 to 0:40 is the problem and its weight. The solution does not appear until the reveal at 0:40 |
+| **Start with why it matters, never with features** (Apple keynotes) | Lead with a promise that answers a real frustration. Specs come last, if at all | The promise is "fast where it is safe, human where it matters". No feature list anywhere |
+| **A staged reveal** | Hold the product back, build curiosity, then show it in one clean moment | Cut to black at 0:40, then the product rises on a device |
+| **One idea, repeated** | A single memorable line that every beat supports | "It knows which disputes it must never decide alone" |
+| **The surprise is the refusal** | The memorable moment is the assistant choosing not to answer. That is unusual for a bot and it is the product's value | The approved charge at 1:25: the assistant hands the case to a person, and the card slides in |
+| **Show, do not tell, with the real product** | A demo of the core action beats any explanation | The three demo moments use the real app, inside mockups |
+| **Honest proof** | One credible number, with its limit, beats a pile of metrics | "0 of 372", plus the sentence that a small sample never proves zero risk |
+| **A clear call to action** | End on what happens next | The closing line and the repository |
+
+**A tension to resolve on purpose.** Hackathon guides often say the demo is the most important minute. The organizers here say 90% product and creativity and only 10% technical. Do both by making the demo a **product film**: the real app, cropped and animated, in short beats, with the customer's outcome as the caption. Never narrate how it works while the screen runs.
+
+**Optional framing: a six-sentence story.** If the narration needs a spine, fill in the Pixar pitch: once upon a time a customer trusted her bank. Every day she checked her card without thinking. One day a charge appeared that she did not recognize. Because of that she waited, and the bank's team drowned in questions that were mostly simple. Because of that the safe ones needed an answer in seconds and the risky ones needed a person with the facts. Until finally an assistant that knows the difference.
+
+Sources: [steps for a product launch presentation](https://www.zoho.com/show/chronicles/step-by-step-guide-to-creating-a-product-lauch-presentation.html), [startup pitch video tactics](https://advids.co/blog/startup-pitch-video), [lessons from Apple's product presentations](https://www.crappypresentations.com/presentation-tips-and-tricks/apple-product-presentations), [how to present like Steve Jobs](https://thenarrativeedge.substack.com/p/how-to-present-like-steve-jobs-the), [creating the best demo video for a hackathon](https://tips.hackathon.com/article/creating-the-best-demo-video-for-a-hackathon-what-to-know), [hackathon demo tips for a 3-minute pitch](https://reskilll.com/blogs/hackathon-demo-presentation-tips-pitch-3-minutes-win-2026/), [storytelling frameworks for pitch decks](https://mcginty.net/blog16/).
+
+## Assets to capture from the frontend
+
+Stills and short clips of the real application, taken once from `prod` and reused in the video and the slides. All at 2x resolution so they survive zooming.
+
+| # | Asset | Type | Used in |
+|---|---|---|---|
+| 1 | Login, dark mode, with the scenario dropdown open | still | video 0:40, slide 2, closing card |
+| 2 | Chat in Portuguese: the customer's message and the resolved answer with the case card | 6 to 8 s clip | video demo, moment one |
+| 3 | The approved-charge answer with the handoff card | 6 to 8 s clip | video demo, moment two |
+| 4 | Candidate cards (the assistant asking which charge) | still | slide 2 |
+| 5 | The `/admin` inbox with one escalated case | still | slide 2 |
+| 6 | The case detail in `/admin`: facts, rule, customer message, agent trace | 6 s clip, slow scroll | video 1:25 to 1:55, slide 2 |
+| 7 | The light theme of the chat | still | slide 2 (shows range) |
+
+The data comes from the demo customers, so no real person appears. Capture with a clean browser profile, no extensions and no bookmarks bar.
+
+## Optional: a launch-video skill
+
+The `product-launch-video` skill (HeyGen's HyperFrames) is installed. It captures a URL, picks a design preset, drafts a storyboard and renders the video from HTML, with animation and captions, and it asks for approval at three points. It fits the "launch event" brief well. It is also a large pipeline with its own tooling and sign-in, so use it only if there is time to run its gates and check the render. The fallback is an ordinary editor with the stills and clips above.
+
 ## What not to claim
 
 A measured improvement in production, real identity (the login is a sandbox), time saved, or any savings figure. The evaluation is offline and the data is synthetic. Everything quantitative in the video comes from [Evaluation](EVALUATION.md): 549 cases and 0 of 372 are the only numbers it uses.
