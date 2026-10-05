@@ -4,10 +4,10 @@
 // the customer before it is closed.
 export type Status = "Declined" | "Reversed" | "Approved" | "Pending";
 export type Matches = "one" | "several" | "none";
-export type Outcome = "resolves" | "asks" | "person";
+type Outcome = "resolves" | "asks" | "person";
 export type AgentId = "understand" | "decide" | "act" | "verify" | "escalate" | "respond";
 
-export const THRESHOLD_USD = 500;
+const THRESHOLD_USD = 500;
 export const ORDER: AgentId[] = ["understand", "decide", "act", "verify", "escalate", "respond"];
 
 export type Decision = {
