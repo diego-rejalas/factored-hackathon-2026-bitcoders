@@ -3,3 +3,7 @@ node_modules
 out
 next-env.d.ts
 *.tsbuildinfo
+
+# local settings
+.env
+.env*.local

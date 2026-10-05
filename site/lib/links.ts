@@ -14,7 +14,7 @@ export const LINKS = {
   diego: "https://www.linkedin.com/in/diego-rejalas",
   felix: "https://www.linkedin.com/in/f%C3%A9lix-morales-mareco-148b99150", // the accent in the profile name is percent-encoded
   repo: "https://github.com/diego-rejalas/factored-hackathon-2026-bitcoders",
-  demo: "https://136-82-12-89.sslip.io",
+  demo: process.env.NEXT_PUBLIC_DEMO_URL ?? "", // the live app; set NEXT_PUBLIC_DEMO_URL when building (see .env.example)
 } as const;
 
 export type LinkKey = keyof typeof LINKS;
