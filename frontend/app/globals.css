@@ -2179,9 +2179,24 @@ table.metrics-table tbody th {
   transition: background-color 140ms ease;
 }
 
-.gpt-history button:hover,
+.gpt-history h3 {
+  margin: 0.9rem 0 0.25rem;
+  padding: 0 0.65rem;
+  color: var(--g-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.gpt-history button:hover {
+  background: var(--g-hover);
+}
+
+/* the open conversation is marked by an accent bar, so it is not confused with the row under the pointer */
 .gpt-history button.active {
   background: var(--g-hover);
+  box-shadow: inset 3px 0 0 var(--primary);
+  font-weight: 600;
 }
 
 /* --- sign-in, same language as the chat ---------------------------------------------------------- */

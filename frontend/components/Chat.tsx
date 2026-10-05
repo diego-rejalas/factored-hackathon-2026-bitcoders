@@ -32,6 +32,26 @@ type Message = {
   animate?: boolean;
 };
 
+const DAY = 86_400_000;
+
+// The sidebar groups conversations by how long ago they were last used, newest group first.
+function groupHistory(items: ConversationItem[], language: Language) {
+  const labels =
+    language === "pt"
+      ? { today: "Hoje", yesterday: "Ontem", week: "Últimos 7 dias", older: "Antes" }
+      : { today: "Hoy", yesterday: "Ayer", week: "Últimos 7 días", older: "Antes" };
+  const now = Date.now();
+  const buckets: Record<keyof typeof labels, ConversationItem[]> = { today: [], yesterday: [], week: [], older: [] };
+  for (const item of items) {
+    const age = now - new Date(item.last_at).getTime();
+    const key = age < DAY ? "today" : age < 2 * DAY ? "yesterday" : age < 7 * DAY ? "week" : "older";
+    buckets[key].push(item);
+  }
+  return (Object.keys(labels) as (keyof typeof labels)[])
+    .filter((key) => buckets[key].length > 0)
+    .map((key) => ({ label: labels[key], items: buckets[key] }));
+}
+
 export default function Chat({
   agentUrl,
   token,
@@ -234,21 +254,28 @@ export default function Chat({
           {history.length === 0 ? (
             <p>{ct(language, "noRecent")}</p>
           ) : (
-            <ul>
-              {history.map((item) => (
-                <li key={item.conversation_id}>
-                  <button
-                    type="button"
-                    className={item.conversation_id === conversationId ? "active" : undefined}
-                    aria-current={item.conversation_id === conversationId ? "true" : undefined}
-                    title={formatDate(item.last_at, language)}
-                    onClick={() => openConversation(item.conversation_id)}
-                  >
-                    {item.title || "…"}
-                  </button>
-                </li>
+            <>
+              {groupHistory(history, language).map((group) => (
+                <section key={group.label} aria-label={group.label}>
+                  <h3>{group.label}</h3>
+                  <ul>
+                    {group.items.map((item) => (
+                      <li key={item.conversation_id}>
+                        <button
+                          type="button"
+                          className={item.conversation_id === conversationId ? "active" : undefined}
+                          aria-current={item.conversation_id === conversationId ? "true" : undefined}
+                          title={formatDate(item.last_at, language)}
+                          onClick={() => openConversation(item.conversation_id)}
+                        >
+                          {item.title || "…"}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
               ))}
-            </ul>
+            </>
           )}
         </div>
         <button className="gpt-theme" type="button" onClick={toggleTheme}>
