@@ -28,10 +28,10 @@ One line: **an assistant that knows which disputes it should never decide alone.
 ## How to make it feel like a launch
 
 - **Do not show a raw screen recording.** Every app shot goes inside a device mockup, with a slow push-in, and a callout that names the thing it points at. Cut at the moment of the answer, not before it.
-- **Cold open and transitions with Higgsfield.** The CLI and skills are installed (`higgsfield-generate`, `higgsfield-brandkit`). Ask for: the 20-second cold open (phone in a dark room), a short abstract transition built on the hexagon motif, and a closing still. Authenticate first with `higgsfield auth login`. Generated people and scenes are synthetic: say so in the video description, and never use them to suggest real customers.
+- **Cold open, transitions and closing card with Higgsfield.** See the next section for the exact shots, prompts and commands. Generated people and scenes are synthetic: say so in the video description, and never use them to suggest real customers.
 - **Sound:** one music bed that lifts at the reveal (0:40) and drops under the voice at the demo. Record the voice in a quiet room, in one pass per beat, and cut on the breath.
 - **Kinetic text** for the Why and Trust beats, so the video still reads with the sound off.
-- **Real product, real data.** The captures come from `prod` (the load balancer URL from `terraform output edge_url`) in dark mode at 1440×900, with Carla `CLI-00232W4ZDQPP` for a reversed charge and Ana `CLI-00MT1OY089RA` for the escalation. Create the escalated case before recording so the specialist console has something in it, and sign in as `ops` ahead of time.
+- **Real product, real data.** The captures of the application come from the local stack, which runs the same code with the demo customers (nothing is created in `prod`), at 1920×1080 with 2x resolution, in dark mode, logging in through the scenario dropdown so the customer's name shows. Reproduce them with `pitch-assets/_capture-script.mjs`.
 
 ## Selling techniques applied
 
@@ -55,21 +55,68 @@ What the research agrees on, and where it shows up in the script above. Sources 
 
 Sources: [steps for a product launch presentation](https://www.zoho.com/show/chronicles/step-by-step-guide-to-creating-a-product-lauch-presentation.html), [startup pitch video tactics](https://advids.co/blog/startup-pitch-video), [lessons from Apple's product presentations](https://www.crappypresentations.com/presentation-tips-and-tricks/apple-product-presentations), [how to present like Steve Jobs](https://thenarrativeedge.substack.com/p/how-to-present-like-steve-jobs-the), [creating the best demo video for a hackathon](https://tips.hackathon.com/article/creating-the-best-demo-video-for-a-hackathon-what-to-know), [hackathon demo tips for a 3-minute pitch](https://reskilll.com/blogs/hackathon-demo-presentation-tips-pitch-3-minutes-win-2026/), [storytelling frameworks for pitch decks](https://mcginty.net/blog16/).
 
-## Assets to capture from the frontend
+## Captured assets
 
-Stills and short clips of the real application, taken once from `prod` and reused in the video and the slides. All at 2x resolution so they survive zooming.
+Taken once from the real application, kept outside the repository in `pitch-assets/` (the video and the slides reuse them). Stills are 3840×2160 (2x), clips are 1920×1080 `webm`. The sidebar shows the history with the conversation just recorded, one per scene.
 
-| # | Asset | Type | Used in |
-|---|---|---|---|
-| 1 | Login, dark mode, with the scenario dropdown open | still | video 0:40, slide 2, closing card |
-| 2 | Chat in Portuguese: the customer's message and the resolved answer with the case card | 6 to 8 s clip | video demo, moment one |
-| 3 | The approved-charge answer with the handoff card | 6 to 8 s clip | video demo, moment two |
-| 4 | Candidate cards (the assistant asking which charge) | still | slide 2 |
-| 5 | The `/admin` inbox with one escalated case | still | slide 2 |
-| 6 | The case detail in `/admin`: facts, rule, customer message, agent trace | 6 s clip, slow scroll | video 1:25 to 1:55, slide 2 |
-| 7 | The light theme of the chat | still | slide 2 (shows range) |
+| File | What it shows | Used in |
+|---|---|---|
+| `01-login-dark-dropdown.png` | Login in dark mode with the scenario dropdown open | reveal (0:40), slide 2, closing card |
+| `02-resolved-pt.png` and `.webm` | A reversed charge resolved in Portuguese, with the case card | demo moment one (0:55) |
+| `03-handoff-es.png` and `.webm` | An approved charge: the handoff card | demo moment two (1:25) |
+| `04-candidates.png` | The assistant asking which charge | slide 2 |
+| `05-admin-inbox.png` | The specialist inbox, many cases | demo moment two, slide 2 |
+| `06-case-detail.png` and `.webm` | The case detail with facts, rule, message and trace, scrolling | demo moment two (1:40), slide 2 |
+| `07-chat-light.png` | The chat in the light theme | slide 2 |
+| `08-admin-metrics.png` | The metrics view: 49 cases, 22.4% resolved alone, 77.6% derived, 6 closed by specialists | Trust beat only if shown as a demo, never as a result (see below) |
 
-The data comes from the demo customers, so no real person appears. Capture with a clean browser profile, no extensions and no bookmarks bar.
+**The metrics screen is demo traffic, not a measurement.** It comes from 85 messages sent through the local agent, and 6 cases were closed by hand. The only measured numbers are the ones in [Evaluation](EVALUATION.md).
+
+## Making the generated shots with Higgsfield
+
+The CLI (`higgsfield`, alias `hf`) and its skills are installed. It is **not signed in yet**: run `higgsfield auth login` (opens a browser), then choose the billing workspace with `higgsfield workspace set <workspace_id>`. Model names and prices change, so check them before generating:
+
+```bash
+higgsfield model list --video          # image and video models you can use
+higgsfield model get <model>           # the parameters it accepts (duration, aspect ratio...)
+higgsfield generate cost <model> --prompt "..."     # what a job will cost, before it runs
+higgsfield generate create <model> --prompt "..." --wait --wait-timeout 20m   # run it and wait for the file
+```
+
+The skills' own description names Seedance for video and GPT Image or Nano Banana for stills, and the CLI's help shows `seedance_2_0` in an example. Treat those as starting points and confirm against `model list`. Use 16:9 for every shot.
+
+### What to generate (only what the real app cannot show)
+
+| # | Shot | Length | Where it goes | Prompt to start from |
+|---|---|---|---|---|
+| G1 | Cold open | 6 to 8 s | 0:00 to 0:08 | "Close shot, night, a dark bedroom. A phone lights a woman's face from below, she reads a notification, her expression turns uneasy. Shallow depth of field, cool blue light, handheld, cinematic, no visible text or logos." |
+| G2 | Cold open, the hesitation | 5 to 6 s | 0:08 to 0:14 | "Macro on a thumb hovering over the call button of a phone in a dark room, the screen glow on the skin, slow push-in, quiet and tense." |
+| G3 | Bank side, the pile of tickets | 5 s | 0:20 to 0:25 | "Abstract overhead view of many identical cards sliding in a grid on a dark surface, one card turns red and rises, clean, minimal, soft light." |
+| G4 | Transition into the reveal | 3 to 4 s | 0:38 to 0:41 | "A dark screen, a white hexagon outline draws itself, then expands to fill the frame, crisp lines, deep navy and white, no text." |
+| G5 | Closing still | image | 2:50 to 2:55 | "A single white hexagon mark on a deep navy background with a soft glow, centered, plenty of empty space, no text." (Better: place the real logo from the repository over a generated navy background in the editor.) |
+
+Consistency: the woman in G1 and G2 should be the same person. Generate them from the same reference image (`--image-references ./ref.png`) or in one session, and keep the same wardrobe words in both prompts. If the two do not match, cut G2 to the hand only, with no face. Never name or imitate a real person.
+
+### Words on screen and voice
+
+- Do the on-screen text (the kinetic lines of the Why and Trust beats) in the editor, not in the generated video: generated text is often misspelled.
+- The narration is recorded by a person. If there is no time to record, Higgsfield's `voices` command lists text-to-speech voices (`higgsfield voices`), but a human voice sells better and is safer for names like "LATAM Bank".
+- The brand mark in the corner is the real Factored logo (`frontend/public/factored-logo.png`).
+
+### Edit order
+
+1. Lay down the narration, then the music bed (it lifts at 0:40, ducks under the voice at the demo).
+2. Place G1 to G3 over the Why beat, cut on the narration's breaths.
+3. Cut to black at 0:38, G4 into the product at 0:41.
+4. Put each captured clip inside a device frame, with a slow push-in and one callout, for the demo moments.
+5. Add the kinetic text, then the closing still.
+6. Export at 1080p, 3 minutes at most, and rewatch once with the sound off.
+
+### Rules for the generated footage
+
+- Say in the video description that the opening scenes are AI-generated. They depict no real customer.
+- Check each generated clip for stray text, logos or distorted hands before using it, and regenerate rather than patch.
+- Keep the generation spend small: run `generate cost` first and generate each shot once or twice, not dozens of times.
 
 ## Optional: a launch-video skill
 
