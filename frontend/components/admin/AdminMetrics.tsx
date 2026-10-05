@@ -273,6 +273,13 @@ function CountBars({ values, tone }: { values: Record<string, number>; tone?: "d
   );
 }
 
+const RUN_STATUS: Record<string, string> = {
+  success: "Exitosa",
+  failed: "Fallida",
+  running: "En curso",
+  partial: "Parcial",
+};
+
 function FreshnessPanel({ freshness }: { freshness: DataFreshness }) {
   const run = freshness.last_etl_run;
   const runStatus = run && typeof run.status === "string" ? run.status : tr("es", "notAvailable");
@@ -285,7 +292,7 @@ function FreshnessPanel({ freshness }: { freshness: DataFreshness }) {
         <div className="cell"><span className="label">{tr("es", "customers")}</span><span className="value tnum">{freshness.gold.customers.toLocaleString("es-419")}</span></div>
         <div className="cell"><span className="label">{tr("es", "transactions")}</span><span className="value tnum">{freshness.gold.transactions.toLocaleString("es-419")}</span></div>
         <div className="cell"><span className="label">{tr("es", "snapshotDate")}</span><span className="value">{formatDate(freshness.gold.snapshot_edge, "es")}</span></div>
-        <div className="cell"><span className="label">{tr("es", "lastRun")}</span><span className="value"><span className={`badge badge-${runStatus === "success" ? "success" : "unknown"}`}>{runStatus}</span></span></div>
+        <div className="cell"><span className="label">{tr("es", "lastRun")}</span><span className="value"><span className={`badge badge-${runStatus === "success" ? "success" : "unknown"}`}>{RUN_STATUS[runStatus] ?? runStatus}</span></span></div>
         <div className="cell"><span className="label">Ejecución</span><span className="value mono">{runId}</span></div>
         <div className="cell"><span className="label">Finalizada</span><span className="value">{formatDate(finishedAt, "es")}</span></div>
       </div>
