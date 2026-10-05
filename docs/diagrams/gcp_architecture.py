@@ -51,7 +51,7 @@ with Diagram(
                 secrets = SecretManager("2  Secret Manager\nclaves y contraseñas")
                 lake = GCS("3  Cloud Storage\nlakehouse")
                 logs = Logging("4  Cloud Logging")
-                mon = Monitoring("4  Cloud Monitoring")
+                mon = Monitoring("4  Cloud Monitoring\nmétricas por defecto,\nsin alertas")
                 iam = Iam("5  IAM\ncuenta por servicio")
 
             with Cluster("VPC  factored-prod", graph_attr={**cluster_attr, "bgcolor": "#E9F5EC", "pencolor": "#34A853"}):
