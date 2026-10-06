@@ -1,5 +1,5 @@
-# What the landing and the pitch need outside Google Cloud. It was created by hand first; import.tf adopts it once, and from
-# then on this is the source of truth.
+# What the landing and the pitch need outside Google Cloud. It was created by hand first and then adopted into the state, so
+# this is now the source of truth.
 
 # The landing: a static export of site/, published with `wrangler pages deploy` (see site/README.md). Terraform owns the
 # project; the files are deployed, not planned.
