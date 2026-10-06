@@ -7,10 +7,10 @@ name: Cloudflare (landing and video)
 # gcp-deploy.yml. Both plan and apply run as the deployment account, which only accepts main: the first run has to create the
 # state object, and the read-only account cannot write (it failed with a 403 on the lock). A plan still changes nothing.
 #
-# Needs: the repository secret CLOUDFLARE_API_TOKEN (Pages Edit, R2 Edit, DNS Edit on the account and zone), the GCP
-# federation variables, and one repository variable per name below. No account, zone or domain is written in the code.
-#   CF_ACCOUNT_ID, CF_ZONE_ID, CF_PAGES_PROJECT, CF_R2_BUCKET, EDGE_DOMAIN (the app's name), EDGE_IP (the load balancer's
-#   address).
+# Needs: the repository secrets CLOUDFLARE_API_TOKEN (Pages Edit, R2 Edit, DNS Edit on the account and zone), CF_ACCOUNT_ID
+# and CF_ZONE_ID (secrets, so the public log hides them), the GCP federation values, and one repository variable per name
+# below. No account, zone or domain is written in the code.
+#   CF_PAGES_PROJECT, CF_R2_BUCKET, EDGE_DOMAIN (the app's name), EDGE_IP (the load balancer's address).
 
 on:
   workflow_dispatch:
@@ -23,8 +23,8 @@ on:
 
 env:
   APPLY: ${{ inputs.terraform_action == 'apply' }}
-  TF_VAR_account_id: ${{ vars.CF_ACCOUNT_ID }}
-  TF_VAR_zone_id: ${{ vars.CF_ZONE_ID }}
+  TF_VAR_account_id: ${{ secrets.CF_ACCOUNT_ID }}
+  TF_VAR_zone_id: ${{ secrets.CF_ZONE_ID }}
   TF_VAR_app_hostname: ${{ vars.EDGE_DOMAIN }}
   TF_VAR_edge_ip: ${{ vars.EDGE_IP }}
   TF_VAR_pages_project_name: ${{ vars.CF_PAGES_PROJECT }}
@@ -56,15 +56,15 @@ jobs:
           missing=""
           for v in CF_ACCOUNT_ID CF_ZONE_ID CF_PAGES_PROJECT CF_R2_BUCKET EDGE_DOMAIN EDGE_IP GCP_STATE_BUCKET GCP_WORKLOAD_IDENTITY_PROVIDER GCP_DEPLOY_SA; do
             case "$v" in
-              CF_ACCOUNT_ID) val="${{ vars.CF_ACCOUNT_ID }}";;
-              CF_ZONE_ID) val="${{ vars.CF_ZONE_ID }}";;
+              CF_ACCOUNT_ID) val="${{ secrets.CF_ACCOUNT_ID }}";;
+              CF_ZONE_ID) val="${{ secrets.CF_ZONE_ID }}";;
               CF_PAGES_PROJECT) val="${{ vars.CF_PAGES_PROJECT }}";;
               CF_R2_BUCKET) val="${{ vars.CF_R2_BUCKET }}";;
               EDGE_DOMAIN) val="${{ vars.EDGE_DOMAIN }}";;
               EDGE_IP) val="${{ vars.EDGE_IP }}";;
               GCP_STATE_BUCKET) val="${{ vars.GCP_STATE_BUCKET }}";;
-              GCP_WORKLOAD_IDENTITY_PROVIDER) val="${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}";;
-              GCP_DEPLOY_SA) val="${{ vars.GCP_DEPLOY_SA }}";;
+              GCP_WORKLOAD_IDENTITY_PROVIDER) val="${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}";;
+              GCP_DEPLOY_SA) val="${{ secrets.GCP_DEPLOY_SA }}";;
             esac
             [ -z "$val" ] && missing="$missing $v"
           done
@@ -75,8 +75,8 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           project_id: ${{ vars.GCP_PROJECT_ID }}
-          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ vars.GCP_DEPLOY_SA }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SA }}
 
       - uses: hashicorp/setup-terraform@v3
         with:

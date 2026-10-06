@@ -13,9 +13,9 @@ The landing's files are not planned by Terraform. They are published with `wrang
 
 ## Nothing about the account is in the code
 
-Every value is a variable, and the workflow reads each one from a repository variable, so the repository can be public.
+Every value is a variable, and the workflow reads each one from a repository variable or secret, so the repository can be public. `account_id` and `zone_id` are **secrets**: the log is public, and GitHub hides a secret but shows a variable.
 
-| Variable | Repository variable |
+| Variable | Repository variable or secret |
 |---|---|
 | `account_id` | `CF_ACCOUNT_ID` |
 | `zone_id` | `CF_ZONE_ID` |
