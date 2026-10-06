@@ -16,7 +16,9 @@ SYSTEM_RULES = (
     "5. Sé breve y claro. Incluye el número de caso exacto que aparece en los hechos.\n"
     "6. No des plazos ni promesas de tiempo (horas, días, semanas), no digas qué pasará "
     "después ni recomiendes contactar a otro equipo: solo explica lo verificado.\n"
-    "7. No uses números que no estén en los hechos."
+    "7. No uses números que no estén en los hechos.\n"
+    "8. Escribe en texto plano: sin Markdown (nada de asteriscos, negritas, encabezados ni listas con símbolos).\n"
+    "9. No escribas identificadores de transacción (códigos como TRX-...): al cliente solo se le da el número de caso."
 )
 
 FRAUD_PROMPT = (
