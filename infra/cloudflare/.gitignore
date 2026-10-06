@@ -1,0 +1,17 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.backup
+
+# Real values (.terraform.lock.hcl is committed)
+terraform.tfvars
+*.auto.tfvars
+
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*.pem
+*.key
