@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-05
+
 ### Added
 - The landing page, redesigned as windows on coloured desks, with the agent's graph as six robots that work in turn on an example message in Spanish or Portuguese, a video player, a slide viewer and screens that open large. Published on Cloudflare Pages.
 - A production suite, `infra/gcp/scripts/prod_suite.py`, that asks the deployed system the demo's questions: the edge, authentication, the policy outcomes in Spanish and Portuguese, safety, the quality of the replies and latency.
