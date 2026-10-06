@@ -159,3 +159,12 @@ dialog::backdrop {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
+
+/* The header is sticky and two rows tall on a phone: an anchor must not land under it. */
+html { scroll-padding-top: 7.5rem; }
+@media (min-width: 768px) { html { scroll-padding-top: 4rem; } }
+
+/* The menu row scrolls sideways on a phone. Its own scrollbar fades in and out on touch and repaints on its own cycle, which made
+   the sticky header shake during a vertical scroll. The row is still scrollable; only the indicator goes. */
+.scrollbar-hide { scrollbar-width: none; -ms-overflow-style: none; }
+.scrollbar-hide::-webkit-scrollbar { display: none; }

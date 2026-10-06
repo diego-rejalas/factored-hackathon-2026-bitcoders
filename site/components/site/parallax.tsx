@@ -3,13 +3,17 @@
 import { motion, useMotionValue, useReducedMotion, useScroll, useSpring, useTransform } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 
-// True only after the page has mounted and the visitor asked for reduced motion. The first render always matches the
-// server's HTML, so hydration stays clean.
+// True only after the page has mounted and either the visitor asked for reduced motion or the screen is a touch screen. The
+// first render always matches the server's HTML, so hydration stays clean.
+//
+// Touch screens get no scroll-linked movement: on a phone the browser scrolls on its own thread and the page's script hears
+// about it a frame late, so a layer moved by script lags behind the sticky header and the whole thing seems to shake while
+// the page scrolls. The layers stay where they end up.
 function useCalm() {
   const reduce = useReducedMotion();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  return mounted && !!reduce;
+  const [touch, setTouch] = useState<boolean | null>(null);
+  useEffect(() => setTouch(window.matchMedia("(hover: none) and (pointer: coarse)").matches), []);
+  return touch !== null && (!!reduce || touch);
 }
 
 // Scroll-linked movement. Every piece reads the position of its own element in the viewport, and does not move at all

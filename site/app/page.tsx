@@ -75,9 +75,9 @@ export default function Home() {
         Skip to the content
       </a>
 
-      <header className="sticky top-0 z-40 flex flex-wrap items-stretch justify-between gap-x-1 gap-y-1">
+      <header className="sticky top-0 z-40 flex flex-wrap items-stretch justify-between gap-x-1 gap-y-1 max-md:bg-ink max-md:p-1">
         <BrandChip logo={logo} />
-        <nav aria-label="Main" className="order-3 flex w-full gap-1 overflow-x-auto px-1 pb-1 md:order-none md:w-auto md:px-0 md:pb-0">
+        <nav aria-label="Main" className="order-3 flex h-11 w-full gap-1 scrollbar-hide overflow-x-auto overflow-y-hidden md:order-none md:w-auto">
           <a href="#agents" className={chip}>Agents</a>
           <a href="#screens" className={chip}>Screens</a>
           <a href="#pitch" className={chip}>Pitch</a>
@@ -87,23 +87,23 @@ export default function Home() {
         </nav>
         <div className="flex gap-1">
           <a href={LINKS.demo} className={chip}>Live demo</a>
-          <a href={LINKS.repo} className={`${chip} !bg-ink !text-white hover:!bg-white hover:!text-ink`}>Code</a>
+          <a href={LINKS.repo} className={`${chip} !bg-ink !text-white hover:!bg-white hover:!text-ink max-md:!bg-cyan max-md:!text-ink`}>Code</a>
         </div>
       </header>
 
       <main id="main">
         <section id="top" data-tone="lilac" className="sky relative -mt-12 overflow-hidden px-5 pb-20 pt-28 md:pb-32 md:pt-32">
           <Float from={0} to={160} className="pointer-events-none absolute -left-28 top-24 size-[520px]">
-            <div aria-hidden className="halftone size-full opacity-60" />
+            <div aria-hidden className="halftone size-full opacity-[0.16] md:opacity-60" />
           </Float>
           <Float from={0} to={90} className="pointer-events-none absolute -right-24 top-0 size-[460px]">
-            <div aria-hidden className="halftone size-full opacity-60" />
+            <div aria-hidden className="halftone size-full opacity-[0.16] md:opacity-60" />
           </Float>
 
           <div className={`${wrap} relative grid items-center gap-14 md:grid-cols-[1.1fr_0.9fr]`}>
             <div>
               <h1 className={`${big} text-balance text-[clamp(2.6rem,6vw,5.6rem)]`}>Fast where it is safe, human where it matters.</h1>
-              <p className="mt-7 max-w-[30rem] text-lg font-medium">
+              <p className="mt-7 max-w-[30rem] text-lg font-medium max-md:font-semibold max-md:text-ink">
                 A dispute assistant for LATAM Bank, in Spanish and Portuguese. It closes the safe cases in seconds and hands the rest to a person, case ready.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
@@ -148,7 +148,7 @@ export default function Home() {
           {screens.map((s, i) => (
             <section key={s.title} data-tone={s.tone} aria-labelledby={`h-screen-${i}`} className={`${s.desk} relative overflow-hidden py-20 md:py-28`}>
               <Float from={-40} to={120} className={`pointer-events-none absolute size-[420px] ${i % 2 ? "-left-20 top-6" : "-right-24 top-10"}`}>
-                <div aria-hidden className="halftone size-full opacity-40" />
+                <div aria-hidden className="halftone size-full opacity-[0.14] md:opacity-40" />
               </Float>
               <div className={`${wrap} relative grid items-center gap-10 md:grid-cols-[0.8fr_1.2fr] md:gap-16`}>
                 <div className={i % 2 ? "md:order-2" : ""}>

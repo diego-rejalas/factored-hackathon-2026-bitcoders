@@ -234,9 +234,9 @@ export function Agents() {
   const message = preset[lang];
 
   return (
-    <div className="grid gap-7">
+    <div className="grid grid-cols-1 gap-7 [&>*]:min-w-0">
       <Window title="chat.app" tone="white">
-        <div className="grid gap-5 lg:grid-cols-[1.25fr_1fr]">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.25fr_1fr] [&>*]:min-w-0">
           <div>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="font-semibold" id="msg-label">Pick a message</p>
@@ -255,7 +255,7 @@ export function Agents() {
                 ))}
               </div>
             </div>
-            <div role="radiogroup" aria-labelledby="msg-label" className="mt-3 grid gap-2">
+            <div role="radiogroup" aria-labelledby="msg-label" className="mt-3 grid grid-cols-1 gap-2">
               {PRESETS.map((p) => (
                 <button
                   key={p.id}
@@ -310,7 +310,7 @@ export function Agents() {
         </p>
       </Window>
 
-      <div ref={stage} className="grid gap-7">
+      <div ref={stage} className="grid grid-cols-1 gap-7 [&>*]:min-w-0">
       <p className="sr-only" aria-live="polite">{done ? `${d.stamp}. ${d.reason}` : ""}</p>
 
       {wide ? (
@@ -369,7 +369,7 @@ export function Agents() {
           ))}
         </div>
       ) : (
-        <ol className="grid gap-3">
+        <ol className="grid grid-cols-1 gap-3">
           {ORDER.map((id, i) => (
             <li key={id} className={viewOf(id).skipped ? "opacity-50" : ""}>
               <Card id={id} d={d} view={viewOf(id)} selected={selected === id} onSelect={() => setSelected(id)} status={key} lang={lang} />
