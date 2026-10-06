@@ -23,6 +23,8 @@ IDENTITY = re.compile(r"\bCLI-[A-Z0-9]+\b|\b\d{7,}\b")
 INTERNAL_NAME = re.compile(
     r"\b(auto_resolved|in_progress|escalated|no_charge_confirmed|reversal_confirmed|Approved|Declined|Pending|Reversed)\b"
 )
+# A transaction's own id (TRX-..., TXN-...): the specialist needs it, the customer does not, and it reads as noise.
+TRANSACTION_ID = re.compile(r"\b(?:TRX|TXN)-[A-Z0-9-]+\b")
 MAX_LENGTH = 900
 
 
@@ -35,6 +37,21 @@ def numbers(text: str) -> set[str]:
     return found
 
 
+def plain_text(draft: str) -> str:
+    """The draft without Markdown. The chat shows text as it comes, so "**rechazada**" would reach the customer with its
+    asterisks. The words stay, the marks go."""
+    text = re.sub(r"(\*\*|__)(.+?)\1", r"\2", draft, flags=re.DOTALL)
+    text = re.sub(r"(?<![\w*])\*(?!\s)([^*\n]+?)(?<!\s)\*(?![\w*])", r"\1", text)
+    text = re.sub(r"`+([^`]*)`+", r"\1", text)
+    text = re.sub(r"(?m)^\s{0,3}#{1,6}\s+", "", text)
+    return text.strip()
+
+
+def without_transaction_ids(text: str) -> str:
+    """A fact for the model with the transaction's id taken out, so it has nothing to copy into the reply."""
+    return re.sub(r"[ \t]{2,}", " ", TRANSACTION_ID.sub("", text)).replace(" ,", ",").strip()
+
+
 def check(draft: str, facts: list[str], message: str, case_id: str | None) -> str | None:
     """None when the draft may be sent, otherwise the name of the rule it broke."""
     if len(draft) > MAX_LENGTH:
@@ -45,6 +62,8 @@ def check(draft: str, facts: list[str], message: str, case_id: str | None) -> st
         return "identity"
     if INTERNAL_NAME.search(draft):
         return "internal_name"
+    if TRANSACTION_ID.search(draft):
+        return "transaction_id"
     allowed = numbers(" ".join(facts) + " " + message)
     # A year, a day or the decline code appear in the facts; anything else is something nobody verified.
     invented = numbers(draft) - allowed

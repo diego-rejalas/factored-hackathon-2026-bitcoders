@@ -468,13 +468,14 @@ def build_graph(tools, tracer, llm=None):
         if drafts_here:
             case_id = str(state["case"].get("case_id") or "")
             draft = await llm.chat(
-                "Hechos verificados:\n- " + "\n- ".join(facts)
+                "Hechos verificados:\n- " + "\n- ".join(grounding.without_transaction_ids(f) for f in facts)
                 + f"\n\nMensaje del cliente: {state['message']}\n"
                 + f"Redacta la respuesta final al cliente en {language} usando solo estos hechos."
             )
             if not draft:
                 draft_status = "llm_no_answer"
             else:
+                draft = grounding.plain_text(draft)
                 broken = grounding.check(draft, facts, state["message"], case_id)
                 if broken:
                     draft_status = f"llm_rejected_{broken}"  # the fixed text stays
