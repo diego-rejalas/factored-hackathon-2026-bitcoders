@@ -16,7 +16,7 @@ npx serve out       # to look at the build
 
 The address of the live app is not in the code. Set `NEXT_PUBLIC_DEMO_URL` when you build, or put it in `.env.local` (ignored by git; `.env.example` shows the name). Without it the "Live demo" buttons show "Soon".
 
-The pitch video comes from `NEXT_PUBLIC_VIDEO_URL` when it is set, and from `public/` otherwise. Use a host that answers range requests (an object-storage bucket, YouTube, Vimeo): a host that ignores them, like Cloudflare Pages, plays the video but cannot skip through it.
+The pitch video is not in the repository. It comes from `NEXT_PUBLIC_VIDEO_URL`, which must point at a host that answers range requests (an object-storage bucket, YouTube, Vimeo): a host that ignores them, like Cloudflare Pages, plays the video but cannot skip through it. Without the variable the page says the video is not part of the build.
 
 ## Publishing
 

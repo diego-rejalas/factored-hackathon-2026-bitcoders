@@ -173,7 +173,7 @@ export default function Home() {
                 src={FILES.video}
                 poster={poster.src}
                 title="pitch.mp4"
-                label="The pitch video, 2 minutes 45 seconds, in English"
+                label="The pitch video, 2 minutes 50 seconds, in English"
                 downloadHref={FILES.video}
                 size="18 MB"
               />

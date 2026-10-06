@@ -24,3 +24,6 @@ team_credentials.md
 # Code-intelligence indexes (generated)
 .codegraph/
 graphify-out/
+
+# Videos at the root are working copies, not part of the repository
+/*.mp4
