@@ -2,11 +2,11 @@
 // An empty one shows "Soon" and cannot be clicked.
 const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
-// The files themselves. The deck is served from public/. The video can be served from anywhere that answers range requests
-// (a bucket, YouTube, Vimeo): set NEXT_PUBLIC_VIDEO_URL. Without it the page falls back to the copy in public/, which
-// plays but cannot be skipped through on hosts that ignore range requests, like Cloudflare Pages.
+// The files themselves. The deck is served from public/. The video is not in the repository: it is served from a host
+// that answers range requests, which a person needs to skip through it (a bucket, YouTube, Vimeo). Set
+// NEXT_PUBLIC_VIDEO_URL when building. Without it the page says the video is not part of the build.
 export const FILES = {
-  video: process.env.NEXT_PUBLIC_VIDEO_URL || `${BASE}/bitcoders-pitch.mp4`,
+  video: process.env.NEXT_PUBLIC_VIDEO_URL ?? "",
   deck: `${BASE}/bitcoders-pitch.pptx`,
 } as const;
 
