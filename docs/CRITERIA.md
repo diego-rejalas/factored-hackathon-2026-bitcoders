@@ -96,10 +96,10 @@ What is open, in order of impact: the **deployment** of this version and the **s
 
 ## Submission (before Oct 5)
 
-- [ ] A public GitHub repo: `factored-hackathon-2026-[team name]`. **Warning: the `factored-hackathon-2026-bitcoders` repo is private right now (a deliberate choice during development). Make it public before submitting, or confirm with the organizer whether they accept a collaborator invitation instead.**
-- [ ] A link where the tool is deployed (a real deployment, not only local).
-- [ ] A 4 to 6 slide presentation with details of the tool.
-- [ ] A pitch video (mandatory) of **no more than 3 minutes**, demonstrating the working solution and explaining the core architectural decisions. (The challenge page sets the limit at 3 minutes.)
+- [x] A public GitHub repo: `factored-hackathon-2026-bitcoders`. (Private during development; made public on 2026-10-05 after a scan of the whole history for secrets.)
+- [x] A link where the tool is deployed (a real deployment, not only local): https://bitcoders.eirete.io
+- [x] A 4 to 6 slide presentation with details of the tool. (Six slides, `.pptx`, linked from the landing.)
+- [x] A pitch video (mandatory) of **no more than 3 minutes**, demonstrating the working solution and explaining the core architectural decisions. (The challenge page sets the limit at 3 minutes.)
 - [ ] Send everything to hackathon.admin@factored.ai.
 - [ ] "Submit your tool no matter what!!!" Submit even if it is incomplete.
 
