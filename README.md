@@ -57,6 +57,7 @@ The challenge statement is in [`docs/challenge/`](docs/challenge/) (organizer ma
 | `ml/eval/` | Held-out sets and evaluation of the ML components (intent and transaction ranking) |
 | `agent/eval/` | End-to-end evaluation of the system and of the intent classifier |
 | `infra/gcp/` | Terraform per environment (`dev`, `qa`, `prod`) and modules |
+| `infra/cloudflare/` | Terraform for the landing (Pages), the pitch video's bucket and the app's DNS record |
 | `infra/gcp/airflow/` | The Airflow image and DAG that run on the VM |
 | `docs/` | Documentation and diagrams |
 

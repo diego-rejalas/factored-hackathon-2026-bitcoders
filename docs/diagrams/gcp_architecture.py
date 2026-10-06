@@ -11,6 +11,7 @@ from diagrams.gcp.storage import GCS
 from diagrams.generic.compute import Rack
 from diagrams.onprem.client import User, Users
 from diagrams.onprem.vcs import Github
+from diagrams.saas.cdn import Cloudflare
 
 graph_attr = {
     "fontsize": "22",
@@ -26,7 +27,7 @@ cluster_attr = {"fontname": "Helvetica-Bold", "fontsize": "14", "labeljust": "l"
 edge_attr = {"fontname": "Helvetica", "fontsize": "11", "color": "#5F6368", "fontcolor": "#3C4043"}
 
 with Diagram(
-    "Reference architecture on Google Cloud (prod)",
+    "Reference architecture: Google Cloud and Cloudflare (prod)",
     filename="gcp-architecture",
     outformat=["png", "svg"],
     show=False,
@@ -39,6 +40,11 @@ with Diagram(
     gha = Github("GitHub Actions\nCI/CD")
     s3 = S3("Organizer S3\n(us-east-2)")
     llm = Rack("OpenRouter\n(LLM)")
+
+    with Cluster("Cloudflare  (outside Google Cloud, infra/cloudflare)", graph_attr={**cluster_attr, "bgcolor": "#FEF3E8", "pencolor": "#F38020"}):
+        dns = Cloudflare("16  DNS\nA record to the ALB,\nno proxy")
+        pages = Cloudflare("17  Pages\nthe landing")
+        video = Cloudflare("18  R2 bucket\nthe pitch video")
 
     with Cluster("Google Cloud", graph_attr={**cluster_attr, "bgcolor": "#FFFFFF", "pencolor": "#4285F4"}):
         with Cluster("Entry (global)", graph_attr={**cluster_attr, "bgcolor": "#FDF3E3", "pencolor": "#F9AB00"}):
@@ -71,6 +77,10 @@ with Diagram(
                     sql = SQL("13  Cloud SQL\nPostgreSQL 18\nprivate IP, SSL")
 
     cliente >> Edge(label="HTTPS", color="#1A73E8", penwidth="2") >> armor >> lb
+    dns >> Edge(label="name resolves to the ALB", style="dashed", color="#F38020") >> lb
+    cliente >> Edge(label="landing", color="#F38020") >> pages
+    pages >> Edge(label="video, range requests", color="#F38020") >> video
+    pages >> Edge(label="Live demo link", style="dotted", color="#F38020") >> lb
     lb >> Edge(label="/", color="#1A73E8") >> frontend
     lb >> Edge(label="/agent/*", color="#1A73E8") >> agent
     agent >> Edge(label="HTTP tools\nID token (its account only)") >> backend

@@ -101,6 +101,17 @@ It makes the agent open or escalate dispute cases, as any customer message does,
 
 **5. Stop the VM** if it was started: `./infra/gcp/scripts/airflow_vm.sh stop` (it also stops by itself at 03:00).
 
+## The landing, the video and the app's name (Cloudflare)
+
+These are not part of the Google Cloud apply. They are Terraform in `infra/cloudflare`, with their own state (the same bucket, the prefix `cloudflare`) and their own workflow, `Cloudflare (landing and video)`, run by hand.
+
+1. **Once:** create an API token with Pages Edit, R2 Edit and DNS Edit on the account and the zone, and nothing else. Set it with `gh secret set CLOUDFLARE_API_TOKEN`. Set the repository variables listed in [`infra/cloudflare/README.md`](../infra/cloudflare/README.md).
+2. Run the workflow with `plan` and read it. The first run **adopts** what was made by hand: it shows three imports and no destruction.
+3. Run it with `apply`. Afterwards delete `infra/cloudflare/import.tf` in a follow-up change.
+4. The landing's files are published with `wrangler pages deploy` (see `site/README.md`). The pitch video is an object in the bucket: `wrangler r2 object put <bucket>/<name> --file <video> --remote`, and the site reads its address from `NEXT_PUBLIC_VIDEO_URL`.
+
+The app's name needs a DNS record to the load balancer's address, **without** the proxy. Add the name to the load balancer first (`EDGE_ADDITIONAL_DOMAINS`, then `EDGE_DOMAIN`), as described above, and wait for its certificate to be `ACTIVE` before relying on it.
+
 ## Rolling back
 
 - **Services.** Cloud Run keeps earlier revisions, and the switch is immediate:

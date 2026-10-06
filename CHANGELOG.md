@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- The landing page, redesigned as windows on coloured desks, with the agent's graph as six robots that work in turn on an example message in Spanish or Portuguese, a video player, a slide viewer and screens that open large. Published on Cloudflare Pages.
+- A production suite, `infra/gcp/scripts/prod_suite.py`, that asks the deployed system the demo's questions: the edge, authentication, the policy outcomes in Spanish and Portuguese, safety, the quality of the replies and latency.
+- A domain of its own for the app: an extra managed certificate next to the main one (`edge_additional_domains`), with the names in repository variables and not in the code.
+- `infra/cloudflare`: the landing's Pages project, the pitch video's bucket and the app's DNS record as Terraform, with a workflow and the state in the existing bucket.
+
+### Fixed
+- The files in the frontend's `public/` answered 404 in production (the logo): the Dockerfile did not copy the folder into the image.
+- A model reply could reach the customer with Markdown marks (`**rechazada**`) or with the transaction's own id; the draft is now cleaned and a draft that shows an id is dropped.
+- The pitch video could not be skipped through on Pages, which ignores range requests; it is served from a bucket.
+
 ## [1.0.0] - 2026-10-05
 
 First submitted version for the Factored AI & Data Hackathon 2026. Everything below the dated entries of this release was developed before it and is listed as it was recorded.

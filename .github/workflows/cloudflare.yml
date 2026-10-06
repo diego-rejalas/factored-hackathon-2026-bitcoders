@@ -1,0 +1,107 @@
+name: Cloudflare (landing and video)
+
+# Plans or applies infra/cloudflare: the Pages project of the landing, the bucket of the pitch video, the bucket's public
+# address and the app's DNS record. Run by hand; nothing here runs on a push.
+#
+# State: the GCS bucket that holds the GCP state, under the prefix "cloudflare", reached with the same federation as
+# gcp-deploy.yml (a plan as the read-only account, an apply as the deployment one, which only accepts main).
+#
+# Needs: the repository secret CLOUDFLARE_API_TOKEN (Pages Edit, R2 Edit, DNS Edit on the account and zone), the GCP
+# federation variables, and one repository variable per name below. No account, zone or domain is written in the code.
+#   CF_ACCOUNT_ID, CF_ZONE_ID, CF_PAGES_PROJECT, CF_R2_BUCKET, EDGE_DOMAIN (the app's name), EDGE_IP (the load balancer's
+#   address), and, only for the first apply that adopts what was made by hand, CF_APP_RECORD_ID.
+
+on:
+  workflow_dispatch:
+    inputs:
+      terraform_action:
+        description: "Terraform action"
+        type: choice
+        default: plan
+        options: [plan, apply]
+
+env:
+  APPLY: ${{ inputs.terraform_action == 'apply' }}
+  TF_VAR_account_id: ${{ vars.CF_ACCOUNT_ID }}
+  TF_VAR_zone_id: ${{ vars.CF_ZONE_ID }}
+  TF_VAR_app_hostname: ${{ vars.EDGE_DOMAIN }}
+  TF_VAR_edge_ip: ${{ vars.EDGE_IP }}
+  TF_VAR_pages_project_name: ${{ vars.CF_PAGES_PROJECT }}
+  TF_VAR_r2_bucket_name: ${{ vars.CF_R2_BUCKET }}
+  TF_VAR_app_record_id: ${{ vars.CF_APP_RECORD_ID }}
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-terraform
+  cancel-in-progress: false
+
+jobs:
+  terraform:
+    name: Terraform (cloudflare)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # lets the job ask GitHub for the OIDC token that Google exchanges
+    defaults:
+      run:
+        working-directory: infra/cloudflare
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check what the run needs
+        run: |
+          missing=""
+          for v in CF_ACCOUNT_ID CF_ZONE_ID CF_PAGES_PROJECT CF_R2_BUCKET EDGE_DOMAIN EDGE_IP GCP_STATE_BUCKET GCP_WORKLOAD_IDENTITY_PROVIDER GCP_PLAN_SA; do
+            case "$v" in
+              CF_ACCOUNT_ID) val="${{ vars.CF_ACCOUNT_ID }}";;
+              CF_ZONE_ID) val="${{ vars.CF_ZONE_ID }}";;
+              CF_PAGES_PROJECT) val="${{ vars.CF_PAGES_PROJECT }}";;
+              CF_R2_BUCKET) val="${{ vars.CF_R2_BUCKET }}";;
+              EDGE_DOMAIN) val="${{ vars.EDGE_DOMAIN }}";;
+              EDGE_IP) val="${{ vars.EDGE_IP }}";;
+              GCP_STATE_BUCKET) val="${{ vars.GCP_STATE_BUCKET }}";;
+              GCP_WORKLOAD_IDENTITY_PROVIDER) val="${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}";;
+              GCP_PLAN_SA) val="${{ vars.GCP_PLAN_SA }}";;
+            esac
+            [ -z "$val" ] && missing="$missing $v"
+          done
+          [ -z "$CLOUDFLARE_API_TOKEN" ] && missing="$missing secret:CLOUDFLARE_API_TOKEN"
+          if [ -n "$missing" ]; then echo "::error::Missing:$missing"; exit 1; fi
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          # Only an apply needs write access to the state; every plan runs as the read-only account.
+          service_account: ${{ env.APPLY == 'true' && vars.GCP_DEPLOY_SA || vars.GCP_PLAN_SA }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init
+        # The read-only account cannot write the state lock either, so a plan that will not be applied skips it.
+        run: terraform init -backend-config="bucket=${{ vars.GCP_STATE_BUCKET }}" -input=false -lock=${{ env.APPLY == 'true' }}
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Terraform plan
+        run: terraform plan -input=false -lock=${{ env.APPLY == 'true' }} -out=tfplan
+
+      - name: Terraform apply
+        if: env.APPLY == 'true'
+        run: terraform apply -auto-approve -input=false tfplan
+
+      - name: What it serves
+        if: env.APPLY == 'true'
+        run: |
+          echo "landing: $(terraform output -raw landing_address)"
+          echo "video host: $(terraform output -raw video_host)"
