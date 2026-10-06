@@ -29,7 +29,7 @@ The token is the repository **secret** `CLOUDFLARE_API_TOKEN`, an API token with
 
 ## State
 
-The bucket that holds the GCP state, under the prefix `cloudflare`, reached with the same federation as `gcp-deploy.yml`. The bucket's name is not in the code: `terraform init -backend-config="bucket=<the state bucket>"`.
+The bucket that holds the GCP state, under the prefix `cloudflare`, reached with the same federation as `gcp-deploy.yml`. Plan and apply both run as the deployment account (which only accepts `main`), because the first run has to create the state object and the read-only account cannot write. The bucket's name is not in the code: `terraform init -backend-config="bucket=<the state bucket>"`.
 
 ## Run it
 

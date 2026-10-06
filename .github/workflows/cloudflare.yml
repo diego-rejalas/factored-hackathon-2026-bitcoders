@@ -4,7 +4,8 @@ name: Cloudflare (landing and video)
 # address and the app's DNS record. Run by hand; nothing here runs on a push.
 #
 # State: the GCS bucket that holds the GCP state, under the prefix "cloudflare", reached with the same federation as
-# gcp-deploy.yml (a plan as the read-only account, an apply as the deployment one, which only accepts main).
+# gcp-deploy.yml. Both plan and apply run as the deployment account, which only accepts main: the first run has to create the
+# state object, and the read-only account cannot write (it failed with a 403 on the lock). A plan still changes nothing.
 #
 # Needs: the repository secret CLOUDFLARE_API_TOKEN (Pages Edit, R2 Edit, DNS Edit on the account and zone), the GCP
 # federation variables, and one repository variable per name below. No account, zone or domain is written in the code.
@@ -54,7 +55,7 @@ jobs:
       - name: Check what the run needs
         run: |
           missing=""
-          for v in CF_ACCOUNT_ID CF_ZONE_ID CF_PAGES_PROJECT CF_R2_BUCKET EDGE_DOMAIN EDGE_IP GCP_STATE_BUCKET GCP_WORKLOAD_IDENTITY_PROVIDER GCP_PLAN_SA; do
+          for v in CF_ACCOUNT_ID CF_ZONE_ID CF_PAGES_PROJECT CF_R2_BUCKET EDGE_DOMAIN EDGE_IP GCP_STATE_BUCKET GCP_WORKLOAD_IDENTITY_PROVIDER GCP_DEPLOY_SA; do
             case "$v" in
               CF_ACCOUNT_ID) val="${{ vars.CF_ACCOUNT_ID }}";;
               CF_ZONE_ID) val="${{ vars.CF_ZONE_ID }}";;
@@ -64,7 +65,7 @@ jobs:
               EDGE_IP) val="${{ vars.EDGE_IP }}";;
               GCP_STATE_BUCKET) val="${{ vars.GCP_STATE_BUCKET }}";;
               GCP_WORKLOAD_IDENTITY_PROVIDER) val="${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}";;
-              GCP_PLAN_SA) val="${{ vars.GCP_PLAN_SA }}";;
+              GCP_DEPLOY_SA) val="${{ vars.GCP_DEPLOY_SA }}";;
             esac
             [ -z "$val" ] && missing="$missing $v"
           done
@@ -76,8 +77,7 @@ jobs:
         with:
           project_id: ${{ vars.GCP_PROJECT_ID }}
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          # Only an apply needs write access to the state; every plan runs as the read-only account.
-          service_account: ${{ env.APPLY == 'true' && vars.GCP_DEPLOY_SA || vars.GCP_PLAN_SA }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
 
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -87,14 +87,13 @@ jobs:
         run: terraform fmt -check -recursive
 
       - name: Terraform init
-        # The read-only account cannot write the state lock either, so a plan that will not be applied skips it.
-        run: terraform init -backend-config="bucket=${{ vars.GCP_STATE_BUCKET }}" -input=false -lock=${{ env.APPLY == 'true' }}
+        run: terraform init -backend-config="bucket=${{ vars.GCP_STATE_BUCKET }}" -input=false
 
       - name: Terraform validate
         run: terraform validate
 
       - name: Terraform plan
-        run: terraform plan -input=false -lock=${{ env.APPLY == 'true' }} -out=tfplan
+        run: terraform plan -input=false -out=tfplan
 
       - name: Terraform apply
         if: env.APPLY == 'true'
