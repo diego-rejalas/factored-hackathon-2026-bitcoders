@@ -16,6 +16,7 @@ import chatHandoff from "@/images/chat-handoff.jpg";
 import chatResolved from "@/images/chat-resolved.jpg";
 import bitcoders from "@/images/bitcoders-logo.png";
 import logo from "@/images/logo.png";
+import architecture from "@/images/architecture.png";
 import poster from "@/images/pitch-poster.jpg";
 import slide1 from "@/images/slides/slide-1.jpg";
 import slide2 from "@/images/slides/slide-2.jpg";
@@ -80,6 +81,7 @@ export default function Home() {
           <a href="#agents" className={chip}>Agents</a>
           <a href="#screens" className={chip}>Screens</a>
           <a href="#pitch" className={chip}>Pitch</a>
+          <a href="#architecture" className={chip}>Build</a>
           <a href="#proof" className={chip}>Numbers</a>
           <a href="#team" className={chip}>Team</a>
         </nav>
@@ -178,6 +180,38 @@ export default function Home() {
                 size="18 MB"
               />
               <SlideViewer slides={slides} deckHref={FILES.deck} size="110 KB" />
+            </div>
+          </div>
+        </section>
+
+        <section id="architecture" data-tone="butter" aria-labelledby="h-arch" className="on-butter overflow-x-clip py-20 md:py-28">
+          <div className={wrap}>
+            <h2 id="h-arch" className={`${big} text-[clamp(2.4rem,6vw,5.2rem)]`}>Where it runs</h2>
+            <p className="mb-10 mt-5 max-w-[40rem] text-lg font-medium">
+              Customers reach one load balancer on Google Cloud. The agent and the backend are private services, the database has only a private address, and the landing and the video are on Cloudflare. All of it is Terraform.
+            </p>
+            <div className="grid items-start gap-8 lg:grid-cols-[1.6fr_1fr] [&>*]:min-w-0">
+              <Window title="architecture.png" tone="white">
+                <Zoom
+                  src={architecture}
+                  alt="Architecture diagram: the customer reaches Cloud Armor and a load balancer on Google Cloud, which sends the app to the frontend and the agent on Cloud Run. The agent calls a private backend, read-only on the database. An Airflow VM loads the data. The landing, the pitch video and the app's DNS record are on Cloudflare."
+                  title="architecture.png"
+                  sizes="(min-width: 1024px) 700px, 90vw"
+                />
+                <p className="mt-3 font-mono text-sm">Click the diagram to enlarge it.</p>
+              </Window>
+              <div className="grid gap-5">
+                {[
+                  { tone: "bg-mint", title: "The policy is code", text: "The rules sit outside the model. The model reads the message and drafts the reply, and a draft that breaks a rule is replaced by a fixed text." },
+                  { tone: "bg-lilac", title: "One way to the data", text: "The agent reaches the bank only through a private backend that checks who is asking. The database has a private address, and each service has its own role." },
+                  { tone: "bg-coral", title: "Checked in production", text: "A suite of 32 checks asks the live system the demo's questions: the edge, access, the policy in Spanish and Portuguese, safety and the replies." },
+                ].map((c) => (
+                  <div key={c.title} className={`${c.tone} border-2 border-ink p-5 shadow-[6px_6px_0_var(--ink)]`}>
+                    <h3 className="font-semibold">{c.title}</h3>
+                    <p className="mt-2 text-sm font-medium leading-snug">{c.text}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </section>
