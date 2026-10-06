@@ -1,3 +1,4 @@
+import asyncio
 import os
 from contextlib import asynccontextmanager
 
@@ -44,7 +45,11 @@ def create_app(store: BankStore | None = None) -> FastAPI:
             if os.environ.get("DEMO_ACCOUNTS_ENABLED", "false").lower() == "true" and os.environ.get("DEMO_PASSWORD"):
                 await seed_demo_accounts(owned, os.environ["DEMO_PASSWORD"])
             app.state.store = owned
+            # Warm the demo scenarios now, so the first visitor to the login does not wait for them.
+            warm = asyncio.create_task(owned.demo_scenarios())
+            warm.add_done_callback(lambda task: task.cancelled() or task.exception())
             yield
+            warm.cancel()
             await owned.close()
         else:
             yield
