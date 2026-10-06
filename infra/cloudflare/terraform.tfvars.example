@@ -5,4 +5,3 @@ app_hostname       = "app.example.com"
 edge_ip            = "<the load balancer's reserved address>"
 pages_project_name = "<pages project>"
 r2_bucket_name     = "<bucket>"
-# app_record_id    = "<id of the existing DNS record>"   # only for the first apply that adopts what exists (import.tf)

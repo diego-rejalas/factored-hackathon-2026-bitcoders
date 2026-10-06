@@ -36,10 +36,3 @@ variable "r2_bucket_name" {
   description = "Name of the bucket that holds the pitch video. The video lives here, not in the repository, because a bucket answers range requests and Pages does not, and a video that ignores them cannot be skipped through."
   type        = string
 }
-
-# Only while adopting what was created by hand: the id of the existing DNS record (see import.tf).
-variable "app_record_id" {
-  description = "Id of the DNS record that already exists for app_hostname. Used only by import.tf, once."
-  type        = string
-  default     = ""
-}

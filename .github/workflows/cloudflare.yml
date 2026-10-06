@@ -10,7 +10,7 @@ name: Cloudflare (landing and video)
 # Needs: the repository secret CLOUDFLARE_API_TOKEN (Pages Edit, R2 Edit, DNS Edit on the account and zone), the GCP
 # federation variables, and one repository variable per name below. No account, zone or domain is written in the code.
 #   CF_ACCOUNT_ID, CF_ZONE_ID, CF_PAGES_PROJECT, CF_R2_BUCKET, EDGE_DOMAIN (the app's name), EDGE_IP (the load balancer's
-#   address), and, only for the first apply that adopts what was made by hand, CF_APP_RECORD_ID.
+#   address).
 
 on:
   workflow_dispatch:
@@ -29,7 +29,6 @@ env:
   TF_VAR_edge_ip: ${{ vars.EDGE_IP }}
   TF_VAR_pages_project_name: ${{ vars.CF_PAGES_PROJECT }}
   TF_VAR_r2_bucket_name: ${{ vars.CF_R2_BUCKET }}
-  TF_VAR_app_record_id: ${{ vars.CF_APP_RECORD_ID }}
   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
 permissions:

@@ -1,6 +1,6 @@
 # Cloudflare: the landing, the pitch video and the app's name
 
-What lives outside Google Cloud, as Terraform. It was made by hand first; `import.tf` adopts it once.
+What lives outside Google Cloud, as Terraform. It was made by hand first and then adopted into the state.
 
 | Resource | What it is |
 |---|---|
@@ -23,7 +23,6 @@ Every value is a variable, and the workflow reads each one from a repository var
 | `edge_ip` | `EDGE_IP` (the `ip_address` output of `infra/gcp/envs/prod`) |
 | `pages_project_name` | `CF_PAGES_PROJECT` |
 | `r2_bucket_name` | `CF_R2_BUCKET` |
-| `app_record_id` | `CF_APP_RECORD_ID` (only to adopt the existing record, once) |
 
 The token is the repository **secret** `CLOUDFLARE_API_TOKEN`, an API token with Pages Edit, R2 Edit and DNS Edit on that account and zone (and nothing else). Create it in the Cloudflare dashboard and set it with `gh secret set CLOUDFLARE_API_TOKEN`.
 
@@ -35,6 +34,6 @@ The bucket that holds the GCP state, under the prefix `cloudflare`, reached with
 
 The workflow `Cloudflare (landing and video)`, by hand, with `plan` or `apply`. Plan first and read it.
 
-The first apply **adopts** what already exists (`import.tf`): the plan shows three imports (the project, the bucket, the record) and no destruction. The managed domain has no import; the resource enables it, which is idempotent for a bucket that already has it. After that apply, delete `import.tf` and the variable `app_record_id` in a follow-up change, and the repository variable `CF_APP_RECORD_ID`.
+What was created by hand was adopted into the state with a one-time `import.tf` (the Pages project, the bucket and the DNS record, three imports and no destruction), and that file is gone. The managed domain has no import; the resource enables it, which was a no-op for a bucket that already had it. A plan now says "No changes".
 
 By hand: `cp terraform.tfvars.example terraform.tfvars`, fill it in, `export CLOUDFLARE_API_TOKEN=...`, `terraform init -backend-config="bucket=..."`, `terraform plan`.
