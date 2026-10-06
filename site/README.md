@@ -22,6 +22,15 @@ The pitch video comes from `NEXT_PUBLIC_VIDEO_URL` when it is set, and from `pub
 
 `out/` is plain static files, so any static host works (GitHub Pages, a Cloud Storage bucket, Vercel). For a GitHub Pages project URL, build with `NEXT_PUBLIC_BASE_PATH=/<repo> pnpm build`. GitHub Pages needs the repository to be public.
 
+The landing is published on Cloudflare Pages. The project is in Terraform (`infra/cloudflare`); the files are deployed by hand, with the two build variables set (`NEXT_PUBLIC_DEMO_URL`, `NEXT_PUBLIC_VIDEO_URL`, see `.env.example`):
+
+```bash
+pnpm build
+npx wrangler pages deploy out --project-name <the Pages project> --branch main
+```
+
+`wrangler login` stores the session on your machine, outside the repository.
+
 ## Notes
 
 - The theme follows the system: dark is the product's own look, with a light variant.

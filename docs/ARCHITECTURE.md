@@ -35,6 +35,16 @@ flowchart LR
     VM -->|bronze and silver Parquet| LAKE[(Cloud Storage<br/>lakehouse)]
     VM -->|publishes gold| GOLD
     VM --> OPS
+
+    subgraph cf["Cloudflare (outside GCP)"]
+        DNS[DNS<br/>A record to the load balancer]
+        PAGES[Pages<br/>the landing]
+        R2[(R2<br/>the pitch video)]
+    end
+
+    DNS -.->|name resolves to| FE
+    PAGES -->|video, range requests| R2
+    PAGES -.->|Live demo link| FE
 ```
 
 ## Deployment
@@ -46,6 +56,8 @@ Everything is Terraform in `infra/gcp/`, in three environments (`dev`, `qa`, `pr
 - **Identities.** Each service has its own service account and reads only the secrets it needs. In the database each service has its own role (`backend_app`, `agent_app`). Deployment from GitHub Actions uses identity federation, with no stored keys.
 - **Images and secrets.** Artifact Registry and Secret Manager. The organizer's S3 keys and the OpenRouter key are loaded by hand, and an `apply` does not overwrite them.
 - **Cost.** The Airflow VM stops by itself at night and starts on demand (`scripts/airflow_vm.sh`). Cloud SQL can be paused (`scripts/manage_db.sh`).
+- **Domain.** The app's name is a DNS record in Cloudflare that points at the load balancer's address, without Cloudflare's proxy, because Google issues the managed certificate by looking at where the name resolves. A name can be added without interrupting the current one: each extra domain gets its own certificate next to the main one (`edge_additional_domains`). The names are repository variables, not code.
+- **Landing and video.** The landing is a static export of `site/` on Cloudflare Pages, and the pitch video is an object in an R2 bucket: Pages ignores range requests, so a video served from it plays but cannot be skipped through. Both are in `infra/cloudflare` (the Pages project, the bucket, its public address and the DNS record), with their own state and their own workflow, apart from the application. Details in [Deployment](DEPLOY.md).
 - **Monitoring.** Cloud Run and Cloud SQL report their default metrics and logs. No alerts, dashboards or uptime checks are defined yet (see [Path to production](PRODUCTION.md)).
 
 ## 1. Extraction and loading

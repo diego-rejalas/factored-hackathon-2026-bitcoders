@@ -146,3 +146,5 @@ Cloud Run at 0 instances costs almost nothing, and Cloud SQL is the only permane
 ## An earlier stack
 
 Before the environments were split, a deployment existed with the old names (`factored-hackathon`, `us-central1`) and unprefixed state. The current environments are **new** deployments and do not replace or destroy it. If it still exists, it is retired with `terraform destroy` from commit `62a97b1` and its state, after the new environment has been verified.
+
+The landing, the pitch video's bucket and the app's DNS record are not here: they are in [`../cloudflare`](../cloudflare/README.md), with their own state and workflow.
