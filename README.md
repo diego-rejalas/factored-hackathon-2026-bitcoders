@@ -11,6 +11,17 @@ A banking customer-service assistant that resolves safe transaction disputes on 
 - **A specialist** picks up escalated cases in the `/admin` console, with the evidence, the audit trail and the agent's trace.
 - Policy, permissions and identity live in code. The language model is optional and only drafts the reply.
 
+## Try it
+
+| | |
+|---|---|
+| **Live demo** | https://bitcoders.eirete.io (the login offers ready-made customer scenarios, in Spanish and Portuguese) |
+| **Landing, with the pitch video and the slides** | https://bitcoders-pitch.pages.dev |
+| **Slides (`.pptx`)** | https://bitcoders-pitch.pages.dev/bitcoders-pitch.pptx |
+| **Pitch video** | 2 minutes 50 seconds, in English, on the landing page under "The pitch" |
+
+The data is synthetic. The specialist console at `/admin` needs a staff account.
+
 ## How it works
 
 **The agent.** Policy is code and the model only helps: it classifies, drafts the reply and takes a second look for fraud, but it never decides.
