@@ -1,5 +1,7 @@
+import asyncio
 import base64
 import json
+import logging
 import os
 import time
 from datetime import date, datetime, timedelta
@@ -12,6 +14,8 @@ from fastapi import Request
 
 from app.migrate import apply_migrations
 from app.response_codes import meanings
+
+logger = logging.getLogger(__name__)
 
 
 def _json_default(value: Any) -> Any:
@@ -133,6 +137,7 @@ class BankStore:
         self.pool = pool
         self._snapshot_edge_value: Any = None
         self._demo_cache: tuple[float, list[dict]] | None = None
+        self._demo_refresh: asyncio.Task | None = None
 
     @classmethod
     async def create(cls) -> "BankStore":
@@ -868,10 +873,31 @@ class BankStore:
     async def demo_scenarios(self) -> list[dict]:
         """Deterministic demo picks (see plan D5): four customers that guarantee each
         workflow path in a demo/video. Anchored to the same snapshot edge as the agent's
-        searches, cached in memory for 5 minutes, and never touching fraud columns."""
+        searches, and never touching fraud columns.
+
+        Building them takes several seconds, so nobody waits for it after the first time: a cached
+        answer is always returned at once, and once it is older than DEMO_CACHE_SECONDS one background
+        task rebuilds it. The data is a static snapshot, so a stale answer is the same answer."""
+        if self._demo_cache is None:
+            return await self._build_demo_scenarios()
+        if time.monotonic() - self._demo_cache[0] >= self.DEMO_CACHE_SECONDS:
+            self._refresh_demo_scenarios()
+        return self._demo_cache[1]
+
+    def _refresh_demo_scenarios(self) -> None:
+        if self._demo_refresh is not None and not self._demo_refresh.done():
+            return
+
+        async def rebuild() -> None:
+            try:
+                await self._build_demo_scenarios()
+            except Exception:
+                logger.warning("demo scenarios refresh failed; keeping the cached answer", exc_info=True)
+
+        self._demo_refresh = asyncio.create_task(rebuild())
+
+    async def _build_demo_scenarios(self) -> list[dict]:
         now = time.monotonic()
-        if self._demo_cache is not None and now - self._demo_cache[0] < self.DEMO_CACHE_SECONDS:
-            return self._demo_cache[1]
         threshold = self._demo_threshold_usd()
         edge = await self.snapshot_edge()
         async with self.pool.acquire() as conn:
