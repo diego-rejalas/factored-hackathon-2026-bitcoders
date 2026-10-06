@@ -95,6 +95,10 @@ AGENT_URL="$(cd infra/gcp/envs/prod && terraform output -raw edge_url)/agent" py
 
 And by hand, in the browser with the load balancer URL: sign in as a demo customer, then try a case that resolves, one that escalates, one in Portuguese, and the `/admin` console with the user you loaded.
 
+**Production suite.** `BASE_URL=https://<your address> python3 infra/gcp/scripts/prod_suite.py` asks the deployed system the questions a person clicking through the demo would meet, using the same demo customers the login offers (`/agent/meta/demo-scenarios`), and exits non-zero if a check fails. It covers the edge (HTTPS, the redirect, the certificate and its expiry, the files in `public/`), authentication, the policy outcomes in Spanish and Portuguese, safety (a prompt injection, another customer's data, an out-of-scope question) and the replies themselves (no internal names, no promise of time or money), and it reports the latency of every turn. A WARN does not fail the run. It has no dependencies.
+
+It makes the agent open or escalate dispute cases, as any customer message does, and lists the case ids it caused. `--no-writes` skips the checks that do, and `--json FILE` saves the results. It is not the 549-case evaluation: it is a check that the live system answers well, in about a minute.
+
 **5. Stop the VM** if it was started: `./infra/gcp/scripts/airflow_vm.sh stop` (it also stops by itself at 03:00).
 
 ## Rolling back
