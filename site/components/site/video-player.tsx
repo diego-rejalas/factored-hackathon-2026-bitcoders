@@ -10,7 +10,20 @@ const btn = "grid min-h-11 min-w-11 place-items-center border-2 border-ink bg-wh
 
 // The pitch video in a window of the page, with its own controls instead of the browser's. It is a plain <video>, so the
 // file can be swapped for any other without touching this component.
-export function VideoPlayer({ src, poster, title, label, downloadHref, size }: { src: string; poster: string; title: string; label: string; downloadHref: string; size: string }) {
+type Props = { src: string; poster: string; title: string; label: string; downloadHref: string; size: string };
+
+export function VideoPlayer(props: Props) {
+  if (!props.src) {
+    return (
+      <Window title={props.title} tone="white">
+        <p className="font-mono text-sm">The video is not part of this build. Set NEXT_PUBLIC_VIDEO_URL when building the site.</p>
+      </Window>
+    );
+  }
+  return <Player {...props} />;
+}
+
+function Player({ src, poster, title, label, downloadHref, size }: Props) {
   const video = useRef<HTMLVideoElement>(null);
   const box = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
