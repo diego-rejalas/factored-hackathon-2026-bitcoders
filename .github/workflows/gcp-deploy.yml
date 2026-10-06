@@ -10,8 +10,10 @@ name: GCP deploy
 # accepts workflows running on main (see infra/gcp/bootstrap).
 #
 # Needs in the repo (or per GitHub Environment, which lets prod require a manual approval):
-#   vars: GCP_PROJECT_ID, GCP_STATE_BUCKET, GCP_REGION (default us-east4),
-#         GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_PLAN_SA, GCP_DEPLOY_SA (outputs of infra/gcp/bootstrap)
+#   vars:    GCP_PROJECT_ID, GCP_STATE_BUCKET, GCP_REGION (default us-east4)
+#   secrets: GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_PLAN_SA, GCP_DEPLOY_SA (outputs of infra/gcp/bootstrap) and AIRFLOW_ADMIN_MEMBERS.
+#            They are secrets and not variables because GitHub hides a secret in the log and shows a variable, and the log is
+#            public: it would print the project number, the service accounts and the administrators' emails.
 # The state bucket is created once with infra/gcp/scripts/setup-backend.sh.
 
 on:
@@ -42,7 +44,7 @@ env:
   TAG: ${{ github.sha }}
   # Who may open the IAP tunnel to the Airflow VM, as a JSON list: a repository variable, so that no personal address
   # lives in the code and an apply from here does not remove the access an earlier apply granted.
-  TF_VAR_airflow_admin_members: ${{ vars.AIRFLOW_ADMIN_MEMBERS || '[]' }}
+  TF_VAR_airflow_admin_members: ${{ secrets.AIRFLOW_ADMIN_MEMBERS || '[]' }}
   # Domains live in repository variables, not in the code. Empty: the load balancer keeps its <ip>.sslip.io name.
   TF_VAR_edge_domain: ${{ vars.EDGE_DOMAIN || '' }}
   TF_VAR_edge_additional_domains: ${{ vars.EDGE_ADDITIONAL_DOMAINS || '[]' }}
@@ -60,8 +62,8 @@ jobs:
     steps:
       - id: check
         env:
-          PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          PLAN_SA: ${{ vars.GCP_PLAN_SA }}
+          PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          PLAN_SA: ${{ secrets.GCP_PLAN_SA }}
         run: echo "ready=$([ -n "$PROVIDER" ] && [ -n "$PLAN_SA" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
   deploy:
@@ -79,13 +81,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The whole secret is hidden in the log, but Terraform prints each member on its own line, so each one is hidden too.
+      - name: Hide each administrator in the log
+        env:
+          MEMBERS: ${{ secrets.AIRFLOW_ADMIN_MEMBERS || '[]' }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          for member in json.loads(os.environ["MEMBERS"]):
+              print(f"::add-mask::{member}")
+              print(f"::add-mask::{member.split(':', 1)[-1]}")
+          PY
+
       - id: auth
         uses: google-github-actions/auth@v2
         with:
           project_id: ${{ vars.GCP_PROJECT_ID }}
-          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           # Only an apply needs write access; every plan runs as the read-only account.
-          service_account: ${{ env.APPLY == 'true' && vars.GCP_DEPLOY_SA || vars.GCP_PLAN_SA }}
+          service_account: ${{ env.APPLY == 'true' && secrets.GCP_DEPLOY_SA || secrets.GCP_PLAN_SA }}
 
       - uses: google-github-actions/setup-gcloud@v2
 

@@ -14,7 +14,7 @@ The `prod` `plan` says so. It ran from GitHub with the read-only account and app
 | Airflow VM | Only the image tag in its metadata changes. The VM stays stopped until it is used |
 | Secret `factored-prod-admin-users` and its read permission for the backend | **New and empty (`NOT_SET`).** It has to be loaded, or the `/admin` console answers 503 |
 
-An earlier `plan` showed 3 destroys: the Airflow VM access of whoever operates it. Those were permissions that a local `apply` had granted with a variable the GitHub workflow did not pass. It now passes it, from the repository variable `AIRFLOW_ADMIN_MEMBERS`. Without it, applying from GitHub removes access from whoever had it.
+An earlier `plan` showed 3 destroys: the Airflow VM access of whoever operates it. Those were permissions that a local `apply` had granted with a variable the GitHub workflow did not pass. It now passes it, from the repository secret `AIRFLOW_ADMIN_MEMBERS` (a secret, so the public log hides the emails). Without it, applying from GitHub removes access from whoever had it.
 
 **Data.** The backend migrations run at startup, once and under a lock:
 
@@ -27,7 +27,7 @@ An earlier `plan` showed 3 destroys: the Airflow VM access of whoever operates i
 |---|---|---|
 | 1 | Look at the duplicates `0003` would close (below). If they are test cases, it does not matter | You |
 | 2 | Optional but recommended: in GitHub, **Settings, Environments, prod**, add required reviewers. Today anyone with write permission can apply to `prod` | You |
-| 3 | Confirm that `AIRFLOW_ADMIN_MEMBERS` exists: `gh variable list` | You |
+| 3 | Confirm that `AIRFLOW_ADMIN_MEMBERS` exists: `gh secret list` | You |
 
 **Look at the duplicates** (this starts the VM, queries and stops it):
 

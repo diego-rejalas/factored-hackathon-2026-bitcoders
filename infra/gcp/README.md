@@ -63,7 +63,7 @@ The differences come from variables (`db_tier`, `use_cloud_sql_connector`, `db_d
    ```bash
    PROJECT_ID=<PROJECT_ID> ./infra/gcp/scripts/setup-backend.sh
    ```
-3. For CI deployment (with no stored key, using Workload Identity Federation): apply `infra/gcp/bootstrap` once (by hand, with an admin account) and copy its three outputs to repository variables: `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_PLAN_SA` and `GCP_DEPLOY_SA`, together with `GCP_PROJECT_ID` and `GCP_STATE_BUCKET` (and optionally `GCP_REGION`). See `.github/workflows/gcp-deploy.yml`.
+3. For CI deployment (with no stored key, using Workload Identity Federation): apply `infra/gcp/bootstrap` once (by hand, with an admin account) and copy its three outputs to repository **secrets** (`GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_PLAN_SA` and `GCP_DEPLOY_SA`: the workflow log is public, and GitHub hides a secret but shows a variable), together with the variables `GCP_PROJECT_ID` and `GCP_STATE_BUCKET` (and optionally `GCP_REGION`). See `.github/workflows/gcp-deploy.yml`.
 
 ## Deploying an environment by hand
 
