@@ -234,3 +234,26 @@ def test_a_security_matter_the_classifier_calls_out_of_scope_still_reaches_a_per
 ])
 def test_a_draft_that_shows_an_internal_name_is_rejected(draft):
     assert grounding.check(draft, ["transacción TXN-1 figura como Declined"], "No reconozco el cobro", "case-1") == "internal_name"
+
+
+@pytest.mark.parametrize("draft, expected", [
+    ("La transacción fue **rechazada** por fondos insuficientes.", "La transacción fue rechazada por fondos insuficientes."),
+    ("A cobrança foi __revertida__ e *verificada*.", "A cobrança foi revertida e verificada."),
+    ("## Resumen\nCaso `abc` registrado.", "Resumen\nCaso abc registrado."),
+    ("El monto de 3 * 4 y 5*6 no cambia, ni un * suelto.", "El monto de 3 * 4 y 5*6 no cambia, ni un * suelto."),
+])
+def test_markdown_marks_are_removed_and_the_words_stay(draft, expected):
+    assert grounding.plain_text(draft) == expected
+
+
+def test_the_model_is_not_shown_the_transaction_id_and_the_fact_stays_readable():
+    fact = "transacción TRX-P1R0GUZ51WRWZ05P1ABE (Moda Express, 389.87 USD) estado Reversed"
+    assert grounding.without_transaction_ids(fact) == "transacción (Moda Express, 389.87 USD) estado Reversed"
+    assert grounding.without_transaction_ids("caso verificado en estado auto_resolved") == "caso verificado en estado auto_resolved"
+
+
+def test_a_draft_that_shows_a_transaction_id_is_rejected():
+    facts = ["transacción TRX-P1R0GUZ51WRWZ05P1ABE (Moda Express, 389.87 USD)"]
+    draft = "La transacción TRX-P1R0GUZ51WRWZ05P1ABE por 389.87 USD fue rechazada. Caso registrado."
+    assert grounding.check(draft, facts, "No reconozco el cobro de 389.87", "case-1") == "transaction_id"
+    assert grounding.check("La transacción por 389.87 USD fue rechazada.", facts, "No reconozco el cobro de 389.87", "case-1") is None
