@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- The demo sleeps when nobody uses it and wakes on request (`enable_waker`, on in `prod`): a `waker` Cloud Run service (`infra/gcp/waker/`, `modules/waker`) stops Cloud SQL after 30 minutes without traffic and starts it when asked, reached through the load balancer under `/waker/`. A Cloud Scheduler job runs the idle check, and the database never sleeps while the Airflow VM runs.
+- A waiting screen in the frontend (`WakeGate`) that wakes the demo by itself and shows its progress, in Spanish and Portuguese, and the landing's "Live demo" links wake it before opening the app (`NEXT_PUBLIC_WAKER_URL`).
+
+### Changed
+- With the waker on, the backend and the agent have no minimum instance. `modules/cloudsql` ignores `activation_policy` and `user_labels` after creation, so an `apply` does not wake a sleeping database; the workflow starts the database before it applies, and `airflow_vm.sh start` starts it before the VM.
+- The deploy account of `infra/gcp/bootstrap` gets `roles/cloudscheduler.admin` and `roles/iam.roleAdmin`; the bootstrap has to be applied again by hand.
+
 ## [1.1.0] - 2026-10-05
 
 ### Added
