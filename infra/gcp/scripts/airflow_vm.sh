@@ -23,6 +23,16 @@ ssh_vm() { gcloud compute ssh "$VM" --tunnel-through-iap --zone "$ZONE" --projec
 
 state() { vm describe --format="value(status)"; }
 
+# Airflow keeps its metadata in Cloud SQL. The waker may have stopped the database, so start it before the VM (a no-op when
+# it already runs). While the VM runs, the waker never stops the database.
+wake_db() {
+    local instance="factored-${ENVIRONMENT}"
+    if [ "$(gcloud sql instances describe "$instance" --project "$PROJECT" --format='value(settings.activationPolicy)')" = "NEVER" ]; then
+        echo "Starting Cloud SQL ($instance)..."
+        gcloud sql instances patch "$instance" --project "$PROJECT" --activation-policy=ALWAYS --quiet
+    fi
+}
+
 wait_ready() {
     echo "Waiting for Airflow (the first boot also installs Docker and can take several minutes)..."
     for _ in $(seq 1 60); do
@@ -38,6 +48,7 @@ wait_ready() {
 
 case "${1:-}" in
     start)
+        wake_db
         [ "$(state)" = "RUNNING" ] || vm start
         wait_ready
         ;;

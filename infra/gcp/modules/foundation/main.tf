@@ -15,6 +15,8 @@ resource "google_project_service" "services" {
     "cloudresourcemanager.googleapis.com",
     "iap.googleapis.com",
     "oslogin.googleapis.com",
+    "cloudscheduler.googleapis.com",
+    "monitoring.googleapis.com",
   ])
   service            = each.key
   disable_on_destroy = false

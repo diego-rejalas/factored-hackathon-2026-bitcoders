@@ -1,6 +1,7 @@
 # External Application Load Balancer (global, EXTERNAL_MANAGED) in front of the public Cloud Run services:
 #   /          -> frontend
 #   /agent/*   -> agent (prefix removed)
+#   /waker/*   -> waker (prefix removed), only when waker_service is set: wakes the demo from a sleeping database
 # One HTTPS origin means the browser calls the agent on the same origin, so CORS does not apply. Cloud Armor
 # filters both backends, and the services accept traffic only from this load balancer.
 
@@ -11,10 +12,13 @@ resource "google_compute_global_address" "this" {
 
 locals {
   domain = var.domain != "" ? var.domain : "${replace(google_compute_global_address.this.address, ".", "-")}.sslip.io"
-  backends = {
-    frontend = var.frontend_service
-    agent    = var.agent_service
-  }
+  backends = merge(
+    {
+      frontend = var.frontend_service
+      agent    = var.agent_service
+    },
+    var.waker_service != "" ? { waker = var.waker_service } : {},
+  )
 }
 
 resource "google_compute_managed_ssl_certificate" "this" {
@@ -184,6 +188,22 @@ resource "google_compute_url_map" "https" {
       route_action {
         url_rewrite {
           path_prefix_rewrite = "/"
+        }
+      }
+    }
+
+    dynamic "route_rules" {
+      for_each = var.waker_service != "" ? [1] : []
+      content {
+        priority = 2
+        service  = google_compute_backend_service.this["waker"].id
+        match_rules {
+          prefix_match = "/waker/"
+        }
+        route_action {
+          url_rewrite {
+            path_prefix_rewrite = "/"
+          }
         }
       }
     }

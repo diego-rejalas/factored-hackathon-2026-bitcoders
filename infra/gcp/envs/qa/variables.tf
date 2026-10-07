@@ -244,3 +244,21 @@ variable "demo_password" {
   type        = string
   default     = "Demo-Bancario-2026"
 }
+
+variable "enable_waker" {
+  description = "Put the demo to sleep when nobody uses it and wake it on request (modules/waker): Cloud SQL is stopped after waker_idle_minutes without traffic, and the page shows a waiting screen while it starts. Needs enable_edge. Turns the backend and agent minimum instances to 0. Cuts the idle cost to the load balancer, Cloud Armor and the disks."
+  type        = bool
+  default     = false
+}
+
+variable "waker_idle_minutes" {
+  description = "Minutes without traffic to the frontend or the agent before the database is stopped."
+  type        = number
+  default     = 30
+}
+
+variable "waker_allowed_origins" {
+  description = "Origins that may call the waker from a browser: the landing's, for example [\"https://landing.example.pages.dev\"]. The app itself is same-origin and needs none. The deploy workflow reads them from the repository variable WAKER_ALLOWED_ORIGINS."
+  type        = list(string)
+  default     = []
+}

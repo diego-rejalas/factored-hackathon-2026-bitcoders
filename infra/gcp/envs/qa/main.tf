@@ -116,6 +116,13 @@ locals {
   # Where the browser reaches the agent: the same origin as the page once the load balancer is the way in.
   agent_public_url = local.edge_locked ? "https://${module.edge[0].domain}/agent" : module.agent.uri
   edge_ingress     = local.edge_locked ? "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER" : "INGRESS_TRAFFIC_ALL"
+
+  # With the waker, the demo sleeps: Cloud Run scales to zero by itself, so the two services that need the database
+  # never keep an instance (the waker stops and starts Cloud SQL, the one piece that does not wake on a request).
+  backend_min_instances = var.enable_waker ? 0 : var.backend_min_instances
+  agent_min_instances   = var.enable_waker ? 0 : var.agent_min_instances
+  # Where the page asks whether the demo is awake: same origin, through the load balancer. Empty: no waiting screen.
+  waker_path = var.enable_waker && local.edge_locked ? "/waker" : ""
 }
 
 module "backend" {
@@ -145,7 +152,7 @@ module "backend" {
   cloudsql_connection_name = module.cloudsql.connection_name
   allow_unauthenticated    = var.backend_public
   invoker_members          = var.backend_public ? [] : ["serviceAccount:${module.agent.service_account_email}"]
-  min_instances            = var.backend_min_instances
+  min_instances            = local.backend_min_instances
   deletion_protection      = var.run_deletion_protection
   labels                   = local.labels
 
@@ -181,7 +188,7 @@ module "agent" {
   cloudsql_connection_name = module.cloudsql.connection_name
   allow_unauthenticated    = true
   ingress                  = local.edge_ingress
-  min_instances            = var.agent_min_instances
+  min_instances            = local.agent_min_instances
   deletion_protection      = var.run_deletion_protection
   labels                   = local.labels
 
@@ -198,6 +205,7 @@ module "frontend" {
 
   env = {
     AGENT_URL = local.agent_public_url
+    WAKER_URL = local.waker_path
   }
 
   allow_unauthenticated = true
@@ -219,8 +227,42 @@ module "edge" {
   agent_service      = module.agent.name
   domain             = var.edge_domain
   additional_domains = var.edge_additional_domains
+  waker_service      = var.enable_waker ? module.waker[0].name : ""
 
   depends_on = [module.foundation]
+}
+
+# Stops Cloud SQL when nobody uses the demo and starts it when someone asks (see modules/waker).
+module "waker" {
+  count  = var.enable_waker ? 1 : 0
+  source = "../../modules/waker"
+
+  name           = "${local.prefix}-waker"
+  project_id     = var.project_id
+  region         = var.region
+  image          = "${module.foundation.image_base}/waker:${var.image_tag}"
+  sql_instance   = module.cloudsql.instance_name
+  watch_services = [module.frontend.name, module.agent.name]
+  airflow_vm     = var.enable_airflow ? "${local.prefix}-airflow" : ""
+  airflow_zone   = var.airflow_zone
+  idle_minutes   = var.waker_idle_minutes
+
+  cors_allowed_origins = var.waker_allowed_origins
+  ingress              = local.edge_ingress
+  deletion_protection  = var.run_deletion_protection
+  labels               = local.labels
+
+  depends_on = [module.foundation]
+}
+
+# The waker is reached through the load balancer, so the route has to exist.
+resource "terraform_data" "waker_requires_edge" {
+  lifecycle {
+    precondition {
+      condition     = !var.enable_waker || var.enable_edge
+      error_message = "enable_waker needs enable_edge: the waker is reached through the load balancer, under /waker/."
+    }
+  }
 }
 
 module "etl" {
