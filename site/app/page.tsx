@@ -3,6 +3,7 @@ import { Browser, FilePdf, GithubLogo, PlayCircle } from "@phosphor-icons/react/
 
 import { Agents } from "@/components/site/agents";
 import { BrandChip } from "@/components/site/brand-chip";
+import { DemoWake } from "@/components/site/demo-wake";
 import { LinkButton, LinkRow } from "@/components/site/link-button";
 import { Drift, Float, PointerLayer } from "@/components/site/parallax";
 import { SlideViewer } from "@/components/site/slide-viewer";
@@ -281,6 +282,7 @@ export default function Home() {
           </div>
         </section>
       </main>
+      <DemoWake />
 
       <footer className="on-cyan px-5 pb-12 pt-12">
         <div className={wrap}>
