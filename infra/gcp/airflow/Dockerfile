@@ -8,6 +8,14 @@ ARG PYTHON_VERSION=3.12
 # stack needs are added below: postgres (Airflow's metadata database driver) and standard (@task).
 FROM apache/airflow:slim-${AIRFLOW_VERSION}-python${PYTHON_VERSION}
 
+# Security fixes for the Debian packages the base image carries (Trivy CRITICAL, fixable: the perl CVEs of October 2026).
+# Only the packages that were flagged are upgraded, so nothing else in the base moves. The image goes back to the airflow user below.
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends --only-upgrade perl perl-base perl-modules-5.36 \
+    && rm -rf /var/lib/apt/lists/*
+USER airflow
+
 ARG AIRFLOW_VERSION
 ARG PYTHON_VERSION
 # Same versions that ran the pipeline in production (see docs/ARCHITECTURE.md).

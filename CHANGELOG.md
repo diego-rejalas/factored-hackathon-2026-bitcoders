@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - With the waker on, the backend and the agent have no minimum instance. `modules/cloudsql` ignores `activation_policy` and `user_labels` after creation, so an `apply` does not wake a sleeping database; the workflow starts the database before it applies, and `airflow_vm.sh start` starts it before the VM.
 - The deploy account of `infra/gcp/bootstrap` gets `roles/cloudscheduler.admin` and `roles/iam.roleAdmin`; the bootstrap has to be applied again by hand.
 
+### Fixed
+- The Airflow image failed the Trivy scan with three new fixable perl CVEs of the Debian base (`CVE-2026-13221`, `CVE-2026-42496`, `CVE-2026-8376`); the Dockerfile now upgrades `perl`, `perl-base` and `perl-modules-5.36`, and the image still runs as `airflow`.
+
 ## [1.1.0] - 2026-10-05
 
 ### Added
