@@ -48,6 +48,8 @@ env:
   # Domains live in repository variables, not in the code. Empty: the load balancer keeps its <ip>.sslip.io name.
   TF_VAR_edge_domain: ${{ vars.EDGE_DOMAIN || '' }}
   TF_VAR_edge_additional_domains: ${{ vars.EDGE_ADDITIONAL_DOMAINS || '[]' }}
+  # Origins (the landing's) that may call the waker from a browser, as a JSON list. Empty: only the app itself, same-origin.
+  TF_VAR_waker_allowed_origins: ${{ vars.WAKER_ALLOWED_ORIGINS || '[]' }}
 
 # The default token is read-only; a job that needs more says so itself.
 permissions:
@@ -132,6 +134,7 @@ jobs:
           docker build . -f infra/gcp/etl/Dockerfile   -t "$BASE/etl:$TAG"
           docker build . -f frontend/Dockerfile        -t "$BASE/frontend:$TAG"
           docker build . -f infra/gcp/airflow/Dockerfile -t "$BASE/airflow:$TAG"
+          docker build . -f infra/gcp/waker/Dockerfile   -t "$BASE/waker:$TAG"
 
       - name: Push images
         if: env.APPLY == 'true'
@@ -139,7 +142,7 @@ jobs:
         run: |
           gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
           BASE="${REGION}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/factored-${ENVIRONMENT}"
-          for img in backend agent etl frontend airflow; do docker push "$BASE/$img:$TAG"; done
+          for img in backend agent etl frontend airflow waker; do docker push "$BASE/$img:$TAG"; done
 
       - name: Terraform plan
         # The read-only account cannot take the state lock, so a plan that will not be applied skips it.
@@ -153,6 +156,18 @@ jobs:
           pip install --quiet checkov
           SKIPS=$(grep -E '^\s+- (CKV[A-Z0-9_]+)' "$GITHUB_WORKSPACE/.checkov.yaml" | grep -oE 'CKV[A-Z0-9_]+' | paste -sd,)
           checkov -f "$RUNNER_TEMP/plan.json" --framework terraform_plan --skip-check "$SKIPS" --compact --quiet
+
+      # The backend and the agent connect to the database when they start, and Cloud Run starts the new revision to check it.
+      # With the waker the database may be stopped, so it is started first (a no-op when it is already running).
+      - name: Wake the database
+        if: env.APPLY == 'true'
+        working-directory: .
+        run: |
+          INSTANCE="factored-${ENVIRONMENT}"
+          POLICY=$(gcloud sql instances describe "$INSTANCE" --project "${{ vars.GCP_PROJECT_ID }}" --format='value(settings.activationPolicy)' 2>/dev/null || true)
+          if [ "$POLICY" = "NEVER" ]; then
+            gcloud sql instances patch "$INSTANCE" --project "${{ vars.GCP_PROJECT_ID }}" --activation-policy=ALWAYS --quiet
+          fi
 
       - name: Terraform apply
         if: env.APPLY == 'true'

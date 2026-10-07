@@ -3,10 +3,10 @@ name: CI
 on:
   pull_request:
     branches: [main]
-    paths: ["infra/gcp/airflow/**", "infra/gcp/etl/**", "data/dbt/**", "data/pipeline/**", "backend/**", "agent/**", "frontend/**", ".github/workflows/ci.yml"]
+    paths: ["infra/gcp/airflow/**", "infra/gcp/etl/**", "infra/gcp/waker/**", "data/dbt/**", "data/pipeline/**", "backend/**", "agent/**", "frontend/**", ".github/workflows/ci.yml"]
   push:
     branches: [main]
-    paths: ["infra/gcp/airflow/**", "infra/gcp/etl/**", "data/dbt/**", "data/pipeline/**", "backend/**", "agent/**", "frontend/**", ".github/workflows/ci.yml"]
+    paths: ["infra/gcp/airflow/**", "infra/gcp/etl/**", "infra/gcp/waker/**", "data/dbt/**", "data/pipeline/**", "backend/**", "agent/**", "frontend/**", ".github/workflows/ci.yml"]
 
 # The default token is read-only; a job that needs more says so itself.
 permissions:
@@ -103,6 +103,18 @@ jobs:
           -e SESSION_JWT_SECRET=ci-secret -e SESSION_TTL_MINUTES=120
           -e PG_TEST_HOST=localhost -e PG_TEST_PORT=5432 -e PG_TEST_USER=postgres -e PG_TEST_PASSWORD=ci
           backend-ci-check sh -c "pip install --no-cache-dir pytest httpx && python -m pytest -q"
+
+  waker:
+    name: Build the waker image and run its tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image (tests ship inside; the Google calls are faked)
+        run: docker build . -f infra/gcp/waker/Dockerfile -t waker-ci-check
+      - name: pytest inside the image
+        run: >
+          docker run --rm --user root -w /app waker-ci-check
+          sh -c "pip install --no-cache-dir pytest httpx && python -m pytest -q"
 
   agent:
     name: Build the agent image and run its tests
