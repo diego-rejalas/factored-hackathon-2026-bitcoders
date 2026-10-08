@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- After the database woke up, the login could stay without scenarios, and the page showed nothing for up to half a minute before the waiting screen. The backend started one build of the demo scenarios for each visitor and each retry of the agent (sixteen at once in the incident, fighting for ten connections, each over 80 seconds on a database with empty caches); they now share a single build that a caller giving up does not cancel. The waiting screen shows its second step before the first probe, waits up to five minutes for the services instead of showing the login at 150 seconds, and shows the waiting screen if the waker takes more than a moment. The login tries the scenarios again every 5 seconds, up to 12 times, before saying they are unavailable.
+
 ### Added
 - The demo sleeps when nobody uses it and wakes on request (`enable_waker`, on in `prod`): a `waker` Cloud Run service (`infra/gcp/waker/`, `modules/waker`) stops Cloud SQL after 30 minutes without traffic and starts it when asked, reached through the load balancer under `/waker/`. A Cloud Scheduler job runs the idle check, and the database never sleeps while the Airflow VM runs.
 - A waiting screen in the frontend (`WakeGate`) that wakes the demo by itself and shows its progress, in Spanish and Portuguese, and the landing's "Live demo" links wake it before opening the app (`NEXT_PUBLIC_WAKER_URL`).
