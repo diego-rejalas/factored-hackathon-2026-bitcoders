@@ -70,7 +70,6 @@ module "service" {
   ingress               = var.ingress
   min_instances         = 0
   max_instances         = 2
-  memory                = "256Mi"
   deletion_protection   = var.deletion_protection
   labels                = var.labels
 }
