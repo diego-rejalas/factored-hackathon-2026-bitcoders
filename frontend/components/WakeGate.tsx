@@ -28,14 +28,20 @@ async function waker(wakerUrl: string, path: string, method: "GET" | "POST" = "G
   return (await response.json()).state as string;
 }
 
-// The demo scenarios are the heaviest first request: they start the backend from zero and build its cache, which takes
-// about half a minute. The agent answers them through the backend, so a 200 here means the whole chain is up.
-async function servicesAnswer(agentUrl: string): Promise<boolean> {
+async function answers(url: string): Promise<boolean> {
   try {
-    return (await fetch(`${agentUrl}/meta/demo-scenarios`, { cache: "no-store" })).ok;
+    return (await fetch(url, { cache: "no-store" })).ok;
   } catch {
     return false;
   }
+}
+
+// "Up" is not "a page answered". A health answer or a cached list proves nothing: after the database wakes, the services still
+// hold connections that died with it, and the first logins fail for minutes. So the agent is asked whether it can really do its
+// work: /ready runs a query through its own connections and through the backend's, and replaces the dead ones. Then the demo
+// scenarios, the heaviest first request (the backend builds them from scratch after a cold start), so the login finds them ready.
+async function servicesAnswer(agentUrl: string): Promise<boolean> {
+  return (await answers(`${agentUrl}/ready`)) && (await answers(`${agentUrl}/meta/demo-scenarios`));
 }
 
 /**
