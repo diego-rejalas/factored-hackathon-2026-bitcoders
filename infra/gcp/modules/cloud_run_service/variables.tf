@@ -99,6 +99,12 @@ variable "memory" {
   default = "512Mi"
 }
 
+variable "cpu_idle" {
+  description = "Allocate the CPU only while a request is being served (request-based billing). Off keeps the CPU always allocated, which is billed for as long as an instance lives (a minimum instance, or the ~15 minutes after the last request). Work started after the response is paused until the next request."
+  type        = bool
+  default     = false
+}
+
 variable "deletion_protection" {
   type    = bool
   default = false
