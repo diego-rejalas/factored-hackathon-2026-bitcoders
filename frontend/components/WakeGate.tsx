@@ -9,7 +9,10 @@ import type { Language } from "@/lib/types";
 type Phase = "checking" | "db" | "services" | "ready";
 
 const POLL_MS = 3000;
-const SERVICES_TIMEOUT_MS = 150_000;
+// After a wake the backend builds the demo scenarios on a database whose caches are empty, which took close to two minutes.
+const SERVICES_TIMEOUT_MS = 300_000;
+// How long the first look at the waker may take before the waiting screen shows (a cold waker needs a few seconds).
+const SLOW_CHECK_MS = 1500;
 // The waker stops the database after a quiet spell. A tab that is open and used says so every few minutes, so
 // reading a case for a while never puts the demo to sleep under the reader.
 const HEARTBEAT_MS = 4 * 60_000;
@@ -50,6 +53,7 @@ export default function WakeGate({ wakerUrl, agentUrl, children }: { wakerUrl: s
   const [shownOnce, setShownOnce] = useState(!wakerUrl);
   const [seconds, setSeconds] = useState(0);
   const [language, setLanguage] = useState<Language>("es");
+  const [slowCheck, setSlowCheck] = useState(false);
   const running = useRef(false);
   const lastCheck = useRef(Date.now());
   const lastActivity = useRef(Date.now());
@@ -76,12 +80,11 @@ export default function WakeGate({ wakerUrl, agentUrl, children }: { wakerUrl: s
         await sleep(POLL_MS);
         state = await waker(wakerUrl, "/status");
       }
-      if (!(await servicesAnswer(agentUrl))) {
-        setSeconds(0);
-        setPhase("services");
-        const deadline = Date.now() + SERVICES_TIMEOUT_MS;
-        while (Date.now() < deadline && !(await servicesAnswer(agentUrl))) await sleep(2000);
-      }
+      // Show the second step before the first probe, which can last half a minute: the screen must never be blank.
+      setSeconds(0);
+      setPhase("services");
+      const deadline = Date.now() + SERVICES_TIMEOUT_MS;
+      while (Date.now() < deadline && !(await servicesAnswer(agentUrl))) await sleep(2000);
     } catch {
       // The waker is unreachable: show the app instead of keeping someone out.
     } finally {
@@ -96,12 +99,19 @@ export default function WakeGate({ wakerUrl, agentUrl, children }: { wakerUrl: s
     void wakeUp();
   }, [wakeUp]);
 
+  // A first look at the waker that takes more than a moment (it may be starting from zero) must not show a blank page.
+  useEffect(() => {
+    if (phase !== "checking") return;
+    const timer = setTimeout(() => setSlowCheck(true), SLOW_CHECK_MS);
+    return () => clearTimeout(timer);
+  }, [phase]);
+
   // The elapsed clock of the waiting screen.
   useEffect(() => {
-    if (phase !== "db" && phase !== "services") return;
+    if (phase !== "db" && phase !== "services" && !(phase === "checking" && slowCheck)) return;
     const timer = setInterval(() => setSeconds((value) => value + 1), 1000);
     return () => clearInterval(timer);
-  }, [phase]);
+  }, [phase, slowCheck]);
 
   // What counts as use, for the heartbeat.
   useEffect(() => {
@@ -159,7 +169,9 @@ export default function WakeGate({ wakerUrl, agentUrl, children }: { wakerUrl: s
       document.body.style.overflow = previous;
     };
   }, [covering]);
-  if (phase === "checking") return <div className="login" aria-busy="true" />;
+  if (phase === "checking") {
+    return slowCheck ? <WaitingScreen phase="db" seconds={seconds} language={language} /> : <div className="login" aria-busy="true" />;
+  }
   // The first time the app must not render until it can load; later it stays mounted underneath the waiting screen.
   if (!shownOnce) return <WaitingScreen phase={phase} seconds={seconds} language={language} />;
   return (
