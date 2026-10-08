@@ -64,3 +64,13 @@ output "edge_locked" {
   description = "True when the frontend and the agent accept traffic only through the load balancer."
   value       = local.edge_locked
 }
+
+output "waker_scheduler_job" {
+  description = "Cloud Scheduler job of the idle check, or null when the waker is off."
+  value       = try(module.waker[0].scheduler_job, null)
+}
+
+output "waker_uri" {
+  description = "Direct address of the waker service (closed to the internet when the load balancer is the way in), or null when the waker is off."
+  value       = try(module.waker[0].uri, null)
+}

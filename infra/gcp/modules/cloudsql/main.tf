@@ -60,6 +60,13 @@ resource "google_sql_database_instance" "postgres" {
       }
     }
   }
+
+  # The waker (modules/waker) and scripts/manage_db.sh stop and start the instance by patching the activation policy, and
+  # the waker stamps the time of the last wake in a label. Without this an `apply` would put both back to what the code says
+  # and wake a sleeping database. The variable only decides the policy at creation.
+  lifecycle {
+    ignore_changes = [settings[0].activation_policy, settings[0].user_labels]
+  }
 }
 
 resource "google_sql_database" "data" {

@@ -92,6 +92,8 @@ resource "google_project_iam_member" "deploy" {
     "roles/servicenetworking.networksAdmin",
     "roles/vpcaccess.admin",
     "roles/iap.admin",
+    "roles/cloudscheduler.admin",
+    "roles/iam.roleAdmin",
     "roles/serviceusage.serviceUsageAdmin",
   ])
   project = var.project_id

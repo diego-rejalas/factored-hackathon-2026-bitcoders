@@ -22,6 +22,12 @@ variable "agent_service" {
   type        = string
 }
 
+variable "waker_service" {
+  description = "Name of the Cloud Run service that answers /waker/* (wakes a sleeping demo). The prefix is removed before the request reaches it. Empty: no such route."
+  type        = string
+  default     = ""
+}
+
 variable "domain" {
   description = "Domain of the managed certificate. Empty: <ip>.sslip.io, a public DNS service that resolves any such name to its IP, so the certificate works without owning a domain."
   type        = string

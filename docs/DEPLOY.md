@@ -28,6 +28,8 @@ An earlier `plan` showed 3 destroys: the Airflow VM access of whoever operates i
 | 1 | Look at the duplicates `0003` would close (below). If they are test cases, it does not matter | You |
 | 2 | Optional but recommended: in GitHub, **Settings, Environments, prod**, add required reviewers. Today anyone with write permission can apply to `prod` | You |
 | 3 | Confirm that `AIRFLOW_ADMIN_MEMBERS` exists: `gh secret list` | You |
+| 4 | For the waker (`enable_waker`, on in `prod`): apply `infra/gcp/bootstrap` again by hand with an admin account. The deploy account needs `roles/cloudscheduler.admin` and `roles/iam.roleAdmin` for the scheduler job and the waker's custom role | You |
+| 5 | For the landing to wake the demo: set the repository variable `WAKER_ALLOWED_ORIGINS` (a JSON list with the landing's origin) and build the landing with `NEXT_PUBLIC_WAKER_URL=https://<the app>/waker` | You |
 
 **Look at the duplicates** (this starts the VM, queries and stops it):
 
@@ -129,4 +131,5 @@ The app's name needs a DNS record to the load balancer's address, **without** th
 
 - **The deployment itself.** The `plan` and the local tests do not replace a real `apply`. Check the result of the run before relying on any of this.
 - **The path through the load balancer** with this version. The managed certificate can take a while to provision after domain changes (this deployment does not change the domain).
+- **The waker.** Its logic and the HTTP layer are tested with fakes (`infra/gcp/waker/tests`), the Terraform validates and a read-only `plan` of `prod` shows only the expected resources, but it was never applied. Not verified against the real APIs: that Cloud Scheduler reaches a service whose ingress is the load balancer (run the job once by hand after the apply: `gcloud scheduler jobs run factored-prod-waker-sleep-if-idle --location us-east4`), the exact Cloud SQL PATCH body, and the waiting screens in a browser. Until it is applied, `prod` keeps the database awake.
 - **`e2e.py` against the edge.** Its 11 scenarios passed against the local stack and against `prod` in the earlier deployment. Pointing `AGENT_URL` at the load balancer's `/agent` is the intended way, not the one that was tested.

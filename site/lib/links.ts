@@ -19,4 +19,9 @@ export const LINKS = {
   demo: process.env.NEXT_PUBLIC_DEMO_URL ?? "", // the live app; set NEXT_PUBLIC_DEMO_URL when building (see .env.example)
 } as const;
 
+// The waker: a service that stops the demo when nobody uses it and starts it on request. Set NEXT_PUBLIC_WAKER_URL (for
+// example https://<the app>/waker) and the "Live demo" links wake the demo first and show how far it is. Empty: they go
+// straight to the app.
+export const WAKER_URL = (process.env.NEXT_PUBLIC_WAKER_URL ?? "").replace(/\/$/, "");
+
 export type LinkKey = keyof typeof LINKS;

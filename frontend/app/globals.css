@@ -2812,3 +2812,86 @@ table.metrics-table tbody th {
 .admin-shell .appbar-btn.appbar-theme {
   padding: 0 0.6rem;
 }
+
+/* --- waiting screen while the demo wakes up ------------------------------------------------- */
+
+.wake-card {
+  gap: 1rem;
+}
+
+.wake-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.wake-step {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.wake-step.wake-working {
+  color: var(--text);
+}
+
+.wake-step.wake-done {
+  color: var(--ok);
+}
+
+.wake-state {
+  margin-left: auto;
+  font-size: 0.8rem;
+}
+
+.wake-spin {
+  animation: wake-spin 1s linear infinite;
+}
+
+@keyframes wake-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.wake-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.wake-bar-fill {
+  display: block;
+  height: 100%;
+  width: 40%;
+  border-radius: 999px;
+  background: var(--primary);
+  animation: wake-slide 1.6s ease-in-out infinite;
+}
+
+@keyframes wake-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wake-spin,
+  .wake-bar-fill {
+    animation: none;
+  }
+
+  .wake-bar-fill {
+    width: 100%;
+    opacity: 0.5;
+  }
+}

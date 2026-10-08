@@ -16,6 +16,8 @@ npx serve out       # to look at the build
 
 The address of the live app is not in the code. Set `NEXT_PUBLIC_DEMO_URL` when you build, or put it in `.env.local` (ignored by git; `.env.example` shows the name). Without it the "Live demo" buttons show "Soon".
 
+The demo may be asleep (see `infra/gcp/README.md`, "The demo sleeps by itself"). Set `NEXT_PUBLIC_WAKER_URL` to the app's address plus `/waker` and the "Live demo" links wake it first, show how long it has been, and open the app when it is ready (`components/site/demo-wake.tsx`). Without it they go straight to the app. The landing's origin has to be in the repository variable `WAKER_ALLOWED_ORIGINS`, or the browser refuses the answers.
+
 The pitch video is not in the repository. It comes from `NEXT_PUBLIC_VIDEO_URL`, which must point at a host that answers range requests (an object-storage bucket, YouTube, Vimeo): a host that ignores them, like Cloudflare Pages, plays the video but cannot skip through it. Without the variable the page says the video is not part of the build.
 
 ## Publishing
