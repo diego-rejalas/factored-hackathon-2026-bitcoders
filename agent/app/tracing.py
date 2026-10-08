@@ -119,6 +119,8 @@ class Tracer:
     async def connect(cls) -> "Tracer":
         import asyncpg
 
+        from app.pool import ResilientPool
+
         required = ("PG_HOST", "PG_USER", "PG_PASSWORD")
         if not all(os.environ.get(var) for var in required):
             return cls(None)
@@ -129,7 +131,8 @@ class Tracer:
             password=os.environ["PG_PASSWORD"],
             database=os.environ.get("PG_DATABASE", "data"),
         )
-        tracer = cls(pool)
+        # Never hands out a dead connection (see app/pool.py). Conversations shares this pool.
+        tracer = cls(ResilientPool(pool))
         await tracer.init_schema()
         return tracer
 

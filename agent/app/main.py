@@ -4,11 +4,13 @@ from contextlib import asynccontextmanager
 
 import jwt
 from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 import app.replies as replies
 from app.observability import RequestLogMiddleware
+from app.pool import DatabaseUnavailable
 from app.graph import build_graph
 from app.llm import LLM
 from app.tools import ToolError, bank_tools_from_env
@@ -177,6 +179,11 @@ def create_app(tools=None, tracer=None, llm=None, conversations=None) -> FastAPI
             max_age=600,
         )
     app.add_middleware(RequestLogMiddleware, service="agent")
+
+    @app.exception_handler(DatabaseUnavailable)
+    async def database_unavailable(request, exc):
+        # 503, not 500: it is not a bug, and the caller may try again.
+        return JSONResponse(status_code=503, content={"detail": "database unavailable"})
 
     if tools is not None or tracer is not None or llm is not None:
         app.state.tools = tools or bank_tools_from_env()
