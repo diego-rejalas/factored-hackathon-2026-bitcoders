@@ -138,6 +138,7 @@ class BankStore:
         self._snapshot_edge_value: Any = None
         self._demo_cache: tuple[float, list[dict]] | None = None
         self._demo_refresh: asyncio.Task | None = None
+        self._demo_build: asyncio.Task | None = None
 
     @classmethod
     async def create(cls) -> "BankStore":
@@ -879,10 +880,26 @@ class BankStore:
         answer is always returned at once, and once it is older than DEMO_CACHE_SECONDS one background
         task rebuilds it. The data is a static snapshot, so a stale answer is the same answer."""
         if self._demo_cache is None:
-            return await self._build_demo_scenarios()
+            return await self._demo_build_once()
         if time.monotonic() - self._demo_cache[0] >= self.DEMO_CACHE_SECONDS:
             self._refresh_demo_scenarios()
         return self._demo_cache[1]
+
+    async def _demo_build_once(self) -> list[dict]:
+        """Every caller that needs the scenarios while there is no cache waits for the same single build.
+
+        Building them is the heaviest thing the backend does, and after a cold start (the database has just woken up
+        and its caches are empty) it takes over a minute. Each of the visitors, and each retry of the agent, used to
+        start a build of its own: sixteen at once fought for the ten connections of the pool and every one of them
+        got slower. The build runs as its own task and is shielded, so a caller that gives up (the agent's timeout)
+        does not cancel it, and the next caller picks it up where it is."""
+        task = self._demo_build
+        if task is None or task.done():
+            task = asyncio.create_task(self._build_demo_scenarios())
+            # Nobody may be left waiting when it fails: read the error here so a failure never goes unobserved.
+            task.add_done_callback(lambda finished: finished.cancelled() or finished.exception())
+            self._demo_build = task
+        return await asyncio.shield(task)
 
     def _refresh_demo_scenarios(self) -> None:
         if self._demo_refresh is not None and not self._demo_refresh.done():
@@ -890,7 +907,7 @@ class BankStore:
 
         async def rebuild() -> None:
             try:
-                await self._build_demo_scenarios()
+                await self._demo_build_once()
             except Exception:
                 logger.warning("demo scenarios refresh failed; keeping the cached answer", exc_info=True)
 

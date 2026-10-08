@@ -10,6 +10,7 @@ def make_store(build):
     store = object.__new__(BankStore)
     store._demo_cache = None
     store._demo_refresh = None
+    store._demo_build = None
     store._build_demo_scenarios = build.__get__(store)
     return store
 
@@ -78,3 +79,46 @@ async def test_a_failed_rebuild_keeps_serving_the_cached_answer():
     assert await store.demo_scenarios() == cached
     await store._demo_refresh
     assert await store.demo_scenarios() == cached
+
+
+@pytest.mark.anyio
+async def test_many_visitors_before_the_first_build_share_a_single_one():
+    builds: list[int] = []
+    store = make_store(build_counting(builds))
+    answers = await asyncio.gather(*[store.demo_scenarios() for _ in range(16)])
+    assert len(builds) == 1, "sixteen visitors must not start sixteen builds"
+    assert all(answer == answers[0] for answer in answers)
+
+
+@pytest.mark.anyio
+async def test_a_caller_that_gives_up_does_not_cancel_the_build():
+    builds: list[int] = []
+    store = make_store(build_counting(builds))
+    waiter = asyncio.create_task(store.demo_scenarios())
+    await asyncio.sleep(0.01)
+    waiter.cancel()  # what the agent's timeout does to its request
+    with pytest.raises(asyncio.CancelledError):
+        await waiter
+    answer = await store.demo_scenarios()  # the next caller picks up the build that is already running
+    assert answer[0]["built"] == 1
+    assert len(builds) == 1
+
+
+@pytest.mark.anyio
+async def test_a_failed_first_build_is_tried_again_by_the_next_caller():
+    attempts: list[int] = []
+
+    async def flaky(self):
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise RuntimeError("database not ready yet")
+        value = [{"scenario": "n"}]
+        self._demo_cache = (time.monotonic(), value)
+        return value
+
+    store = make_store(build_counting([]))
+    store._build_demo_scenarios = flaky.__get__(store)
+    with pytest.raises(RuntimeError):
+        await store.demo_scenarios()
+    assert await store.demo_scenarios() == [{"scenario": "n"}]
+    assert len(attempts) == 2
