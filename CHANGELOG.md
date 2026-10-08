@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A waiting screen in the frontend (`WakeGate`) that wakes the demo by itself and shows its progress, in Spanish and Portuguese, and the landing's "Live demo" links wake it before opening the app (`NEXT_PUBLIC_WAKER_URL`).
 
 ### Changed
+- The waiting screen now waits for the services behind the database (`/meta/demo-scenarios`, which starts the backend and builds its cache, about 30 s) before it shows the app, keeps the demo awake with a heartbeat while a tab is open and in use, and covers the app again, without unmounting it, if the demo slept while the tab was in the background.
+- `cpu_idle` in `modules/cloud_run_service` (off by default) and `run_cpu_idle` (on in `prod`): CPU billed only while a request runs. The waker always uses it. `waker_idle_minutes` is 15 and `waker_check_schedule` every 5 minutes in all environments.
 - With the waker on, the backend and the agent have no minimum instance. `modules/cloudsql` ignores `activation_policy` and `user_labels` after creation, so an `apply` does not wake a sleeping database; the workflow starts the database before it applies, and `airflow_vm.sh start` starts it before the VM.
 - The deploy account of `infra/gcp/bootstrap` gets `roles/cloudscheduler.admin` and `roles/iam.roleAdmin`; the bootstrap has to be applied again by hand.
 

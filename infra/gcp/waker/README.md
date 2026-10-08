@@ -14,7 +14,7 @@ The browser reaches it through the load balancer as `/waker/*`. The prefix is re
 
 ## Settings (environment)
 
-`PROJECT_ID`, `SQL_INSTANCE`, `WATCH_SERVICES` (comma separated Cloud Run services), `IDLE_MINUTES` (30), `AIRFLOW_VM` and
+`PROJECT_ID`, `SQL_INSTANCE`, `WATCH_SERVICES` (comma separated Cloud Run services), `IDLE_MINUTES` (30 in the service; Terraform sets 15), `AIRFLOW_VM` and
 `AIRFLOW_ZONE` (optional), `CORS_ALLOWED_ORIGINS`, `SCHEDULER_SA`, `SCHEDULER_AUDIENCE`, `STATUS_CACHE_SECONDS` (5). Terraform sets them.
 
 ## Tests
