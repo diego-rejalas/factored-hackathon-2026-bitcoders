@@ -13,6 +13,7 @@ import asyncpg
 from fastapi import Request
 
 from app.migrate import apply_migrations
+from app.pool import ResilientPool
 from app.response_codes import meanings
 
 logger = logging.getLogger(__name__)
@@ -150,7 +151,7 @@ class BankStore:
             database=os.environ.get("PG_DATABASE", "data"),
             init=cls._init_conn,
         )
-        return cls(pool)
+        return cls(ResilientPool(pool))
 
     @staticmethod
     async def _init_conn(conn: asyncpg.Connection) -> None:
