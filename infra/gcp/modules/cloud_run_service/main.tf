@@ -64,6 +64,8 @@ resource "google_cloud_run_v2_service" "this" {
           cpu    = var.cpu
           memory = var.memory
         }
+        # null keeps what the API chooses (CPU always allocated); true bills the CPU only while a request runs.
+        cpu_idle = var.cpu_idle ? true : null
       }
 
       dynamic "env" {

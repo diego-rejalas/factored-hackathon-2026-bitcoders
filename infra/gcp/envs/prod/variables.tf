@@ -252,9 +252,21 @@ variable "enable_waker" {
 }
 
 variable "waker_idle_minutes" {
-  description = "Minutes without traffic to the frontend or the agent before the database is stopped."
+  description = "Minutes without traffic to the frontend or the agent before the database is stopped. An open tab that is being used sends a heartbeat every few minutes, so it never counts as idle."
   type        = number
-  default     = 30
+  default     = 15
+}
+
+variable "waker_check_schedule" {
+  description = "Cron expression (UTC) of the idle check. The database sleeps between waker_idle_minutes and waker_idle_minutes plus one interval after the last use."
+  type        = string
+  default     = "*/5 * * * *"
+}
+
+variable "run_cpu_idle" {
+  description = "Bill the CPU of the backend, agent and frontend only while a request runs. With minimum instances at 0 (enable_waker) it removes the cost of the ~15 minutes an instance stays alive after the last request. Work started after a response (the backend's refresh of the demo scenarios) waits for the next request."
+  type        = bool
+  default     = true
 }
 
 variable "waker_allowed_origins" {

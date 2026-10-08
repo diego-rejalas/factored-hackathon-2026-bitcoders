@@ -26,7 +26,7 @@ Next.js 16 (App Router) and TypeScript, with no Tailwind. It runs on Cloud Run (
 |---|---|
 | `AGENT_URL` | The agent's URL at run time (Cloud Run). It is the only API the browser knows |
 | `NEXT_PUBLIC_AGENT_URL` | An alternative for local development |
-| `WAKER_URL` | Where the page asks whether the demo is awake (`/waker`, same origin, behind the load balancer). Set by Terraform when `enable_waker` is on; empty means no waiting screen (`components/WakeGate.tsx`) |
+| `WAKER_URL` | Where the page asks whether the demo is awake (`/waker`, same origin, behind the load balancer). Set by Terraform when `enable_waker` is on; empty means no waiting screen (`components/WakeGate.tsx`: waits for the database and for `/meta/demo-scenarios`, sends a heartbeat while the tab is in use, and covers the app again if the demo went to sleep meanwhile) |
 
 ## Development and verification
 

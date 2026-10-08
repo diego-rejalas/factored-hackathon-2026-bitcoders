@@ -131,11 +131,11 @@ Cloud Run at 0 instances costs almost nothing, and Cloud SQL is the only permane
 
 ### The demo sleeps by itself and wakes on request (`enable_waker`)
 
-With `enable_waker` (on in `prod`) nobody has to run those commands. The `waker` Cloud Run service (`waker/`, module `modules/waker`) stops Cloud SQL after `waker_idle_minutes` (30) without traffic to the frontend or the agent, and starts it when someone asks. The backend and the agent run with no minimum instance, so the whole demo is asleep except what cannot be: the load balancer, Cloud Armor and the disks.
+With `enable_waker` (on in `prod`) nobody has to run those commands. The `waker` Cloud Run service (`waker/`, module `modules/waker`) stops Cloud SQL after `waker_idle_minutes` (15) without traffic to the frontend or the agent, and starts it when someone asks. The backend and the agent run with no minimum instance, so the whole demo is asleep except what cannot be: the load balancer, Cloud Armor and the disks.
 
 ```text
 ┌──────────────────────────────────┐
-│ Cloud Scheduler, every 10 min    │
+│ Cloud Scheduler, every 5 min     │
 └────────────────┬─────────────────┘
                  ▼  POST /sleep-if-idle (ID token)
 ┌──────────────────────────────────┐        ┌──────────────────────┐
@@ -148,14 +148,16 @@ With `enable_waker` (on in `prod`) nobody has to run those commands. The `waker`
 └──────────────────────────────────┘◄── the landing's "Live demo" (site/)
 ```
 
-- **Waking.** Opening the app while it sleeps shows a waiting screen that wakes it by itself. On the landing, the "Live demo" links wake it first and open the app when it is ready. Cloud SQL takes about a minute; Cloud Run starts on the first request.
-- **Sleeping.** Every 10 minutes the idle check looks at the request count of the frontend and the agent (Cloud Monitoring). It does nothing if the demo was woken less than `waker_idle_minutes` ago, if there was any request in that time, or if the Airflow VM is running. If the check cannot read a metric, the database stays awake.
+- **Waking.** Opening the app while it sleeps shows a waiting screen that wakes it by itself and shows two steps: the database, and the services (the screen waits until `/meta/demo-scenarios` answers, which starts the agent and the backend from zero and builds the scenarios' cache, about half a minute). Only then does the app appear, so the first login never shows "scenarios not available". On the landing, the "Live demo" links wake it first and open the app when it is ready. Cloud SQL takes about a minute.
+- **An open session.** While a tab is visible and in use (a click, a key or a scroll in the last 20 minutes) it sends a request to the agent every 4 minutes, which counts as use, so the demo does not sleep under someone reading. When a tab comes back to the front after a minute or more and the demo went to sleep meanwhile, the waiting screen covers the app, which stays mounted, so the session is not lost.
+- **Sleeping.** Every 5 minutes (`waker_check_schedule`) the idle check looks at the request count of the frontend and the agent (Cloud Monitoring). It does nothing if the demo was woken less than `waker_idle_minutes` ago, if there was any request in that time, or if the Airflow VM is running. If the check cannot read a metric, the database stays awake.
 - **What the waker may do.** A custom role with `cloudsql.instances.get`, `cloudsql.instances.update` and `compute.instances.get`, plus `roles/monitoring.viewer`. `/wake` is public and idempotent; `/sleep-if-idle` accepts only an ID token of the scheduler's service account. Cloud Armor's per-IP rate limit protects both.
 - **Terraform does not undo it.** `modules/cloudsql` ignores `activation_policy` and `user_labels` after creation (the waker stamps the time of the last wake in a label), so an `apply` does not wake a sleeping database. The workflow starts the database before it applies, because the backend and the agent connect to it on start and Cloud Run starts the new revision to check it.
 - **Airflow.** `airflow_vm.sh start` starts the database first. The VM keeps the database awake while it runs.
 - **Switch it off:** `enable_waker=false` (the minimum instances go back to `backend_min_instances` and `agent_min_instances`). If the database is asleep at that moment, `manage_db.sh resume` wakes it.
 - **Needs once, by hand:** apply `bootstrap/` again (the deploy account gets `roles/cloudscheduler.admin` and `roles/iam.roleAdmin`), and, for the landing, set the repository variable `WAKER_ALLOWED_ORIGINS` to a JSON list with the landing's origin.
-- **Cost, estimated** (public prices of `us-east4`, about 20 % either way): about US$6.5 a day awake, about US$2 a day asleep.
+- **CPU billed per request** (`run_cpu_idle`, on in `prod`): the backend, agent, frontend and waker pay for CPU only while a request runs. The default of Cloud Run (always allocated) bills an instance for its whole life, which for the waker (called every few minutes) would be the whole day. The one thing that waits for the next request is the backend's refresh of the demo scenarios, started after a response.
+- **Cost, estimated** (public prices of `us-east4`, about 20 % either way): about US$9 a day awake all day, about US$2 a day asleep, about US$3 on a day with a few hours of use. Before the waker the demo cost about US$9 every day.
 
 ## State and what is missing
 

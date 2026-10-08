@@ -69,6 +69,7 @@ module "service" {
   allow_unauthenticated = true
   ingress               = var.ingress
   min_instances         = 0
+  cpu_idle              = true # the scheduler calls it every few minutes, which would keep an always-on instance alive all day
   max_instances         = 2
   deletion_protection   = var.deletion_protection
   labels                = var.labels

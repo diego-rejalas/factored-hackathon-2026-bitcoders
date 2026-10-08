@@ -2895,3 +2895,11 @@ table.metrics-table tbody th {
     opacity: 0.5;
   }
 }
+
+/* The waiting screen over an app that is already open (the demo went to sleep while the tab was in the background). */
+.wake-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--canvas);
+}

@@ -153,6 +153,7 @@ module "backend" {
   allow_unauthenticated    = var.backend_public
   invoker_members          = var.backend_public ? [] : ["serviceAccount:${module.agent.service_account_email}"]
   min_instances            = local.backend_min_instances
+  cpu_idle                 = var.run_cpu_idle
   deletion_protection      = var.run_deletion_protection
   labels                   = local.labels
 
@@ -189,6 +190,7 @@ module "agent" {
   allow_unauthenticated    = true
   ingress                  = local.edge_ingress
   min_instances            = local.agent_min_instances
+  cpu_idle                 = var.run_cpu_idle
   deletion_protection      = var.run_deletion_protection
   labels                   = local.labels
 
@@ -210,6 +212,7 @@ module "frontend" {
 
   allow_unauthenticated = true
   ingress               = local.edge_ingress
+  cpu_idle              = var.run_cpu_idle
   deletion_protection   = var.run_deletion_protection
   labels                = local.labels
 
@@ -246,6 +249,7 @@ module "waker" {
   airflow_vm     = var.enable_airflow ? "${local.prefix}-airflow" : ""
   airflow_zone   = var.airflow_zone
   idle_minutes   = var.waker_idle_minutes
+  check_schedule = var.waker_check_schedule
 
   cors_allowed_origins = var.waker_allowed_origins
   ingress              = local.edge_ingress
