@@ -1121,6 +1121,30 @@
         ]
       }
     },
+    "/ready": {
+      "get": {
+        "description": "Liveness says the process is up; readiness says that everything behind it works: the agent's own database\nconnection and the backend, which has to reach the database too. The page that wakes the demo waits for this.",
+        "operationId": "ready_ready_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Ready Ready Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ready",
+        "tags": [
+          "health"
+        ]
+      }
+    },
     "/session": {
       "post": {
         "operationId": "session_session_post",

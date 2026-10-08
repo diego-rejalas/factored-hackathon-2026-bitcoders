@@ -144,6 +144,14 @@ class BankTools:
     async def get_demo_scenarios(self) -> dict:
         return await self._request("GET", "/meta/demo-scenarios")
 
+    async def ready(self) -> bool:
+        """True when the backend answers and can reach the database."""
+        try:
+            await self._request("GET", "/ready")
+        except ToolError:
+            return False
+        return True
+
     async def _request(self, method: str, path: str, token: str | None = None, **kwargs) -> dict:
         headers = kwargs.pop("headers", {})
         request_id = request_id_var.get()

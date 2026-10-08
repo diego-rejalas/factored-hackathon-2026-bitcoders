@@ -189,6 +189,18 @@ def create_app(tools=None, tracer=None, llm=None, conversations=None) -> FastAPI
     async def health() -> dict:
         return {"status": "ok", "service": "agent"}
 
+    @app.get("/ready", tags=["health"])
+    async def ready() -> dict:
+        """Liveness says the process is up; readiness says that everything behind it works: the agent's own database
+        connection and the backend, which has to reach the database too. The page that wakes the demo waits for this."""
+        try:
+            ok = await app.state.tracer.ping() and await app.state.tools.ready()
+        except Exception:  # noqa: BLE001
+            ok = False
+        if not ok:
+            raise HTTPException(503, "not ready")
+        return {"status": "ready", "service": "agent"}
+
     @app.post("/session", tags=["session"])
     async def session(body: SessionRequest) -> dict:
         try:

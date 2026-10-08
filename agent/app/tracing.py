@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 
@@ -131,6 +132,27 @@ class Tracer:
         tracer = cls(pool)
         await tracer.init_schema()
         return tracer
+
+    PING_TIMEOUT_SECONDS = 5
+
+    async def ping(self) -> bool:
+        """True when a query really goes through the pool (nothing to check when tracing is off).
+
+        A pool whose database was stopped and started again holds dead connections that it does not know about (its idle
+        timer does not run while the instance is frozen between requests). A failed ping marks them all to be replaced on
+        the next use, and tries once more."""
+        if not self.enabled:
+            return True
+        import asyncpg
+
+        for _ in range(2):
+            try:
+                async with asyncio.timeout(self.PING_TIMEOUT_SECONDS):
+                    async with self.pool.acquire() as conn:
+                        return await conn.fetchval("select 1") == 1
+            except (asyncpg.PostgresError, asyncpg.InterfaceError, OSError, TimeoutError):
+                await self.pool.expire_connections()
+        return False
 
     async def init_schema(self) -> None:
         if not self.enabled:

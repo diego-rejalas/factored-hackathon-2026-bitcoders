@@ -15,6 +15,7 @@ The exact schema is `tests/contract/openapi.json`, and a test fails if the code 
 | `GET /admin/agent-metrics?window=<hours>` | Outcomes, containment, p50 and p95 latency per node, intents, languages and the `verify` result, from `agent.trace_log` |
 | `GET /admin/conversations/{id}/trace` | The steps of a conversation. It never contains customer text |
 | `GET /health` | Liveness |
+| `GET /ready` | Readiness: the agent's own database connection works and the backend answers its `/ready` (which reaches the database). `503` otherwise. The page that wakes the demo waits for it |
 
 The rest are thin forwards to the backend with up-front checks: `POST /session`, `POST /admin/session`, `GET /me/disputes`, `GET /disputes/{id}`, `GET /meta/demo-scenarios`, `GET /meta/data`, `GET /admin/disputes*`, `POST /admin/disputes/{id}/transition` and `GET /admin/metrics`.
 
