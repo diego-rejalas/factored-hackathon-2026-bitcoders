@@ -7,6 +7,9 @@ import { scenarioLabel, tr } from "@/lib/i18n";
 import type { DemoScenario, Language } from "@/lib/types";
 import { useTheme } from "@/lib/useTheme";
 
+const SCENARIO_ATTEMPTS = 12;
+const SCENARIO_RETRY_MS = 5000;
+
 const SCENARIO_ICON = {
   auto_resolved: CheckCircle,
   ambiguous: Question,
@@ -45,19 +48,29 @@ export default function Login({
     return () => document.removeEventListener("mousedown", close);
   }, [menuOpen]);
 
+  // The scenarios are the first thing the backend builds after it starts from zero, and that can take a while. A single try
+  // that fails must not leave the list empty for good: try again every few seconds before saying they are unavailable.
   useEffect(() => {
     let active = true;
-    fetch(`${agentUrl}/meta/demo-scenarios`, { cache: "no-store" })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("scenarios unavailable");
-        return (await response.json()) as { scenarios?: DemoScenario[] };
-      })
-      .then((body) => {
-        if (active) setScenarios(body.scenarios ?? []);
-      })
-      .catch(() => {
-        if (active) setScenariosError(true);
-      });
+    (async () => {
+      for (let attempt = 0; attempt < SCENARIO_ATTEMPTS && active; attempt++) {
+        try {
+          const response = await fetch(`${agentUrl}/meta/demo-scenarios`, { cache: "no-store" });
+          if (response.ok) {
+            const body = (await response.json()) as { scenarios?: DemoScenario[] };
+            if (active) {
+              setScenarios(body.scenarios ?? []);
+              setScenariosError(false);
+            }
+            return;
+          }
+        } catch {
+          // Try again below.
+        }
+        if (attempt < SCENARIO_ATTEMPTS - 1) await new Promise((resolve) => setTimeout(resolve, SCENARIO_RETRY_MS));
+      }
+      if (active) setScenariosError(true);
+    })();
     return () => {
       active = false;
     };

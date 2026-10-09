@@ -13,6 +13,7 @@ import asyncpg
 from fastapi import Request
 
 from app.migrate import apply_migrations
+from app.pool import ResilientPool
 from app.response_codes import meanings
 
 logger = logging.getLogger(__name__)
@@ -138,6 +139,7 @@ class BankStore:
         self._snapshot_edge_value: Any = None
         self._demo_cache: tuple[float, list[dict]] | None = None
         self._demo_refresh: asyncio.Task | None = None
+        self._demo_build: asyncio.Task | None = None
 
     @classmethod
     async def create(cls) -> "BankStore":
@@ -149,7 +151,7 @@ class BankStore:
             database=os.environ.get("PG_DATABASE", "data"),
             init=cls._init_conn,
         )
-        return cls(pool)
+        return cls(ResilientPool(pool))
 
     @staticmethod
     async def _init_conn(conn: asyncpg.Connection) -> None:
@@ -168,9 +170,24 @@ class BankStore:
         async with self.pool.acquire() as conn:
             return await apply_migrations(conn)
 
+    PING_TIMEOUT_SECONDS = 5
+
     async def ping(self) -> bool:
-        async with self.pool.acquire() as conn:
-            return await conn.fetchval("select 1") == 1
+        """True when a query really goes through the pool.
+
+        When the database is stopped and started again, the connections the pool holds are dead, but the pool does not know:
+        its timer that closes idle connections does not run while the instance is frozen between requests (the CPU is billed
+        per request). Every query that picks one of them fails, which is how a login kept failing for minutes with the
+        database already up. A failed ping marks all the connections to be replaced on the next use, so the next query
+        opens fresh ones, and tries once more."""
+        for _ in range(2):
+            try:
+                async with asyncio.timeout(self.PING_TIMEOUT_SECONDS):
+                    async with self.pool.acquire() as conn:
+                        return await conn.fetchval("select 1") == 1
+            except (asyncpg.PostgresError, asyncpg.InterfaceError, OSError, TimeoutError):
+                await self.pool.expire_connections()
+        return False
 
     async def snapshot_edge(self) -> Any:
         if self._snapshot_edge_value is None:
@@ -879,10 +896,26 @@ class BankStore:
         answer is always returned at once, and once it is older than DEMO_CACHE_SECONDS one background
         task rebuilds it. The data is a static snapshot, so a stale answer is the same answer."""
         if self._demo_cache is None:
-            return await self._build_demo_scenarios()
+            return await self._demo_build_once()
         if time.monotonic() - self._demo_cache[0] >= self.DEMO_CACHE_SECONDS:
             self._refresh_demo_scenarios()
         return self._demo_cache[1]
+
+    async def _demo_build_once(self) -> list[dict]:
+        """Every caller that needs the scenarios while there is no cache waits for the same single build.
+
+        Building them is the heaviest thing the backend does, and after a cold start (the database has just woken up
+        and its caches are empty) it takes over a minute. Each of the visitors, and each retry of the agent, used to
+        start a build of its own: sixteen at once fought for the ten connections of the pool and every one of them
+        got slower. The build runs as its own task and is shielded, so a caller that gives up (the agent's timeout)
+        does not cancel it, and the next caller picks it up where it is."""
+        task = self._demo_build
+        if task is None or task.done():
+            task = asyncio.create_task(self._build_demo_scenarios())
+            # Nobody may be left waiting when it fails: read the error here so a failure never goes unobserved.
+            task.add_done_callback(lambda finished: finished.cancelled() or finished.exception())
+            self._demo_build = task
+        return await asyncio.shield(task)
 
     def _refresh_demo_scenarios(self) -> None:
         if self._demo_refresh is not None and not self._demo_refresh.done():
@@ -890,7 +923,7 @@ class BankStore:
 
         async def rebuild() -> None:
             try:
-                await self._build_demo_scenarios()
+                await self._demo_build_once()
             except Exception:
                 logger.warning("demo scenarios refresh failed; keeping the cached answer", exc_info=True)
 

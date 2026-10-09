@@ -4,11 +4,13 @@ from contextlib import asynccontextmanager
 
 import jwt
 from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 import app.replies as replies
 from app.observability import RequestLogMiddleware
+from app.pool import DatabaseUnavailable
 from app.graph import build_graph
 from app.llm import LLM
 from app.tools import ToolError, bank_tools_from_env
@@ -178,6 +180,11 @@ def create_app(tools=None, tracer=None, llm=None, conversations=None) -> FastAPI
         )
     app.add_middleware(RequestLogMiddleware, service="agent")
 
+    @app.exception_handler(DatabaseUnavailable)
+    async def database_unavailable(request, exc):
+        # 503, not 500: it is not a bug, and the caller may try again.
+        return JSONResponse(status_code=503, content={"detail": "database unavailable"})
+
     if tools is not None or tracer is not None or llm is not None:
         app.state.tools = tools or bank_tools_from_env()
         app.state.tracer = tracer if tracer is not None else Tracer(None)
@@ -188,6 +195,18 @@ def create_app(tools=None, tracer=None, llm=None, conversations=None) -> FastAPI
     @app.get("/health", tags=["health"])
     async def health() -> dict:
         return {"status": "ok", "service": "agent"}
+
+    @app.get("/ready", tags=["health"])
+    async def ready() -> dict:
+        """Liveness says the process is up; readiness says that everything behind it works: the agent's own database
+        connection and the backend, which has to reach the database too. The page that wakes the demo waits for this."""
+        try:
+            ok = await app.state.tracer.ping() and await app.state.tools.ready()
+        except Exception:  # noqa: BLE001
+            ok = False
+        if not ok:
+            raise HTTPException(503, "not ready")
+        return {"status": "ready", "service": "agent"}
 
     @app.post("/session", tags=["session"])
     async def session(body: SessionRequest) -> dict:

@@ -3,11 +3,13 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi.responses import JSONResponse
 
 from app.auth import get_current_admin
 from app.db import BankStore, get_store
 from app.demo import seed_demo_accounts
 from app.observability import RequestLogMiddleware
+from app.pool import DatabaseUnavailable
 from app.routes import admin_disputes, customers, disputes, meta, v1
 from app.auth import router as session_router
 
@@ -61,6 +63,12 @@ def create_app(store: BankStore | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.add_middleware(RequestLogMiddleware, service="backend")
+
+    @app.exception_handler(DatabaseUnavailable)
+    async def database_unavailable(request, exc):
+        # 503, not 500: it is not a bug, the caller (the agent) may try again, and it does.
+        return JSONResponse(status_code=503, content={"detail": "database unavailable"})
+
     if store is not None:
         app.state.store = store
     # Root: the routes the agent calls. /v1: what the web app uses, plus the same dispute routes.

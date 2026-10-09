@@ -46,6 +46,9 @@ class FakeBankTools:
     def calls_of(self, method):
         return [c for c in self.calls if c[0] == method]
 
+    async def ready(self) -> bool:
+        return True
+
     async def login(self, customer_id: str, document_number: str) -> dict:
         self.calls.append(("login", customer_id))
         if document_number == "bad":
